@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String        @id @default(uuid())
+  phoneNumber     String        @unique
+  firebaseUid     String        @unique
+  passwordHash    String?
+  name            String?
+  city            String?
+  referralCode    String        @unique
+  referredBy      String?
+  balance         Int           @default(0)
+  referralBalance Int           @default(0) // Earnings from MLM/Referrals
+  fcmToken        String?       // Firebase Cloud Messaging Token
+  totalEarned     Int           @default(0)
+  withdrawalAmount Int          @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  transactions    Transaction[]
+  dailyUsages     DailyUsage[]
+  referralRewards ReferralReward[]
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  amount      Int
+  type        String   // 'earning', 'withdrawal', 'bonus'
+  status      String   // 'success', 'pending', 'failed'
+  description String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model DailyUsage {
+  id          String   @id @default(uuid())
+  userId      String
+  dateStr     String   // YYYY-MM-DD format for easy querying
+  minutes     Int      @default(0)
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, dateStr])
+}
+
+model ReferralReward {
+  id          String   @id @default(uuid())
+  userId      String   // The user who achieved the milestone
+  referrerId  String   // The user who received the reward
+  milestone   String   // 'signup_bonus', '1_hour', '10_hours', 'daily_50', '30_days_jackpot'
+  dateStr     String?  // YYYY-MM-DD for daily recurring rewards
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  // Ensure a milestone is only rewarded once (or once per day if dateStr is set)
+  @@unique([userId, milestone, dateStr])
+}
