@@ -9,7 +9,7 @@ import { prisma } from '../config/db';
 export const logUsage = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { minutes } = req.body;
+    const { minutes, type } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -22,6 +22,8 @@ export const logUsage = async (req: AuthRequest, res: Response): Promise<void> =
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
+    const updateData = type === 'games' ? { gamesMinutes: { increment: minutes } } : { reelsMinutes: { increment: minutes } };
+    const createData = type === 'games' ? { gamesMinutes: minutes } : { reelsMinutes: minutes };
 
     // Upsert the daily usage record
     const usage = await prisma.dailyUsage.upsert({
@@ -31,17 +33,15 @@ export const logUsage = async (req: AuthRequest, res: Response): Promise<void> =
           dateStr: todayStr,
         }
       },
-      update: {
-        minutes: { increment: minutes }
-      },
+      update: updateData,
       create: {
         userId,
         dateStr: todayStr,
-        minutes: minutes,
+        ...createData,
       }
     });
 
-    res.status(200).json({ success: true, todayMinutes: usage.minutes });
+    res.status(200).json({ success: true, todayMinutes: type === 'games' ? usage.gamesMinutes : usage.reelsMinutes });
   } catch (error) {
     console.error('Error logging usage:', error);
     res.status(500).json({ error: 'Internal server error' });

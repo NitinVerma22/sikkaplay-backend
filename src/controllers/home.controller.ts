@@ -127,8 +127,8 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       streakCount: Math.max(1, currentStreak),
       hasClaimedToday,
       recentRewards,
-      reelsMinutesWatched: usageToday?.minutes || 0,
-      gamesMinutesPlayed: usageToday?.minutes || 0, // Should be split if possible, but keeping it simple
+      reelsMinutesWatched: usageToday?.reelsMinutes || 0,
+      gamesMinutesPlayed: usageToday?.gamesMinutes || 0,
       watchEarnClaimedMilestones,
       playEarnClaimedMilestones,
       completedSocialTasks

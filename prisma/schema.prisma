@@ -45,7 +45,8 @@ model DailyUsage {
   id          String   @id @default(uuid())
   userId      String
   dateStr     String   // YYYY-MM-DD format for easy querying
-  minutes     Int      @default(0)
+  reelsMinutes Int      @default(0)
+  gamesMinutes Int      @default(0)
   user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
