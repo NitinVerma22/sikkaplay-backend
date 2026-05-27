@@ -52,10 +52,9 @@ const evaluateDailyMilestones = async () => {
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   // Get all users who played more than 40 mins yesterday
-  const activeUsages = await prisma.dailyUsage.findMany({
+  const allUsages = await prisma.dailyUsage.findMany({
     where: {
       dateStr: yesterdayStr,
-      minutes: { gte: 40 },
     },
     include: {
       user: {
@@ -63,6 +62,8 @@ const evaluateDailyMilestones = async () => {
       }
     }
   });
+  
+  const activeUsages = allUsages.filter(u => (u.reelsMinutes + u.gamesMinutes) >= 40);
 
   for (const usage of activeUsages) {
     if (!usage.user.referredBy) continue;
@@ -128,15 +129,16 @@ const evaluateDailyMilestones = async () => {
         // Calculate total playtime
         const totalPlaytime = await prisma.dailyUsage.aggregate({
           where: { userId: usage.user.id },
-          _sum: { minutes: true }
+          _sum: { reelsMinutes: true, gamesMinutes: true }
         });
 
-        const totalMins = totalPlaytime._sum.minutes || 0;
+        const totalMins = (totalPlaytime._sum.reelsMinutes || 0) + (totalPlaytime._sum.gamesMinutes || 0);
         
         // Count active days
-        const activeDays = await prisma.dailyUsage.count({
-          where: { userId: usage.user.id, minutes: { gte: 10 } } // Minimum 10 mins to count as active day
+        const allUserDays = await prisma.dailyUsage.findMany({
+          where: { userId: usage.user.id } 
         });
+        const activeDays = allUserDays.filter(d => (d.reelsMinutes + d.gamesMinutes) >= 10).length;
 
         // Jackpot criteria: 2700 minutes (45 hours) AND at least 20 active days out of 30
         if (totalMins >= 2700 && activeDays >= 20) {
