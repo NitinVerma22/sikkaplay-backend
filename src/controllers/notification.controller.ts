@@ -1,11 +1,12 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth.middleware';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const getNotifications = async (req: Request, res: Response) => {
+export const getNotifications = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     const notifications = await prisma.notification.findMany({
@@ -21,9 +22,9 @@ export const getNotifications = async (req: Request, res: Response) => {
   }
 };
 
-export const markAsRead = async (req: Request, res: Response) => {
+export const markAsRead = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId;
     const { notificationId } = req.body;
     
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -48,9 +49,9 @@ export const markAsRead = async (req: Request, res: Response) => {
   }
 };
 
-export const clearNotifications = async (req: Request, res: Response) => {
+export const clearNotifications = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     await prisma.notification.deleteMany({
