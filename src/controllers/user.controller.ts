@@ -90,3 +90,25 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const updateUpi = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { upiId } = req.body;
+
+    if (!userId || upiId === undefined) {
+      res.status(400).json({ error: 'Missing user ID or UPI ID' });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { upiId }
+    });
+
+    res.status(200).json({ success: true, message: 'UPI ID updated successfully' });
+  } catch (error) {
+    console.error('Error updating UPI ID:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

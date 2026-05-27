@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi } from '../controllers/user.controller';
 import { claimReward } from '../controllers/earn.controller';
 import { logUsage } from '../controllers/usage.controller';
 import { getMyNetwork } from '../controllers/network.controller';
@@ -19,6 +19,9 @@ router.post('/fcm-token', updateFcmToken);
 
 // GET /api/user/transactions
 router.get('/transactions', getTransactions);
+
+// PUT /api/user/upi
+router.put('/upi', updateUpi);
 
 // POST /api/user/earn
 router.post('/earn', claimReward);
