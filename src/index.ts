@@ -4,6 +4,7 @@ import cors from 'cors';
 import { prisma } from './config/db';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import configRoutes from './routes/config.routes';
 import { startCronJobs } from './services/cron.service';
 
 const app = express();
@@ -18,6 +19,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/config', configRoutes);
 
 // Basic health check route
 app.get('/', (req: Request, res: Response) => {
