@@ -98,3 +98,25 @@ model SupportTicket {
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id])
 }
+
+model Admin {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String   // Hashed password
+  role      String   @default("superadmin") // superadmin, moderator
+  createdAt DateTime @default(now())
+}
+
+model AppConfig {
+  id                  String   @id @default(uuid())
+  gullakMaxSize       Int      @default(100) // Max coins Gullak can hold
+  reelsCoinsPerMin    Int      @default(5)   // Coins earned per minute watching reels
+  dailyStreakCoins    Int      @default(50)  // Base coins for daily streak
+  referralBonus       Int      @default(500) // Coins rewarded for successful referral
+  commissionRate      Float    @default(0.10) // 10% commission on MLM network withdrawals
+  minWithdrawalLimit  Int      @default(1000) // Minimum coins required to withdraw
+  apkDownloadUrl      String   @default("https://sikkaplay-apk.web.app/app-release.apk")
+  latestAppVersion    String   @default("1.0.0")
+  forceUpdate         Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+}
