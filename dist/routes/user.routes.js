@@ -29,4 +29,5 @@ router.get('/home', home_controller_1.getHomeState);
 // GET /api/user/wallet
 const wallet_controller_1 = require("../controllers/wallet.controller");
 router.get('/wallet', wallet_controller_1.getWalletStats);
+router.post('/withdraw', wallet_controller_1.requestWithdrawal);
 exports.default = router;

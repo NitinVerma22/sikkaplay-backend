@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getWalletStats = void 0;
+exports.requestWithdrawal = exports.getWalletStats = void 0;
 const db_1 = require("../config/db");
 const getWalletStats = async (req, res) => {
     try {
@@ -64,3 +64,62 @@ const getWalletStats = async (req, res) => {
     }
 };
 exports.getWalletStats = getWalletStats;
+const requestWithdrawal = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { amount, upiId } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!amount || amount <= 0) {
+            res.status(400).json({ error: 'Invalid withdrawal amount' });
+            return;
+        }
+        // 1. Fetch user and app configuration
+        const [user, config] = await Promise.all([
+            db_1.prisma.user.findUnique({ where: { id: userId } }),
+            db_1.prisma.appConfig.findFirst()
+        ]);
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const minLimit = config?.minWithdrawalLimit || 1000;
+        if (amount < minLimit) {
+            res.status(400).json({ error: `Minimum withdrawal amount is ${minLimit} coins` });
+            return;
+        }
+        if (user.balance < amount) {
+            res.status(400).json({ error: 'Insufficient balance' });
+            return;
+        }
+        const targetUpi = upiId || user.upiId;
+        if (!targetUpi) {
+            res.status(400).json({ error: 'UPI ID is required for withdrawal' });
+            return;
+        }
+        // 2. Process withdrawal transaction and deduct balance
+        await db_1.prisma.$transaction([
+            db_1.prisma.user.update({
+                where: { id: userId },
+                data: { balance: { decrement: amount } }
+            }),
+            db_1.prisma.transaction.create({
+                data: {
+                    userId,
+                    amount: -amount, // Stored as a negative amount for withdrawals
+                    type: 'withdrawal',
+                    status: 'pending',
+                    description: `Withdrawal request to UPI: ${targetUpi}`
+                }
+            })
+        ]);
+        res.status(200).json({ success: true, message: 'Withdrawal request submitted successfully' });
+    }
+    catch (error) {
+        console.error('Error requesting withdrawal:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.requestWithdrawal = requestWithdrawal;

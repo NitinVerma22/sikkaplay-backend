@@ -38,11 +38,39 @@ async function main() {
         apkDownloadUrl: 'https://sikkaplay-apk.web.app/app-release.apk',
         latestAppVersion: '1.0.0',
         forceUpdate: false,
+        watchM1Mins: 20,
+        watchM1Coins: 50,
+        watchM2Mins: 60,
+        watchM2Coins: 200,
+        watchM3Mins: 180,
+        watchM3Coins: 600,
+        playM1Mins: 20,
+        playM1Coins: 50,
+        playM2Mins: 60,
+        playM2Coins: 200,
+        playM3Mins: 180,
+        playM3Coins: 600,
       }
     });
     console.log('Default AppConfig created');
   } else {
-    console.log('AppConfig already exists');
+    console.log('AppConfig already exists, updating missing milestone columns...');
+    await prisma.appConfig.updateMany({
+      data: {
+        watchM1Mins: 20,
+        watchM1Coins: 50,
+        watchM2Mins: 60,
+        watchM2Coins: 200,
+        watchM3Mins: 180,
+        watchM3Coins: 600,
+        playM1Mins: 20,
+        playM1Coins: 50,
+        playM2Mins: 60,
+        playM2Coins: 200,
+        playM3Mins: 180,
+        playM3Coins: 600,
+      }
+    });
   }
 
   console.log('Seeding complete.');

@@ -1,8 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPushNotification = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const db_1 = require("../config/db");
 // import * as admin from 'firebase-admin';
 // Initialize Firebase Admin here once you have serviceAccountKey.json
 // admin.initializeApp({
@@ -19,9 +18,9 @@ const sendPushNotification = async (fcmToken, title, body) => {
         // });
         console.log(`[MOCK PUSH NOTIFICATION] To: ${fcmToken} | Title: ${title} | Body: ${body}`);
         // Save to database so it appears in the Notification Tab
-        const user = await prisma.user.findFirst({ where: { fcmToken } });
+        const user = await db_1.prisma.user.findFirst({ where: { fcmToken } });
         if (user) {
-            await prisma.notification.create({
+            await db_1.prisma.notification.create({
                 data: {
                     userId: user.id,
                     title,

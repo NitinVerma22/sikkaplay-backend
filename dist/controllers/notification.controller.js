@@ -1,14 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearNotifications = exports.markAsRead = exports.getNotifications = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const db_1 = require("../config/db");
 const getNotifications = async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId)
             return res.status(401).json({ success: false, message: 'Unauthorized' });
-        const notifications = await prisma.notification.findMany({
+        const notifications = await db_1.prisma.notification.findMany({
             where: { userId },
             orderBy: { createdAt: 'desc' },
             take: 50, // Limit to 50 recent notifications
@@ -28,14 +27,14 @@ const markAsRead = async (req, res) => {
         if (!userId)
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         if (notificationId) {
-            await prisma.notification.updateMany({
+            await db_1.prisma.notification.updateMany({
                 where: { id: notificationId, userId },
                 data: { isRead: true },
             });
         }
         else {
             // Mark all as read
-            await prisma.notification.updateMany({
+            await db_1.prisma.notification.updateMany({
                 where: { userId, isRead: false },
                 data: { isRead: true },
             });
@@ -53,7 +52,7 @@ const clearNotifications = async (req, res) => {
         const userId = req.user?.userId;
         if (!userId)
             return res.status(401).json({ success: false, message: 'Unauthorized' });
-        await prisma.notification.deleteMany({
+        await db_1.prisma.notification.deleteMany({
             where: { userId },
         });
         res.json({ success: true });

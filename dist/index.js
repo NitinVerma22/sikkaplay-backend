@@ -12,6 +12,7 @@ const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const config_routes_1 = __importDefault(require("./routes/config.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const support_routes_1 = __importDefault(require("./routes/support.routes"));
+const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const cron_service_1 = require("./services/cron.service");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use('/api/user', user_routes_1.default);
 app.use('/api/config', config_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
 app.use('/api/support', support_routes_1.default);
+app.use('/api/admin', admin_routes_1.default);
 // Basic health check route
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'SikkaPlay API is running' });
