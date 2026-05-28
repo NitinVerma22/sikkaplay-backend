@@ -62,9 +62,26 @@ export const getWalletStats = async (req: AuthRequest, res: Response): Promise<v
       }
     }
 
+    // Fetch sum of pending withdrawals
+    const pendingWithdrawalAmount = await prisma.transaction.aggregate({
+      where: {
+        userId,
+        type: 'withdrawal',
+        status: 'pending'
+      },
+      _sum: {
+        amount: true
+      }
+    });
+
+    const pendingWithdrawal = Math.abs(pendingWithdrawalAmount._sum.amount || 0);
+
     res.status(200).json({
       success: true,
-      stats
+      stats: {
+        ...stats,
+        pendingWithdrawal
+      }
     });
   } catch (error) {
     console.error('Error fetching wallet stats:', error);

@@ -53,9 +53,24 @@ const getWalletStats = async (req, res) => {
                 target.monthly += tx.amount;
             }
         }
+        // Fetch sum of pending withdrawals
+        const pendingWithdrawalAmount = await db_1.prisma.transaction.aggregate({
+            where: {
+                userId,
+                type: 'withdrawal',
+                status: 'pending'
+            },
+            _sum: {
+                amount: true
+            }
+        });
+        const pendingWithdrawal = Math.abs(pendingWithdrawalAmount._sum.amount || 0);
         res.status(200).json({
             success: true,
-            stats
+            stats: {
+                ...stats,
+                pendingWithdrawal
+            }
         });
     }
     catch (error) {

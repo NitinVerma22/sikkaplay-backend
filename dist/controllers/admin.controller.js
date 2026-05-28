@@ -114,7 +114,7 @@ const getConfigs = async (req, res) => {
 exports.getConfigs = getConfigs;
 const updateConfigs = async (req, res) => {
     try {
-        const configData = req.body;
+        const { id, createdAt, updatedAt, latestVersion, updateUrl, ...configData } = req.body;
         let config = await db_1.prisma.appConfig.findFirst();
         if (!config) {
             config = await db_1.prisma.appConfig.create({ data: configData });
@@ -297,19 +297,23 @@ const updateWithdrawalStatus = async (req, res) => {
             });
             // 2. If failed, refund the amount back to user's wallet
             if (status === 'failed') {
+                const refundAmount = Math.abs(tx.amount);
+                console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId}`);
                 await prismaTx.user.update({
                     where: { id: tx.userId },
                     data: {
-                        balance: { increment: Math.abs(tx.amount) } // tx.amount is stored negative e.g. -500
+                        balance: { increment: refundAmount }
                     }
                 });
             }
             else if (status === 'success') {
+                const withdrawAmount = Math.abs(tx.amount);
+                console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} for user ID: ${tx.userId}`);
                 // Increment withdrawalAmount stats
                 await prismaTx.user.update({
                     where: { id: tx.userId },
                     data: {
-                        withdrawalAmount: { increment: Math.abs(tx.amount) }
+                        withdrawalAmount: { increment: withdrawAmount }
                     }
                 });
             }
