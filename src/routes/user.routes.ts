@@ -36,7 +36,8 @@ router.get('/network', getMyNetwork);
 router.get('/home', getHomeState);
 
 // GET /api/user/wallet
-import { getWalletStats } from '../controllers/wallet.controller';
+import { getWalletStats, requestWithdrawal } from '../controllers/wallet.controller';
 router.get('/wallet', getWalletStats);
+router.post('/withdraw', requestWithdrawal);
 
 export default router;
