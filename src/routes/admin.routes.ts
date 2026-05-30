@@ -13,6 +13,7 @@ import {
   replySupportTicket
 } from '../controllers/admin.controller';
 import { requireAdminJwt } from '../middleware/adminAuth.middleware';
+import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
 
 const router = Router();
 
@@ -41,5 +42,9 @@ router.put('/withdrawals/:id', updateWithdrawalStatus);
 // Support & FAQ Tickets Management
 router.get('/tickets', getSupportTickets);
 router.post('/tickets/:id/reply', replySupportTicket);
+
+// Daily Code Management
+router.post('/daily-code', createDailyCode);
+router.get('/daily-code', getDailyCodes);
 
 export default router;

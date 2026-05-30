@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { getStartOfTodayIST, getStartOfYesterdayIST, getStartOfWeekIST, getStartOfMonthIST } from '../utils/date.utils';
 
 export const getWalletStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -12,12 +13,10 @@ export const getWalletStats = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfYesterday = new Date(startOfToday);
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday as start of week
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfToday = getStartOfTodayIST(now);
+    const startOfYesterday = getStartOfYesterdayIST(now);
+    const startOfWeek = getStartOfWeekIST(now);
+    const startOfMonth = getStartOfMonthIST(now);
 
     // Fetch all successful earning transactions for the user
     // type in ['earning', 'referral_level_income', 'bonus', 'daily_streak', 'social_task']

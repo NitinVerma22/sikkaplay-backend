@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { distributeLevelIncome } from '../services/network.service';
+import { getStartOfTodayIST } from '../utils/date.utils';
 
 export const claimReward = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -21,6 +22,24 @@ export const claimReward = async (req: AuthRequest, res: Response): Promise<void
     if (!type || typeof type !== 'string') {
       res.status(400).json({ error: 'Invalid reward type' });
       return;
+    }
+
+    // Prevent double claiming of daily streak
+    if (type === 'daily_streak') {
+      const startOfToday = getStartOfTodayIST();
+
+      const streakToday = await prisma.transaction.findFirst({
+        where: {
+          userId,
+          type: 'daily_streak',
+          createdAt: { gte: startOfToday }
+        }
+      });
+
+      if (streakToday) {
+        res.status(400).json({ error: 'Daily streak already claimed today' });
+        return;
+      }
     }
 
     // Execute within a transaction to ensure atomicity

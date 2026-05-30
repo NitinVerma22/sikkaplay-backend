@@ -31,6 +31,7 @@ model User {
   referralRewards ReferralReward[]
   notifications   Notification[]
   tickets         SupportTicket[]
+  dailyCodeClaims DailyCodeClaim[]
 }
 
 model Transaction {
@@ -136,4 +137,23 @@ model AppConfig {
   playM3Coins         Int      @default(600)
 
   updatedAt           DateTime @updatedAt
+}
+
+model DailyCode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  createdAt DateTime @default(now())
+  claims    DailyCodeClaim[]
+}
+
+model DailyCodeClaim {
+  id          String    @id @default(uuid())
+  dailyCodeId String
+  userId      String
+  coinsEarned Int
+  createdAt   DateTime  @default(now())
+  dailyCode   DailyCode @relation(fields: [dailyCodeId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dailyCodeId])
 }

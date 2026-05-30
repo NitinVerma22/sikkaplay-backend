@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { getISTDateString } from '../utils/date.utils';
 
 /**
  * Frontend pings this every 5 minutes (while app is open and active)
@@ -21,7 +22,7 @@ export const logUsage = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getISTDateString();
     const updateData = type === 'games' ? { gamesMinutes: { increment: minutes } } : { reelsMinutes: { increment: minutes } };
     const createData = type === 'games' ? { gamesMinutes: minutes } : { reelsMinutes: minutes };
 

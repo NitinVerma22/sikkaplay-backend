@@ -5,6 +5,7 @@ import { logUsage } from '../controllers/usage.controller';
 import { getMyNetwork } from '../controllers/network.controller';
 import { getHomeState } from '../controllers/home.controller';
 import { requireJwt } from '../middleware/auth.middleware';
+import { claimDailyCode } from '../controllers/dailyCode.controller';
 
 const router = Router();
 
@@ -28,6 +29,9 @@ router.post('/earn', claimReward);
 
 // POST /api/user/usage
 router.post('/usage', logUsage);
+
+// POST /api/user/daily-code/claim
+router.post('/daily-code/claim', claimDailyCode);
 
 // GET /api/user/network
 router.get('/network', getMyNetwork);

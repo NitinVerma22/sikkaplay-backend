@@ -19,6 +19,23 @@ const claimReward = async (req, res) => {
             res.status(400).json({ error: 'Invalid reward type' });
             return;
         }
+        // Prevent double claiming of daily streak
+        if (type === 'daily_streak') {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const startOfToday = new Date(todayStr);
+            const streakToday = await db_1.prisma.transaction.findFirst({
+                where: {
+                    userId,
+                    type: 'daily_streak',
+                    createdAt: { gte: startOfToday }
+                }
+            });
+            if (streakToday) {
+                res.status(400).json({ error: 'Daily streak already claimed today' });
+                return;
+            }
+        }
         // Execute within a transaction to ensure atomicity
         const result = await db_1.prisma.$transaction(async (tx) => {
             // 1. Update User Balance & Total Earned

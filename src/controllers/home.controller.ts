@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { getISTDateString, getStartOfTodayIST } from '../utils/date.utils';
 
 export const getHomeState = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -27,8 +28,8 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const startOfToday = new Date(todayStr);
+    const todayStr = getISTDateString(today);
+    const startOfToday = getStartOfTodayIST(today);
 
     // Find daily usage for today
     const usageToday = await prisma.dailyUsage.findUnique({
@@ -57,15 +58,15 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     let currentStreak = 0;
-    let checkDate = new Date(todayStr); // Start from today at 00:00:00
+    let checkDate = new Date(today.getTime()); // Start from today copy
     if (!hasClaimedToday) {
       // If not claimed today, the streak is maintained if claimed yesterday
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
     for (let i = 0; i < allStreaks.length; i++) {
-      const streakDateStr = allStreaks[i].createdAt.toISOString().split('T')[0];
-      const targetDateStr = checkDate.toISOString().split('T')[0];
+      const streakDateStr = getISTDateString(allStreaks[i].createdAt);
+      const targetDateStr = getISTDateString(checkDate);
       
       if (streakDateStr === targetDateStr) {
         currentStreak++;
