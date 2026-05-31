@@ -21,11 +21,16 @@ export const handleCpxCallback = async (req: Request, res: Response): Promise<vo
 
     const secureKey = process.env.CPX_SECURE_KEY || '';
     if (secureKey) {
-      // Calculate MD5 hash: md5(trans_id + "-" + user_id + "-" + amount_local + "-" + secure_key)
-      const dataToHash = `${trans_id}-${user_id}-${amount_local}-${secureKey}`;
-      const calculatedHash = crypto.createHash('md5').update(dataToHash).digest('hex');
+      // Calculate MD5 hash formats
+      // Format 1: Default CPX: md5(trans_id + "-" + secureKey)
+      const defaultData = `${trans_id}-${secureKey}`;
+      const defaultHash = crypto.createHash('md5').update(defaultData).digest('hex');
 
-      if (calculatedHash !== hash) {
+      // Format 2: Extended: md5(trans_id + "-" + user_id + "-" + amount_local + "-" + secureKey)
+      const extendedData = `${trans_id}-${user_id}-${amount_local}-${secureKey}`;
+      const extendedHash = crypto.createHash('md5').update(extendedData).digest('hex');
+
+      if (hash !== defaultHash && hash !== extendedHash) {
         console.error('CPX Callback: Invalid signature hash');
         res.status(403).send('Invalid signature');
         return;
