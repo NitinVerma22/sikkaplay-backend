@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logUsage = void 0;
 const db_1 = require("../config/db");
+const date_utils_1 = require("../utils/date.utils");
 /**
  * Frontend pings this every 5 minutes (while app is open and active)
  * Body: { minutes: 5 }
@@ -18,7 +19,7 @@ const logUsage = async (req, res) => {
             res.status(400).json({ error: 'Invalid minutes' });
             return;
         }
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = (0, date_utils_1.getISTDateString)();
         const updateData = type === 'games' ? { gamesMinutes: { increment: minutes } } : { reelsMinutes: { increment: minutes } };
         const createData = type === 'games' ? { gamesMinutes: minutes } : { reelsMinutes: minutes };
         // Upsert the daily usage record

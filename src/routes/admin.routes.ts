@@ -14,6 +14,7 @@ import {
 } from '../controllers/admin.controller';
 import { requireAdminJwt } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
+import { createVisitLink, getVisitLinks, deleteVisitLink } from '../controllers/visitLink.controller';
 
 const router = Router();
 
@@ -46,5 +47,10 @@ router.post('/tickets/:id/reply', replySupportTicket);
 // Daily Code Management
 router.post('/daily-code', createDailyCode);
 router.get('/daily-code', getDailyCodes);
+
+// Visit Links Management
+router.post('/visit-links', createVisitLink);
+router.get('/visit-links', getVisitLinks);
+router.delete('/visit-links/:id', deleteVisitLink);
 
 export default router;

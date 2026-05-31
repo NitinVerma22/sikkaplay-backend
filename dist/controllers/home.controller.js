@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHomeState = void 0;
 const db_1 = require("../config/db");
+const date_utils_1 = require("../utils/date.utils");
 const getHomeState = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -23,8 +24,8 @@ const getHomeState = async (req, res) => {
             take: 10,
         });
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        const startOfToday = new Date(todayStr);
+        const todayStr = (0, date_utils_1.getISTDateString)(today);
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
         // Find daily usage for today
         const usageToday = await db_1.prisma.dailyUsage.findUnique({
             where: {
@@ -49,14 +50,14 @@ const getHomeState = async (req, res) => {
             orderBy: { createdAt: 'desc' },
         });
         let currentStreak = 0;
-        let checkDate = new Date(todayStr); // Start from today at 00:00:00
+        let checkDate = new Date(today.getTime()); // Start from today copy
         if (!hasClaimedToday) {
             // If not claimed today, the streak is maintained if claimed yesterday
             checkDate.setDate(checkDate.getDate() - 1);
         }
         for (let i = 0; i < allStreaks.length; i++) {
-            const streakDateStr = allStreaks[i].createdAt.toISOString().split('T')[0];
-            const targetDateStr = checkDate.toISOString().split('T')[0];
+            const streakDateStr = (0, date_utils_1.getISTDateString)(allStreaks[i].createdAt);
+            const targetDateStr = (0, date_utils_1.getISTDateString)(checkDate);
             if (streakDateStr === targetDateStr) {
                 currentStreak++;
                 checkDate.setDate(checkDate.getDate() - 1);

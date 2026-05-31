@@ -51,12 +51,17 @@ async function main() {
                 playM2Coins: 200,
                 playM3Mins: 180,
                 playM3Coins: 600,
+                adsEnabled: true,
+                rewardedCapPerDay: 15,
+                dailyCodeAdRequired: true,
+                surveysAdRequired: true,
+                reelsAdInterval: 5,
             }
         });
         console.log('Default AppConfig created');
     }
     else {
-        console.log('AppConfig already exists, updating missing milestone columns...');
+        console.log('AppConfig already exists, updating missing columns...');
         await db_1.prisma.appConfig.updateMany({
             data: {
                 watchM1Mins: 20,
@@ -71,6 +76,11 @@ async function main() {
                 playM2Coins: 200,
                 playM3Mins: 180,
                 playM3Coins: 600,
+                adsEnabled: true,
+                rewardedCapPerDay: 15,
+                dailyCodeAdRequired: true,
+                surveysAdRequired: true,
+                reelsAdInterval: 5,
             }
         });
     }

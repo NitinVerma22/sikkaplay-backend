@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimReward = void 0;
 const db_1 = require("../config/db");
 const network_service_1 = require("../services/network.service");
+const date_utils_1 = require("../utils/date.utils");
 const claimReward = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -21,9 +22,7 @@ const claimReward = async (req, res) => {
         }
         // Prevent double claiming of daily streak
         if (type === 'daily_streak') {
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-            const startOfToday = new Date(todayStr);
+            const startOfToday = (0, date_utils_1.getStartOfTodayIST)();
             const streakToday = await db_1.prisma.transaction.findFirst({
                 where: {
                     userId,

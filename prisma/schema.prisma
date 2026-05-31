@@ -136,6 +136,13 @@ model AppConfig {
   playM3Mins          Int      @default(180)
   playM3Coins         Int      @default(600)
 
+  // Ad Management Configurations
+  adsEnabled          Boolean  @default(true)
+  rewardedCapPerDay   Int      @default(15)
+  dailyCodeAdRequired Boolean  @default(true)
+  surveysAdRequired   Boolean  @default(true)
+  reelsAdInterval     Int      @default(5) // Interstitial ad frequency (every X reels)
+
   updatedAt           DateTime @updatedAt
 }
 
@@ -157,3 +164,12 @@ model DailyCodeClaim {
   dailyCode   DailyCode @relation(fields: [dailyCodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model VisitEarnLink {
+  id           String   @id @default(uuid())
+  title        String
+  url          String
+  rewardAmount Int      @default(5)
+  createdAt    DateTime @default(now())
+}
+

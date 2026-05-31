@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requestWithdrawal = exports.getWalletStats = void 0;
 const db_1 = require("../config/db");
+const date_utils_1 = require("../utils/date.utils");
 const getWalletStats = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -10,12 +11,10 @@ const getWalletStats = async (req, res) => {
             return;
         }
         const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        const startOfWeek = new Date(startOfToday);
-        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday as start of week
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(now);
+        const startOfYesterday = (0, date_utils_1.getStartOfYesterdayIST)(now);
+        const startOfWeek = (0, date_utils_1.getStartOfWeekIST)(now);
+        const startOfMonth = (0, date_utils_1.getStartOfMonthIST)(now);
         // Fetch all successful earning transactions for the user
         // type in ['earning', 'referral_level_income', 'bonus', 'daily_streak', 'social_task']
         const transactions = await db_1.prisma.transaction.findMany({

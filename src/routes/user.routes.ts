@@ -6,6 +6,7 @@ import { getMyNetwork } from '../controllers/network.controller';
 import { getHomeState } from '../controllers/home.controller';
 import { requireJwt } from '../middleware/auth.middleware';
 import { claimDailyCode } from '../controllers/dailyCode.controller';
+import { getVisitLinks } from '../controllers/visitLink.controller';
 
 const router = Router();
 
@@ -43,5 +44,8 @@ router.get('/home', getHomeState);
 import { getWalletStats, requestWithdrawal } from '../controllers/wallet.controller';
 router.get('/wallet', getWalletStats);
 router.post('/withdraw', requestWithdrawal);
+
+// Visit Links
+router.get('/visit-links', getVisitLinks);
 
 export default router;

@@ -7,6 +7,8 @@ const usage_controller_1 = require("../controllers/usage.controller");
 const network_controller_1 = require("../controllers/network.controller");
 const home_controller_1 = require("../controllers/home.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
+const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
+const visitLink_controller_1 = require("../controllers/visitLink.controller");
 const router = (0, express_1.Router)();
 // Protect all user routes with JWT validation
 router.use(auth_middleware_1.requireJwt);
@@ -22,6 +24,8 @@ router.put('/upi', user_controller_1.updateUpi);
 router.post('/earn', earn_controller_1.claimReward);
 // POST /api/user/usage
 router.post('/usage', usage_controller_1.logUsage);
+// POST /api/user/daily-code/claim
+router.post('/daily-code/claim', dailyCode_controller_1.claimDailyCode);
 // GET /api/user/network
 router.get('/network', network_controller_1.getMyNetwork);
 // GET /api/user/home
@@ -30,4 +34,6 @@ router.get('/home', home_controller_1.getHomeState);
 const wallet_controller_1 = require("../controllers/wallet.controller");
 router.get('/wallet', wallet_controller_1.getWalletStats);
 router.post('/withdraw', wallet_controller_1.requestWithdrawal);
+// Visit Links
+router.get('/visit-links', visitLink_controller_1.getVisitLinks);
 exports.default = router;
