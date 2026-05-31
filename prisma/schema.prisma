@@ -142,6 +142,8 @@ model AppConfig {
 model DailyCode {
   id        String   @id @default(uuid())
   code      String   @unique
+  coins     Int      @default(0)
+  maxClaims Int      @default(1)
   createdAt DateTime @default(now())
   claims    DailyCodeClaim[]
 }
@@ -154,6 +156,4 @@ model DailyCodeClaim {
   createdAt   DateTime  @default(now())
   dailyCode   DailyCode @relation(fields: [dailyCodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, dailyCodeId])
 }

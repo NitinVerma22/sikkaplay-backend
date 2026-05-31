@@ -24,21 +24,7 @@ export const claimDailyCode = async (req: AuthRequest, res: Response): Promise<v
 
     const normalizedCode = code.trim().toUpperCase();
 
-    // 1. Check if user has already claimed any daily code today
-    const startOfToday = getStartOfTodayIST();
-    const alreadyClaimedToday = await prisma.dailyCodeClaim.findFirst({
-      where: {
-        userId,
-        createdAt: { gte: startOfToday }
-      }
-    });
-
-    if (alreadyClaimedToday) {
-      res.status(400).json({ error: 'You have already claimed a daily code today' });
-      return;
-    }
-
-    // 2. Fetch the target daily code
+    // 1. Fetch the target daily code
     const dailyCode = await prisma.dailyCode.findUnique({
       where: { code: normalizedCode }
     });
@@ -48,23 +34,25 @@ export const claimDailyCode = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 3. Verify user hasn't claimed this specific code ever (in case admin re-uses codes)
-    const alreadyClaimedThisCode = await prisma.dailyCodeClaim.findUnique({
+    // 2. Count user's claims for this specific code
+    const userClaimsCount = await prisma.dailyCodeClaim.count({
       where: {
-        userId_dailyCodeId: {
-          userId,
-          dailyCodeId: dailyCode.id
-        }
+        userId,
+        dailyCodeId: dailyCode.id
       }
     });
 
-    if (alreadyClaimedThisCode) {
-      res.status(400).json({ error: 'You have already claimed this daily code' });
+    if (userClaimsCount >= dailyCode.maxClaims) {
+      res.status(400).json({
+        error: dailyCode.maxClaims === 1
+          ? 'You have already claimed this daily code!'
+          : `You have reached the maximum claim limit for this code (Max: ${dailyCode.maxClaims})`
+      });
       return;
     }
 
-    // 4. Generate random reward between 200 and 2000 coins
-    const coinsEarned = Math.floor(Math.random() * (2000 - 200 + 1)) + 200;
+    // 3. Use the coins reward assigned to this daily code
+    const coinsEarned = dailyCode.coins;
 
     // 5. Execute transaction: update balance, create transaction, create claim record
     const result = await prisma.$transaction(async (tx) => {
@@ -119,7 +107,7 @@ export const claimDailyCode = async (req: AuthRequest, res: Response): Promise<v
 // createDailyCode: Allows admins to create/register a new daily code
 export const createDailyCode = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
-    const { code } = req.body;
+    const { code, coins, maxClaims } = req.body;
 
     if (!code || typeof code !== 'string') {
       res.status(400).json({ error: 'Code is required' });
@@ -127,6 +115,18 @@ export const createDailyCode = async (req: AdminAuthRequest, res: Response): Pro
     }
 
     const normalizedCode = code.trim().toUpperCase();
+    const coinsReward = typeof coins === 'number' ? coins : parseInt(coins) || 0;
+    const maxClaimsVal = typeof maxClaims === 'number' ? maxClaims : parseInt(maxClaims) || 1;
+
+    if (coinsReward <= 0) {
+      res.status(400).json({ error: 'Coins reward must be a positive number greater than 0' });
+      return;
+    }
+
+    if (maxClaimsVal <= 0) {
+      res.status(400).json({ error: 'Maximum claims limit must be greater than 0' });
+      return;
+    }
 
     // Verify if this code already exists
     const existingCode = await prisma.dailyCode.findUnique({
@@ -139,7 +139,11 @@ export const createDailyCode = async (req: AdminAuthRequest, res: Response): Pro
     }
 
     const newDailyCode = await prisma.dailyCode.create({
-      data: { code: normalizedCode }
+      data: { 
+        code: normalizedCode,
+        coins: coinsReward,
+        maxClaims: maxClaimsVal
+      }
     });
 
     res.status(200).json({
@@ -183,6 +187,8 @@ export const getDailyCodes = async (req: AdminAuthRequest, res: Response): Promi
       return {
         id: c.id,
         code: c.code,
+        coins: c.coins,
+        maxClaims: c.maxClaims,
         createdAt: c.createdAt,
         claimsCount,
         totalCoinsPaid,
