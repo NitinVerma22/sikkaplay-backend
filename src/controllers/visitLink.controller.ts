@@ -6,13 +6,62 @@ import { prisma } from '../config/db';
 // --- GET ALL LINKS (USER & ADMIN) ---
 export const getVisitLinks = async (req: Request, res: Response): Promise<void> => {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+
     const links = await prisma.visitEarnLink.findMany({
       orderBy: { createdAt: 'asc' },
     });
 
+    let linksWithCooldown = links.map(link => ({
+      id: link.id,
+      title: link.title,
+      url: link.url,
+      rewardAmount: link.rewardAmount,
+      createdAt: link.createdAt,
+      cooldownRemaining: 0
+    }));
+
+    if (userId) {
+      const claims = await prisma.visitEarnClaim.findMany({
+        where: { userId },
+      });
+
+      const cooldownPeriodMs = 10 * 60 * 1000; // 10 minutes
+
+      linksWithCooldown = links.map(link => {
+        const linkClaims = claims.filter(c => c.linkId === link.id);
+        if (linkClaims.length > 0) {
+          // Sort by claimedAt descending
+          linkClaims.sort((a, b) => b.claimedAt.getTime() - a.claimedAt.getTime());
+          const latestClaim = linkClaims[0];
+          const timeElapsedMs = Date.now() - latestClaim.claimedAt.getTime();
+          if (timeElapsedMs < cooldownPeriodMs) {
+            const cooldownRemainingSecs = Math.ceil((cooldownPeriodMs - timeElapsedMs) / 1000);
+            return {
+              id: link.id,
+              title: link.title,
+              url: link.url,
+              rewardAmount: link.rewardAmount,
+              createdAt: link.createdAt,
+              cooldownRemaining: cooldownRemainingSecs
+            };
+          }
+        }
+        return {
+          id: link.id,
+          title: link.title,
+          url: link.url,
+          rewardAmount: link.rewardAmount,
+          createdAt: link.createdAt,
+          cooldownRemaining: 0
+        };
+      });
+    }
+
     res.status(200).json({
       success: true,
-      links,
+      links: linksWithCooldown,
     });
   } catch (error) {
     console.error('Error fetching visit links:', error);
@@ -90,5 +139,96 @@ export const deleteVisitLink = async (req: AdminAuthRequest, res: Response): Pro
   } catch (error) {
     console.error('Error deleting visit link:', error);
     res.status(500).json({ error: 'Internal server error while deleting visit link' });
+  }
+};
+
+// --- CLAIM REWARD (USER ONLY, WITH COOLDOWN VALIDATION) ---
+export const claimVisitLinkReward = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { linkId } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized: No user ID found' });
+      return;
+    }
+
+    if (!linkId) {
+      res.status(400).json({ error: 'Link ID is required' });
+      return;
+    }
+
+    // 1. Fetch the link from DB
+    const link = await prisma.visitEarnLink.findUnique({
+      where: { id: linkId }
+    });
+
+    if (!link) {
+      res.status(404).json({ error: 'Sponsored link not found' });
+      return;
+    }
+
+    // 2. Check if user already claimed this link in the last 10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentClaim = await prisma.visitEarnClaim.findFirst({
+      where: {
+        userId,
+        linkId,
+        claimedAt: { gte: tenMinutesAgo }
+      }
+    });
+
+    if (recentClaim) {
+      const elapsed = Date.now() - recentClaim.claimedAt.getTime();
+      const remainingSecs = Math.ceil((10 * 60 * 1000 - elapsed) / 1000);
+      res.status(400).json({
+        error: `This link is on cooldown. Try again in ${remainingSecs} seconds.`
+      });
+      return;
+    }
+
+    // 3. Process transaction: user balance, transaction record, visit claim record
+    const coinsEarned = link.rewardAmount;
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          balance: { increment: coinsEarned },
+          totalEarned: { increment: coinsEarned }
+        }
+      });
+
+      const transactionRecord = await tx.transaction.create({
+        data: {
+          userId,
+          amount: coinsEarned,
+          type: 'earning',
+          status: 'success',
+          description: `Visited sponsored link: ${link.title}`
+        }
+      });
+
+      const claimRecord = await tx.visitEarnClaim.create({
+        data: {
+          userId,
+          linkId,
+        }
+      });
+
+      return { user: updatedUser, transaction: transactionRecord, claim: claimRecord };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Reward claimed successfully!',
+      coinsEarned,
+      newBalance: result.user.balance,
+      transaction: result.transaction
+    });
+
+  } catch (error) {
+    console.error('Error claiming visit link reward:', error);
+    res.status(500).json({ error: 'Internal server error while claiming reward' });
   }
 };

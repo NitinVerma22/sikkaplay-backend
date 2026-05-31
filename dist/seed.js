@@ -84,6 +84,18 @@ async function main() {
             }
         });
     }
+    // 3. Create default Visit & Earn links if none exist
+    const existingLinksCount = await db_1.prisma.visitEarnLink.count();
+    if (existingLinksCount === 0) {
+        await db_1.prisma.visitEarnLink.create({
+            data: {
+                title: 'Sponsored Reward Task',
+                url: 'https://www.effectivecpmnetwork.com/e4bhz80xs?key=bd91f9fc65d8826b9c2d7f8bbeeb640f',
+                rewardAmount: 10
+            }
+        });
+        console.log('Default sponsored visit link seeded');
+    }
     console.log('Seeding complete.');
 }
 main()

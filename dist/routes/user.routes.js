@@ -36,4 +36,5 @@ router.get('/wallet', wallet_controller_1.getWalletStats);
 router.post('/withdraw', wallet_controller_1.requestWithdrawal);
 // Visit Links
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
+router.post('/visit-links/claim', visitLink_controller_1.claimVisitLinkReward);
 exports.default = router;

@@ -173,3 +173,13 @@ model VisitEarnLink {
   createdAt    DateTime @default(now())
 }
 
+model VisitEarnClaim {
+  id        String   @id @default(uuid())
+  userId    String
+  linkId    String
+  claimedAt DateTime @default(now())
+
+  @@index([userId, linkId])
+}
+
+
