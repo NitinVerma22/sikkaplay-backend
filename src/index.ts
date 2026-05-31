@@ -8,6 +8,7 @@ import configRoutes from './routes/config.routes';
 import notificationRoutes from './routes/notification.routes';
 import supportRoutes from './routes/support.routes';
 import adminRoutes from './routes/admin.routes';
+import callbackRoutes from './routes/callback.routes';
 import { startCronJobs } from './services/cron.service';
 
 const app = express();
@@ -26,6 +27,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/callbacks', callbackRoutes);
 
 // Basic health check route
 app.get('/', (req: Request, res: Response) => {
