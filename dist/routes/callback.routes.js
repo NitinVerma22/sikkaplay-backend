@@ -7,4 +7,6 @@ const router = (0, express_1.Router)();
 // Supports both GET and POST requests
 router.get('/cpx', callback_controller_1.handleCpxCallback);
 router.post('/cpx', callback_controller_1.handleCpxCallback);
+// Public webhook route called by Google AdMob SSV
+router.get('/admob-ssv', callback_controller_1.handleAdmobSsvCallback);
 exports.default = router;
