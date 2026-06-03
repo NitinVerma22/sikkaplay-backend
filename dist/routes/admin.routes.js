@@ -18,10 +18,14 @@ router.put('/config', admin_controller_1.updateConfigs);
 // User Management
 router.get('/users', admin_controller_1.getUsers);
 router.put('/users/:id/balance', admin_controller_1.updateUserBalance);
+router.put('/users/:id/freeze', admin_controller_1.toggleUserFreeze);
 router.delete('/users/:id', admin_controller_1.deleteUser);
+// Push Notification Broadcast
+router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 // Withdrawal Management
 router.get('/withdrawals', admin_controller_1.getWithdrawals);
 router.put('/withdrawals/:id', admin_controller_1.updateWithdrawalStatus);
+router.post('/withdrawals/bulk', admin_controller_1.bulkUpdateWithdrawalStatus);
 // Support & FAQ Tickets Management
 router.get('/tickets', admin_controller_1.getSupportTickets);
 router.post('/tickets/:id/reply', admin_controller_1.replySupportTicket);

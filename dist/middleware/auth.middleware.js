@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireJwt = exports.verifyToken = void 0;
 const firebase_1 = require("../config/firebase");
+const db_1 = require("../config/db");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -25,7 +26,7 @@ const verifyToken = async (req, res, next) => {
 };
 exports.verifyToken = verifyToken;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
-const requireJwt = (req, res, next) => {
+const requireJwt = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({ error: 'Unauthorized: No token provided' });
@@ -35,6 +36,15 @@ const requireJwt = (req, res, next) => {
     try {
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         req.user = decoded; // Contains userId
+        // Dynamic anti-fraud/suspension check
+        const user = await db_1.prisma.user.findUnique({
+            where: { id: decoded.userId },
+            select: { isBlocked: true }
+        });
+        if (user?.isBlocked) {
+            res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
+            return;
+        }
         next();
     }
     catch (error) {

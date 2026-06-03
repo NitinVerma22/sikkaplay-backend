@@ -1,24 +1,12 @@
 import { prisma } from '../config/db';
+import * as admin from 'firebase-admin';
+import '../config/firebase'; // Ensure Firebase Admin is initialized
 
-// import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin here once you have serviceAccountKey.json
-// admin.initializeApp({
-//   credential: admin.credential.cert(require('../../serviceAccountKey.json')),
-// });
-
-export const sendPushNotification = async (fcmToken: string, title: string, body: string) => {
+export const sendPushNotification = async (fcmToken: string, title: string, body: string, type: string = 'alert') => {
   if (!fcmToken) return;
 
+  // 1. Save to database so it appears in the Notification Tab
   try {
-    // console.log(`Sending push to ${fcmToken}: ${title} - ${body}`);
-    // await admin.messaging().send({
-    //   token: fcmToken,
-    //   notification: { title, body }
-    // });
-    console.log(`[MOCK PUSH NOTIFICATION] To: ${fcmToken} | Title: ${title} | Body: ${body}`);
-
-    // Save to database so it appears in the Notification Tab
     const user = await prisma.user.findFirst({ where: { fcmToken } });
     if (user) {
       await prisma.notification.create({
@@ -26,12 +14,30 @@ export const sendPushNotification = async (fcmToken: string, title: string, body
           userId: user.id,
           title,
           body,
-          type: 'alert',
+          type,
         }
       });
     }
+  } catch (dbError) {
+    console.error('Error saving notification to DB:', dbError);
+  }
 
+  // 2. Send real push notification via FCM
+  try {
+    console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}]`);
+    await admin.messaging().send({
+      token: fcmToken,
+      notification: { title, body },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'sikkaplay_high_channel',
+          color: '#7C3AED', // App brand theme color (Purple)
+          icon: 'ic_launcher',
+        }
+      }
+    });
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error('Error sending push notification via FCM:', error);
   }
 };

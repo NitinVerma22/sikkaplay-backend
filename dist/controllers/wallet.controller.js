@@ -36,7 +36,7 @@ const getWalletStats = async (req, res) => {
             referral: { today: 0, yesterday: 0, weekly: 0, monthly: 0, total: 0 }
         };
         for (const tx of transactions) {
-            const isReferral = tx.type === 'referral_level_income';
+            const isReferral = tx.type === 'referral_level_income' || tx.type === 'network_income';
             const target = isReferral ? stats.referral : stats.self;
             target.total += tx.amount;
             if (tx.createdAt >= startOfToday) {

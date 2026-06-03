@@ -9,8 +9,11 @@ import {
   deleteUser,
   getWithdrawals,
   updateWithdrawalStatus,
+  bulkUpdateWithdrawalStatus,
   getSupportTickets,
-  replySupportTicket
+  replySupportTicket,
+  toggleUserFreeze,
+  broadcastPushNotification
 } from '../controllers/admin.controller';
 import { requireAdminJwt } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
@@ -34,11 +37,16 @@ router.put('/config', updateConfigs);
 // User Management
 router.get('/users', getUsers);
 router.put('/users/:id/balance', updateUserBalance);
+router.put('/users/:id/freeze', toggleUserFreeze);
 router.delete('/users/:id', deleteUser);
+
+// Push Notification Broadcast
+router.post('/broadcast-push', broadcastPushNotification);
 
 // Withdrawal Management
 router.get('/withdrawals', getWithdrawals);
 router.put('/withdrawals/:id', updateWithdrawalStatus);
+router.post('/withdrawals/bulk', bulkUpdateWithdrawalStatus);
 
 // Support & FAQ Tickets Management
 router.get('/tickets', getSupportTickets);

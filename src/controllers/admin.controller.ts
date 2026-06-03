@@ -3,6 +3,7 @@ import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
+import { sendPushNotification } from '../services/push.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -287,6 +288,84 @@ export const getWithdrawals = async (req: AdminAuthRequest, res: Response): Prom
   }
 };
 
+const processWithdrawal = async (txId: string, status: 'success' | 'failed', referenceId?: string) => {
+  const tx = await prisma.transaction.findUnique({
+    where: { id: txId },
+    include: { user: true }
+  });
+
+  if (!tx || tx.type !== 'withdrawal') {
+    throw new Error(`Withdrawal request ${txId} not found`);
+  }
+
+  if (tx.status !== 'pending') {
+    throw new Error(`Withdrawal request ${txId} is already processed`);
+  }
+
+  const updatedTx = await prisma.$transaction(async (prismaTx) => {
+    // 1. Update transaction status
+    const updated = await prismaTx.transaction.update({
+      where: { id: txId },
+      data: {
+        status,
+        description: status === 'success' 
+          ? `Withdrawal Successful. Ref ID: ${referenceId || 'N/A'}` 
+          : 'Withdrawal Rejected/Failed.'
+      }
+    });
+
+    // 2. If failed, refund the amount back to user's wallet
+    if (status === 'failed') {
+      const refundAmount = Math.abs(tx.amount);
+      console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId}`);
+      await prismaTx.user.update({
+        where: { id: tx.userId },
+        data: {
+          balance: { increment: refundAmount }
+        }
+      });
+    } else if (status === 'success') {
+      const withdrawAmount = Math.abs(tx.amount);
+      console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} for user ID: ${tx.userId}`);
+      // Increment withdrawalAmount stats
+      await prismaTx.user.update({
+        where: { id: tx.userId },
+        data: {
+          withdrawalAmount: { increment: withdrawAmount }
+        }
+      });
+    }
+
+    return updated;
+  });
+
+  // Create a notification for the user
+  const targetUser = await prisma.user.findUnique({
+    where: { id: tx.userId },
+    select: { fcmToken: true }
+  });
+
+  const notifTitle = status === 'success' ? 'Withdrawal Approved 💰' : 'Withdrawal Failed ❌';
+  const notifBody = status === 'success'
+    ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Ref: ${referenceId || 'N/A'}`
+    : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`;
+
+  if (targetUser?.fcmToken) {
+    await sendPushNotification(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal');
+  } else {
+    await prisma.notification.create({
+      data: {
+        userId: tx.userId,
+        title: notifTitle,
+        body: notifBody,
+        type: 'withdrawal'
+      }
+    });
+  }
+
+  return updatedTx;
+};
+
 export const updateWithdrawalStatus = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
@@ -297,73 +376,64 @@ export const updateWithdrawalStatus = async (req: AdminAuthRequest, res: Respons
        return;
     }
 
-    const tx = await prisma.transaction.findUnique({
-      where: { id },
-      include: { user: true }
-    });
-
-    if (!tx || tx.type !== 'withdrawal') {
-       res.status(404).json({ error: 'Withdrawal request not found' });
-       return;
-    }
-
-    if (tx.status !== 'pending') {
-       res.status(400).json({ error: 'Withdrawal request is already processed' });
-       return;
-    }
-
-    const updatedTx = await prisma.$transaction(async (prismaTx) => {
-      // 1. Update transaction status
-      const updated = await prismaTx.transaction.update({
-        where: { id },
-        data: {
-          status,
-          description: status === 'success' 
-            ? `Withdrawal Successful. Ref ID: ${referenceId || 'N/A'}` 
-            : 'Withdrawal Rejected/Failed.'
-        }
-      });
-
-      // 2. If failed, refund the amount back to user's wallet
-      if (status === 'failed') {
-        const refundAmount = Math.abs(tx.amount);
-        console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId}`);
-        await prismaTx.user.update({
-          where: { id: tx.userId },
-          data: {
-            balance: { increment: refundAmount }
-          }
-        });
-      } else if (status === 'success') {
-        const withdrawAmount = Math.abs(tx.amount);
-        console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} for user ID: ${tx.userId}`);
-        // Increment withdrawalAmount stats
-        await prismaTx.user.update({
-          where: { id: tx.userId },
-          data: {
-            withdrawalAmount: { increment: withdrawAmount }
-          }
-        });
-      }
-
-      return updated;
-    });
-
-    // Create a notification for the user
-    await prisma.notification.create({
-      data: {
-        userId: tx.userId,
-        title: status === 'success' ? 'Withdrawal Approved 💰' : 'Withdrawal Failed ❌',
-        body: status === 'success'
-          ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Ref: ${referenceId || 'N/A'}`
-          : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`,
-        type: 'withdrawal'
-      }
-    });
-
+    const updatedTx = await processWithdrawal(id, status, referenceId);
     res.status(200).json({ success: true, message: 'Withdrawal status updated', transaction: updatedTx });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update Withdrawal Error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
+export const bulkUpdateWithdrawalStatus = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ids, status, referenceId } = req.body; // ids: 'all_pending' | string[], status: 'success' | 'failed'
+
+    if (!['success', 'failed'].includes(status)) {
+       res.status(400).json({ error: 'Invalid status. Must be success or failed' });
+       return;
+    }
+
+    let targetIds: string[] = [];
+
+    if (ids === 'all_pending') {
+      const pendingTxs = await prisma.transaction.findMany({
+        where: { type: 'withdrawal', status: 'pending' },
+        select: { id: true }
+      });
+      targetIds = pendingTxs.map(t => t.id);
+    } else if (Array.isArray(ids)) {
+      targetIds = ids;
+    } else {
+      res.status(400).json({ error: 'ids must be "all_pending" or an array of strings' });
+      return;
+    }
+
+    if (targetIds.length === 0) {
+      res.status(200).json({ success: true, message: 'No withdrawals to process' });
+      return;
+    }
+
+    const results = [];
+    const errors = [];
+
+    for (const id of targetIds) {
+      try {
+        const updated = await processWithdrawal(id, status, referenceId);
+        results.push(updated);
+      } catch (err: any) {
+        console.error(`Error processing bulk withdrawal ${id}:`, err);
+        errors.push({ id, error: err.message || 'Error processing request' });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully processed ${results.length} withdrawals. Errors: ${errors.length}`,
+      processedCount: results.length,
+      errors
+    });
+  } catch (error: any) {
+    console.error('Bulk Update Withdrawal Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -431,19 +501,147 @@ export const replySupportTicket = async (req: AdminAuthRequest, res: Response): 
       }
     });
 
-    // Notify user in-app
-    await prisma.notification.create({
-      data: {
-        userId: ticket.userId,
-        title: 'Support Ticket Reply ✉️',
-        body: `Support team replied to your ticket: "${reply.substring(0, 40)}..."`,
-        type: 'alert'
-      }
+    // Notify user via push notification
+    const ticketUser = await prisma.user.findUnique({
+      where: { id: ticket.userId },
+      select: { fcmToken: true }
     });
+
+    const ticketNotifTitle = 'Support Ticket Reply ✉️';
+    const ticketNotifBody = `Support team replied to your ticket: "${reply.substring(0, 40)}..."`;
+
+    if (ticketUser?.fcmToken) {
+      await sendPushNotification(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert');
+    } else {
+      await prisma.notification.create({
+        data: {
+          userId: ticket.userId,
+          title: ticketNotifTitle,
+          body: ticketNotifBody,
+          type: 'alert'
+        }
+      });
+    }
 
     res.status(200).json({ success: true, message: 'Reply sent and ticket resolved', ticket: updatedTicket });
   } catch (error) {
     console.error('Reply Ticket Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const toggleUserFreeze = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { isBlocked: !user.isBlocked }
+    });
+
+    res.status(200).json({ success: true, isBlocked: updatedUser.isBlocked });
+  } catch (error) {
+    console.error('Toggle User Freeze Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const broadcastPushNotification = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { title, body, type, targetType, phoneNumber } = req.body;
+
+    if (!title || !body) {
+      res.status(400).json({ error: 'Title and body are required' });
+      return;
+    }
+
+    const notificationType = type || 'alert';
+
+    if (targetType === 'specific') {
+      if (!phoneNumber) {
+        res.status(400).json({ error: 'Phone number is required for specific targeting' });
+        return;
+      }
+
+      let formattedPhone = phoneNumber.trim();
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+91' + formattedPhone;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { phoneNumber: formattedPhone },
+        select: { id: true, fcmToken: true }
+      });
+
+      if (!user) {
+        res.status(404).json({ error: 'User with this phone number not found' });
+        return;
+      }
+
+      if (user.fcmToken) {
+        await sendPushNotification(user.fcmToken, title, body, notificationType);
+      } else {
+        await prisma.notification.create({
+          data: {
+            userId: user.id,
+            title,
+            body,
+            type: notificationType
+          }
+        });
+      }
+    } else {
+      let whereClause: any = {};
+
+      if (targetType === 'inactive_2_days') {
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+        whereClause.updatedAt = { lt: twoDaysAgo };
+      } else if (targetType === 'inactive_7_days') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        whereClause.updatedAt = { lt: sevenDaysAgo };
+      } else if (targetType === 'zero_balance') {
+        whereClause.balance = 0;
+      }
+
+      const users = await prisma.user.findMany({
+        where: whereClause,
+        select: { id: true, fcmToken: true }
+      });
+
+      if (users.length === 0) {
+        res.status(200).json({ success: true, message: 'No users matched the criteria.' });
+        return;
+      }
+
+      const usersWithToken = users.filter(u => u.fcmToken);
+      const usersWithoutToken = users.filter(u => !u.fcmToken);
+
+      const pushPromises = usersWithToken.map(u => 
+        sendPushNotification(u.fcmToken!, title, body, notificationType)
+      );
+
+      const dbEntries = usersWithoutToken.map(u => ({
+        userId: u.id,
+        title,
+        body,
+        type: notificationType
+      }));
+
+      await Promise.all([
+        ...pushPromises,
+        dbEntries.length > 0 ? prisma.notification.createMany({ data: dbEntries }) : Promise.resolve()
+      ]);
+    }
+
+    res.status(200).json({ success: true, message: 'Notifications sent successfully' });
+  } catch (error) {
+    console.error('Broadcast Push Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

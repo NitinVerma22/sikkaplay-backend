@@ -103,6 +103,10 @@ const loginWithPassword = async (req, res) => {
             res.status(404).json({ error: 'User not registered' });
             return;
         }
+        if (user.isBlocked) {
+            res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
+            return;
+        }
         if (!user.passwordHash) {
             res.status(400).json({ error: 'Invalid credentials' });
             return;
@@ -158,6 +162,10 @@ const googleLogin = async (req, res) => {
             where: { firebaseUid: firebaseUser.uid }
         });
         if (existingUser) {
+            if (existingUser.isBlocked) {
+                res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
+                return;
+            }
             // User exists, just log them in
             const token = jsonwebtoken_1.default.sign({ userId: existingUser.id }, JWT_SECRET, { expiresIn: '30d' });
             res.status(200).json({ success: true, message: 'Login successful', token, user: existingUser });

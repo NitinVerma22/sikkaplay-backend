@@ -41,7 +41,7 @@ export const getWalletStats = async (req: AuthRequest, res: Response): Promise<v
     };
 
     for (const tx of transactions) {
-      const isReferral = tx.type === 'referral_level_income';
+      const isReferral = tx.type === 'referral_level_income' || tx.type === 'network_income';
       const target = isReferral ? stats.referral : stats.self;
       
       target.total += tx.amount;

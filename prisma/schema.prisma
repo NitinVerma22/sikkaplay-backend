@@ -24,6 +24,7 @@ model User {
   upiId           String?       // User's preferred UPI ID for withdrawal
   totalEarned     Int           @default(0)
   withdrawalAmount Int          @default(0)
+  isBlocked       Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   transactions    Transaction[]
@@ -130,11 +131,15 @@ model AppConfig {
   
   // Play & Earn Milestones
   playM1Mins          Int      @default(20)
-  playM1Coins         Int      @default(50)
-  playM2Mins          Int      @default(60)
-  playM2Coins         Int      @default(200)
-  playM3Mins          Int      @default(180)
-  playM3Coins         Int      @default(600)
+  playM1Coins         Int      @default(40)
+  playM2Mins          Int      @default(50)
+  playM2Coins         Int      @default(90)
+  playM3Mins          Int      @default(99)
+  playM3Coins         Int      @default(180)
+
+  // Daily Tasks Coins Configuration
+  dailyCodeTaskCoins  Int      @default(10)
+  visitAllTaskCoins   Int      @default(30)
 
   // Ad Management Configurations
   adsEnabled          Boolean  @default(true)

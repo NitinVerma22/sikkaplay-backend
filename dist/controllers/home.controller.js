@@ -67,10 +67,7 @@ const getHomeState = async (req, res) => {
                 break;
             }
         }
-        // Add today's claim to streak if claimed today
-        if (hasClaimedToday) {
-            currentStreak++;
-        }
+        // Today's claim is already processed inside the allStreaks loop since allStreaks contains today's transaction if claimed today.
         // Reconstruct recent rewards for home screen
         const recentRewards = topTransactions.map(t => ({
             title: t.description,
@@ -103,20 +100,48 @@ const getHomeState = async (req, res) => {
             const id = t.description.toLowerCase().split(' ').pop() || '';
             completedSocialTasks.push(id);
         });
+        // 1. Visit All Links calculations
+        const totalLinks = await db_1.prisma.visitEarnLink.count();
+        const visitedClaimsToday = await db_1.prisma.visitEarnClaim.findMany({
+            where: {
+                userId,
+                claimedAt: { gte: startOfToday }
+            },
+            select: { linkId: true }
+        });
+        const uniqueVisitedLinks = new Set(visitedClaimsToday.map(c => c.linkId));
+        const hasVisitedAllLinksToday = totalLinks > 0 && uniqueVisitedLinks.size >= totalLinks;
+        // 2. Claim Daily Code calculations
+        const dailyCodeClaimsToday = await db_1.prisma.dailyCodeClaim.count({
+            where: {
+                userId,
+                createdAt: { gte: startOfToday }
+            }
+        });
+        const hasClaimedDailyCodeToday = dailyCodeClaimsToday > 0;
+        // 3. Check if task rewards were claimed today
+        const dailyCodeTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Claimed Daily Code');
+        const visitAllTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Visited All Links');
         res.status(200).json({
             success: true,
             balance: user.balance,
             totalEarning: user.totalEarned,
             referralEarning: user.referralBalance,
             withdrawalAmount: user.withdrawalAmount,
-            streakCount: Math.max(1, currentStreak),
+            streakCount: currentStreak,
             hasClaimedToday,
             recentRewards,
             reelsMinutesWatched: usageToday?.reelsMinutes || 0,
             gamesMinutesPlayed: usageToday?.gamesMinutes || 0,
             watchEarnClaimedMilestones,
             playEarnClaimedMilestones,
-            completedSocialTasks
+            completedSocialTasks,
+            dailyCodeTaskCompleted: hasClaimedDailyCodeToday,
+            dailyCodeTaskClaimed,
+            visitAllTaskCompleted: hasVisitedAllLinksToday,
+            visitAllTaskClaimed,
+            visitAllTaskTotalLinks: totalLinks,
+            visitAllTaskVisitedLinks: uniqueVisitedLinks.size
         });
     }
     catch (error) {
