@@ -7,6 +7,7 @@ import {
   getUsers,
   updateUserBalance,
   deleteUser,
+  bulkDeleteUsers,
   getWithdrawals,
   updateWithdrawalStatus,
   bulkUpdateWithdrawalStatus,
@@ -39,6 +40,7 @@ router.get('/users', getUsers);
 router.put('/users/:id/balance', updateUserBalance);
 router.put('/users/:id/freeze', toggleUserFreeze);
 router.delete('/users/:id', deleteUser);
+router.post('/users/bulk-delete', bulkDeleteUsers);
 
 // Push Notification Broadcast
 router.post('/broadcast-push', broadcastPushNotification);

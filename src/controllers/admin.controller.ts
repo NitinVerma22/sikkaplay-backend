@@ -239,12 +239,39 @@ export const deleteUser = async (req: AdminAuthRequest, res: Response): Promise<
     await prisma.referralReward.deleteMany({ where: { userId: id } });
     await prisma.notification.deleteMany({ where: { userId: id } });
     await prisma.supportTicket.deleteMany({ where: { userId: id } });
+    await prisma.visitEarnClaim.deleteMany({ where: { userId: id } });
 
     await prisma.user.delete({ where: { id } });
 
     res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete User Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const bulkDeleteUsers = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { userIds } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      res.status(400).json({ error: 'Missing or invalid userIds array' });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.transaction.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.dailyUsage.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.referralReward.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.notification.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.supportTicket.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.visitEarnClaim.deleteMany({ where: { userId: { in: userIds } } }),
+      prisma.user.deleteMany({ where: { id: { in: userIds } } }),
+    ]);
+
+    res.status(200).json({ success: true, message: `${userIds.length} users deleted successfully` });
+  } catch (error) {
+    console.error('Bulk Delete Users Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
