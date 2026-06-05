@@ -38,6 +38,9 @@ async function main() {
         apkDownloadUrl: 'https://sikkaplay-apk.web.app/app-release.apk',
         latestAppVersion: '1.0.0',
         forceUpdate: false,
+        telegramLink: 'https://t.me/sikkaplay',
+        whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
+        groupLink: 'https://t.me/sikkaplay_group',
         watchM1Mins: 20,
         watchM1Coins: 50,
         watchM2Mins: 60,
@@ -83,6 +86,9 @@ async function main() {
         dailyCodeAdRequired: true,
         surveysAdRequired: true,
         reelsAdInterval: 5,
+        telegramLink: 'https://t.me/sikkaplay',
+        whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
+        groupLink: 'https://t.me/sikkaplay_group',
       }
     });
   }

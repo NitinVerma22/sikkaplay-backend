@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi, getLeaderboard } from '../controllers/user.controller';
 import { claimReward } from '../controllers/earn.controller';
 import { logUsage } from '../controllers/usage.controller';
 import { getMyNetwork } from '../controllers/network.controller';
@@ -15,6 +15,9 @@ router.use(requireJwt);
 
 // GET /api/user/profile
 router.get('/profile', getProfile);
+
+// GET /api/user/leaderboard
+router.get('/leaderboard', getLeaderboard);
 
 // POST /api/user/fcm-token
 router.post('/fcm-token', updateFcmToken);

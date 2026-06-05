@@ -120,6 +120,9 @@ model AppConfig {
   apkDownloadUrl      String   @default("https://sikkaplay-apk.web.app/app-release.apk")
   latestAppVersion    String   @default("1.0.0")
   forceUpdate         Boolean  @default(false)
+  telegramLink        String   @default("https://t.me/sikkaplay")
+  whatsappLink        String   @default("https://whatsapp.com/channel/sikkaplay")
+  groupLink           String   @default("https://t.me/sikkaplay_group")
   
   // Watch & Earn Milestones
   watchM1Mins         Int      @default(20)
