@@ -80,6 +80,7 @@ model Notification {
   isRead    Boolean  @default(false)
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+  bannerUrl String?  // Optional banner image URL
   createdAt DateTime @default(now())
 }
 

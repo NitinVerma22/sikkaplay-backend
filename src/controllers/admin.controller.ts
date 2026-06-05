@@ -581,7 +581,7 @@ export const toggleUserFreeze = async (req: AdminAuthRequest, res: Response): Pr
 
 export const broadcastPushNotification = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, body, type, targetType, phoneNumber } = req.body;
+    const { title, body, type, targetType, phoneNumber, bannerUrl } = req.body;
 
     if (!title || !body) {
       res.status(400).json({ error: 'Title and body are required' });
@@ -612,14 +612,15 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
       }
 
       if (user.fcmToken) {
-        await sendPushNotification(user.fcmToken, title, body, notificationType);
+        await sendPushNotification(user.fcmToken, title, body, notificationType, bannerUrl);
       } else {
         await prisma.notification.create({
           data: {
             userId: user.id,
             title,
             body,
-            type: notificationType
+            type: notificationType,
+            bannerUrl,
           }
         });
       }
@@ -650,14 +651,15 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
       const usersWithoutToken = users.filter(u => !u.fcmToken);
 
       const pushPromises = usersWithToken.map(u => 
-        sendPushNotification(u.fcmToken!, title, body, notificationType)
+        sendPushNotification(u.fcmToken!, title, body, notificationType, bannerUrl)
       );
 
       const dbEntries = usersWithoutToken.map(u => ({
         userId: u.id,
         title,
         body,
-        type: notificationType
+        type: notificationType,
+        bannerUrl,
       }));
 
       await Promise.all([

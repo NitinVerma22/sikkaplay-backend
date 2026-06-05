@@ -2,7 +2,13 @@ import { prisma } from '../config/db';
 import * as admin from 'firebase-admin';
 import '../config/firebase'; // Ensure Firebase Admin is initialized
 
-export const sendPushNotification = async (fcmToken: string, title: string, body: string, type: string = 'alert') => {
+export const sendPushNotification = async (
+  fcmToken: string, 
+  title: string, 
+  body: string, 
+  type: string = 'alert', 
+  bannerUrl: string | null = null
+) => {
   if (!fcmToken) return;
 
   // 1. Save to database so it appears in the Notification Tab
@@ -15,6 +21,7 @@ export const sendPushNotification = async (fcmToken: string, title: string, body
           title,
           body,
           type,
+          bannerUrl,
         }
       });
     }
@@ -24,8 +31,9 @@ export const sendPushNotification = async (fcmToken: string, title: string, body
 
   // 2. Send real push notification via FCM
   try {
-    console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}]`);
-    await admin.messaging().send({
+    console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}, banner: ${bannerUrl}]`);
+    
+    const message: any = {
       token: fcmToken,
       notification: { title, body },
       android: {
@@ -36,7 +44,13 @@ export const sendPushNotification = async (fcmToken: string, title: string, body
           icon: 'ic_launcher',
         }
       }
-    });
+    };
+
+    if (bannerUrl && bannerUrl.trim() !== '') {
+      message.notification.imageUrl = bannerUrl;
+    }
+
+    await admin.messaging().send(message);
   } catch (error) {
     console.error('Error sending push notification via FCM:', error);
   }
