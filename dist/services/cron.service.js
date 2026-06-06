@@ -7,7 +7,10 @@ exports.startCronJobs = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const db_1 = require("../config/db");
 const push_service_1 = require("./push.service");
+const network_service_1 = require("./network.service");
 const startCronJobs = () => {
+    // Process any pending commissions immediately on startup
+    (0, network_service_1.distributePendingReferralCommissions)().catch(e => console.error('Error processing startup commissions:', e));
     // Run every night at midnight (00:00)
     node_cron_1.default.schedule('0 0 * * *', async () => {
         console.log('Running daily cron job for referral rewards...');
@@ -16,6 +19,16 @@ const startCronJobs = () => {
         }
         catch (error) {
             console.error('Error running daily cron job:', error);
+        }
+    });
+    // Run every 3 hours (0 */3 * * *) for referral commission distribution
+    node_cron_1.default.schedule('0 */3 * * *', async () => {
+        console.log('Running 3-hourly cron job for referral commission distribution...');
+        try {
+            await (0, network_service_1.distributePendingReferralCommissions)();
+        }
+        catch (error) {
+            console.error('Error running 3-hourly referral cron job:', error);
         }
     });
     // Also run every hour to check for 3 hour inactivity

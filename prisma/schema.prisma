@@ -36,14 +36,15 @@ model User {
 }
 
 model Transaction {
-  id          String   @id @default(uuid())
-  amount      Int
-  type        String   // 'earning', 'withdrawal', 'bonus'
-  status      String   // 'success', 'pending', 'failed'
-  description String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
+  id                  String   @id @default(uuid())
+  amount              Int
+  type                String   // 'earning', 'withdrawal', 'bonus'
+  status              String   // 'success', 'pending', 'failed'
+  description         String
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  createdAt           DateTime @default(now())
+  isReferralProcessed Boolean  @default(false)
 }
 
 model DailyUsage {

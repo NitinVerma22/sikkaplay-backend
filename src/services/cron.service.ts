@@ -1,8 +1,12 @@
 import cron from 'node-cron';
 import { prisma } from '../config/db';
 import { sendPushNotification } from './push.service';
+import { distributePendingReferralCommissions } from './network.service';
 
 export const startCronJobs = () => {
+  // Process any pending commissions immediately on startup
+  distributePendingReferralCommissions().catch(e => console.error('Error processing startup commissions:', e));
+
   // Run every night at midnight (00:00)
   cron.schedule('0 0 * * *', async () => {
     console.log('Running daily cron job for referral rewards...');
@@ -10,6 +14,16 @@ export const startCronJobs = () => {
       await evaluateDailyMilestones();
     } catch (error) {
       console.error('Error running daily cron job:', error);
+    }
+  });
+
+  // Run every 3 hours (0 */3 * * *) for referral commission distribution
+  cron.schedule('0 */3 * * *', async () => {
+    console.log('Running 3-hourly cron job for referral commission distribution...');
+    try {
+      await distributePendingReferralCommissions();
+    } catch (error) {
+      console.error('Error running 3-hourly referral cron job:', error);
     }
   });
 

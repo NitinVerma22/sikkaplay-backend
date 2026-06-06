@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimReward = void 0;
 const db_1 = require("../config/db");
-const network_service_1 = require("../services/network.service");
 const date_utils_1 = require("../utils/date.utils");
 const claimReward = async (req, res) => {
     try {
@@ -57,10 +56,6 @@ const claimReward = async (req, res) => {
             });
             return { user: updatedUser, transaction: newTransaction };
         });
-        // Trigger MLM distribution in the background (no need to await and block the response)
-        if (amount > 0) {
-            (0, network_service_1.distributeLevelIncome)(userId, amount, description || type).catch(e => console.error(e));
-        }
         res.status(200).json({
             success: true,
             message: 'Reward claimed successfully',

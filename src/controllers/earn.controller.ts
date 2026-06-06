@@ -1,7 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
-import { distributeLevelIncome } from '../services/network.service';
 import { getStartOfTodayIST } from '../utils/date.utils';
 
 export const claimReward = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -67,10 +66,7 @@ export const claimReward = async (req: AuthRequest, res: Response): Promise<void
       return { user: updatedUser, transaction: newTransaction };
     });
 
-    // Trigger MLM distribution in the background (no need to await and block the response)
-    if (amount > 0) {
-      distributeLevelIncome(userId, amount, description || type).catch(e => console.error(e));
-    }
+
 
     res.status(200).json({
       success: true,
