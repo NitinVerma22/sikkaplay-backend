@@ -91,15 +91,48 @@ const getHomeState = async (req, res) => {
             if (matchPlay)
                 playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
         });
+        const config = await db_1.prisma.appConfig.findFirst();
         const completedSocialTasks = [];
-        // Assuming social tasks are stored once, we need to check ALL transactions for this
-        const allSocialTasks = await db_1.prisma.transaction.findMany({
-            where: { userId, type: 'social_task' }
-        });
-        allSocialTasks.forEach(t => {
-            const id = t.description.toLowerCase().split(' ').pop() || '';
-            completedSocialTasks.push(id);
-        });
+        if (config) {
+            const [hasTelegram, hasWhatsapp, hasGroup] = await Promise.all([
+                db_1.prisma.transaction.findFirst({
+                    where: {
+                        userId,
+                        type: 'social_task',
+                        description: `Joined telegram: ${config.telegramLink}`
+                    }
+                }),
+                db_1.prisma.transaction.findFirst({
+                    where: {
+                        userId,
+                        type: 'social_task',
+                        description: `Joined whatsapp: ${config.whatsappLink}`
+                    }
+                }),
+                db_1.prisma.transaction.findFirst({
+                    where: {
+                        userId,
+                        type: 'social_task',
+                        description: `Joined group: ${config.groupLink}`
+                    }
+                })
+            ]);
+            if (hasTelegram)
+                completedSocialTasks.push('telegram');
+            if (hasWhatsapp)
+                completedSocialTasks.push('whatsapp');
+            if (hasGroup)
+                completedSocialTasks.push('group');
+        }
+        else {
+            const allSocialTasks = await db_1.prisma.transaction.findMany({
+                where: { userId, type: 'social_task' }
+            });
+            allSocialTasks.forEach(t => {
+                const id = t.description.toLowerCase().split(' ').pop() || '';
+                completedSocialTasks.push(id);
+            });
+        }
         // 1. Visit All Links calculations
         const totalLinks = await db_1.prisma.visitEarnLink.count();
         const visitedClaimsToday = await db_1.prisma.visitEarnClaim.findMany({

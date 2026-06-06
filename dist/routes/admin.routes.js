@@ -19,7 +19,9 @@ router.put('/config', admin_controller_1.updateConfigs);
 router.get('/users', admin_controller_1.getUsers);
 router.put('/users/:id/balance', admin_controller_1.updateUserBalance);
 router.put('/users/:id/freeze', admin_controller_1.toggleUserFreeze);
+router.put('/users/:id/change-password', admin_controller_1.changeUserPassword);
 router.delete('/users/:id', admin_controller_1.deleteUser);
+router.post('/users/bulk-delete', admin_controller_1.bulkDeleteUsers);
 // Push Notification Broadcast
 router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 // Withdrawal Management

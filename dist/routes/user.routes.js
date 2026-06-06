@@ -14,6 +14,8 @@ const router = (0, express_1.Router)();
 router.use(auth_middleware_1.requireJwt);
 // GET /api/user/profile
 router.get('/profile', user_controller_1.getProfile);
+// GET /api/user/leaderboard
+router.get('/leaderboard', user_controller_1.getLeaderboard);
 // POST /api/user/fcm-token
 router.post('/fcm-token', user_controller_1.updateFcmToken);
 // GET /api/user/transactions

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -220,6 +220,7 @@ const deleteUser = async (req, res) => {
         await db_1.prisma.referralReward.deleteMany({ where: { userId: id } });
         await db_1.prisma.notification.deleteMany({ where: { userId: id } });
         await db_1.prisma.supportTicket.deleteMany({ where: { userId: id } });
+        await db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: id } });
         await db_1.prisma.user.delete({ where: { id } });
         res.status(200).json({ success: true, message: 'User deleted successfully' });
     }
@@ -229,6 +230,30 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+const bulkDeleteUsers = async (req, res) => {
+    try {
+        const { userIds } = req.body;
+        if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+            res.status(400).json({ error: 'Missing or invalid userIds array' });
+            return;
+        }
+        await db_1.prisma.$transaction([
+            db_1.prisma.transaction.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.dailyUsage.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.referralReward.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.notification.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.supportTicket.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.user.deleteMany({ where: { id: { in: userIds } } }),
+        ]);
+        res.status(200).json({ success: true, message: `${userIds.length} users deleted successfully` });
+    }
+    catch (error) {
+        console.error('Bulk Delete Users Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.bulkDeleteUsers = bulkDeleteUsers;
 // 5. Withdrawal Requests Management
 const getWithdrawals = async (req, res) => {
     try {
@@ -290,12 +315,13 @@ const processWithdrawal = async (txId, status, referenceId) => {
         // 2. If failed, refund the amount back to user's wallet
         if (status === 'failed') {
             const refundAmount = Math.abs(tx.amount);
-            console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId}`);
+            const isReferral = tx.description.includes('(Referral Earning)');
+            console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId} (Referral: ${isReferral})`);
             await prismaTx.user.update({
                 where: { id: tx.userId },
-                data: {
-                    balance: { increment: refundAmount }
-                }
+                data: isReferral
+                    ? { referralBalance: { increment: refundAmount } }
+                    : { balance: { increment: refundAmount } }
             });
         }
         else if (status === 'success') {
@@ -460,16 +486,19 @@ const replySupportTicket = async (req, res) => {
             }
         });
         // Notify user via push notification
-        const ticketUser = await db_1.prisma.user.findUnique({
-            where: { id: ticket.userId },
-            select: { fcmToken: true }
-        });
+        let ticketUser = null;
+        if (ticket.userId) {
+            ticketUser = await db_1.prisma.user.findUnique({
+                where: { id: ticket.userId },
+                select: { fcmToken: true }
+            });
+        }
         const ticketNotifTitle = 'Support Ticket Reply ✉️';
         const ticketNotifBody = `Support team replied to your ticket: "${reply.substring(0, 40)}..."`;
         if (ticketUser?.fcmToken) {
             await (0, push_service_1.sendPushNotification)(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert');
         }
-        else {
+        else if (ticket.userId) {
             await db_1.prisma.notification.create({
                 data: {
                     userId: ticket.userId,
@@ -509,7 +538,7 @@ const toggleUserFreeze = async (req, res) => {
 exports.toggleUserFreeze = toggleUserFreeze;
 const broadcastPushNotification = async (req, res) => {
     try {
-        const { title, body, type, targetType, phoneNumber } = req.body;
+        const { title, body, type, targetType, phoneNumber, bannerUrl } = req.body;
         if (!title || !body) {
             res.status(400).json({ error: 'Title and body are required' });
             return;
@@ -533,7 +562,7 @@ const broadcastPushNotification = async (req, res) => {
                 return;
             }
             if (user.fcmToken) {
-                await (0, push_service_1.sendPushNotification)(user.fcmToken, title, body, notificationType);
+                await (0, push_service_1.sendPushNotification)(user.fcmToken, title, body, notificationType, bannerUrl);
             }
             else {
                 await db_1.prisma.notification.create({
@@ -541,7 +570,8 @@ const broadcastPushNotification = async (req, res) => {
                         userId: user.id,
                         title,
                         body,
-                        type: notificationType
+                        type: notificationType,
+                        bannerUrl,
                     }
                 });
             }
@@ -569,12 +599,13 @@ const broadcastPushNotification = async (req, res) => {
             }
             const usersWithToken = users.filter(u => u.fcmToken);
             const usersWithoutToken = users.filter(u => !u.fcmToken);
-            const pushPromises = usersWithToken.map(u => (0, push_service_1.sendPushNotification)(u.fcmToken, title, body, notificationType));
+            const pushPromises = usersWithToken.map(u => (0, push_service_1.sendPushNotification)(u.fcmToken, title, body, notificationType, bannerUrl));
             const dbEntries = usersWithoutToken.map(u => ({
                 userId: u.id,
                 title,
                 body,
-                type: notificationType
+                type: notificationType,
+                bannerUrl,
             }));
             await Promise.all([
                 ...pushPromises,
@@ -589,3 +620,33 @@ const broadcastPushNotification = async (req, res) => {
     }
 };
 exports.broadcastPushNotification = broadcastPushNotification;
+const changeUserPassword = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.trim() === '') {
+            res.status(400).json({ error: 'New password is required' });
+            return;
+        }
+        if (newPassword.length < 6) {
+            res.status(400).json({ error: 'Password must be at least 6 characters' });
+            return;
+        }
+        const user = await db_1.prisma.user.findUnique({ where: { id } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const passwordHash = await bcryptjs_1.default.hash(newPassword, 10);
+        await db_1.prisma.user.update({
+            where: { id },
+            data: { passwordHash }
+        });
+        res.status(200).json({ success: true, message: 'Password changed successfully' });
+    }
+    catch (error) {
+        console.error('Change User Password Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.changeUserPassword = changeUserPassword;

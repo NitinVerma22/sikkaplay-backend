@@ -4,12 +4,10 @@ const express_1 = require("express");
 const support_controller_1 = require("../controllers/support.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
-// Protect all support routes with JWT validation
-router.use(auth_middleware_1.requireJwt);
-// GET /api/support/faqs
+// GET /api/support/faqs (Public)
 router.get('/faqs', support_controller_1.getFaqs);
-// POST /api/support/tickets
+// POST /api/support/tickets (Public / Optional authentication handled in controller)
 router.post('/tickets', support_controller_1.createTicket);
-// GET /api/support/tickets
-router.get('/tickets', support_controller_1.getMyTickets);
+// GET /api/support/tickets (Strictly Protected - only logged-in users can see their tickets)
+router.get('/tickets', auth_middleware_1.requireJwt, support_controller_1.getMyTickets);
 exports.default = router;

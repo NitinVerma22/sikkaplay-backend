@@ -92,14 +92,14 @@ model FAQ {
 
 model SupportTicket {
   id          String   @id @default(uuid())
-  userId      String
+  userId      String?
   name        String
   mobile      String
   issue       String
   status      String   @default("pending") // pending, in_progress, resolved
   reply       String?  // Admin's reply
   createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model Admin {

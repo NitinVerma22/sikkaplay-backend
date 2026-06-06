@@ -344,12 +344,13 @@ const processWithdrawal = async (txId: string, status: 'success' | 'failed', ref
     // 2. If failed, refund the amount back to user's wallet
     if (status === 'failed') {
       const refundAmount = Math.abs(tx.amount);
-      console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId}`);
+      const isReferral = tx.description.includes('(Referral Earning)');
+      console.log(`[WITHDRAWAL REJECT] Refunding ${refundAmount} coins to user ID: ${tx.userId} (Referral: ${isReferral})`);
       await prismaTx.user.update({
         where: { id: tx.userId },
-        data: {
-          balance: { increment: refundAmount }
-        }
+        data: isReferral 
+          ? { referralBalance: { increment: refundAmount } }
+          : { balance: { increment: refundAmount } }
       });
     } else if (status === 'success') {
       const withdrawAmount = Math.abs(tx.amount);
@@ -529,17 +530,20 @@ export const replySupportTicket = async (req: AdminAuthRequest, res: Response): 
     });
 
     // Notify user via push notification
-    const ticketUser = await prisma.user.findUnique({
-      where: { id: ticket.userId },
-      select: { fcmToken: true }
-    });
+    let ticketUser = null;
+    if (ticket.userId) {
+      ticketUser = await prisma.user.findUnique({
+        where: { id: ticket.userId },
+        select: { fcmToken: true }
+      });
+    }
 
     const ticketNotifTitle = 'Support Ticket Reply ✉️';
     const ticketNotifBody = `Support team replied to your ticket: "${reply.substring(0, 40)}..."`;
 
     if (ticketUser?.fcmToken) {
       await sendPushNotification(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert');
-    } else {
+    } else if (ticket.userId) {
       await prisma.notification.create({
         data: {
           userId: ticket.userId,
@@ -671,6 +675,41 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
     res.status(200).json({ success: true, message: 'Notifications sent successfully' });
   } catch (error) {
     console.error('Broadcast Push Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const changeUserPassword = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim() === '') {
+      res.status(400).json({ error: 'New password is required' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash }
+    });
+
+    res.status(200).json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change User Password Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

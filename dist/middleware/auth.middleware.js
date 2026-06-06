@@ -41,7 +41,11 @@ const requireJwt = async (req, res, next) => {
             where: { id: decoded.userId },
             select: { isBlocked: true }
         });
-        if (user?.isBlocked) {
+        if (!user) {
+            res.status(401).json({ error: 'Unauthorized: User account does not exist.' });
+            return;
+        }
+        if (user.isBlocked) {
             res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
             return;
         }

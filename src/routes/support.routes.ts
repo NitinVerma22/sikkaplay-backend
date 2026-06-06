@@ -4,16 +4,13 @@ import { requireJwt } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Protect all support routes with JWT validation
-router.use(requireJwt);
-
-// GET /api/support/faqs
+// GET /api/support/faqs (Public)
 router.get('/faqs', getFaqs);
 
-// POST /api/support/tickets
+// POST /api/support/tickets (Public / Optional authentication handled in controller)
 router.post('/tickets', createTicket);
 
-// GET /api/support/tickets
-router.get('/tickets', getMyTickets);
+// GET /api/support/tickets (Strictly Protected - only logged-in users can see their tickets)
+router.get('/tickets', requireJwt, getMyTickets);
 
 export default router;

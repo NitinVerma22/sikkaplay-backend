@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.getLeaderboard = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const getProfile = async (req, res) => {
     try {
@@ -61,19 +61,30 @@ const getTransactions = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized: No user ID found in session' });
             return;
         }
+        // Only query transactions from the last 3 days
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
         const transactions = await db_1.prisma.transaction.findMany({
-            where: { userId },
+            where: {
+                userId,
+                createdAt: { gte: threeDaysAgo }
+            },
             orderBy: { createdAt: 'desc' },
             skip: (page - 1) * limit,
             take: limit,
         });
-        const total = await db_1.prisma.transaction.count({ where: { userId } });
+        const total = await db_1.prisma.transaction.count({
+            where: {
+                userId,
+                createdAt: { gte: threeDaysAgo }
+            }
+        });
         res.status(200).json({
             success: true,
             transactions,
             total,
             page,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.max(1, Math.ceil(total / limit))
         });
     }
     catch (error) {
@@ -102,3 +113,59 @@ const updateUpi = async (req, res) => {
     }
 };
 exports.updateUpi = updateUpi;
+const getLeaderboard = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized: No user ID found in session' });
+            return;
+        }
+        // 1. Fetch top 20 users sorted by totalEarned desc
+        const topUsers = await db_1.prisma.user.findMany({
+            orderBy: { totalEarned: 'desc' },
+            take: 20,
+            select: {
+                id: true,
+                name: true,
+                totalEarned: true,
+                phoneNumber: true,
+            },
+        });
+        // 2. Fetch current user
+        const currentUser = await db_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                name: true,
+                totalEarned: true,
+                phoneNumber: true,
+            },
+        });
+        if (!currentUser) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        // 3. Determine current user's rank
+        const higherEarnersCount = await db_1.prisma.user.count({
+            where: {
+                totalEarned: {
+                    gt: currentUser.totalEarned,
+                },
+            },
+        });
+        const userRank = higherEarnersCount + 1;
+        res.status(200).json({
+            success: true,
+            leaderboard: topUsers,
+            currentUserRank: {
+                rank: userRank,
+                user: currentUser,
+            },
+        });
+    }
+    catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getLeaderboard = getLeaderboard;

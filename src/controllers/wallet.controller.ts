@@ -91,7 +91,7 @@ export const getWalletStats = async (req: AuthRequest, res: Response): Promise<v
 export const requestWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { amount, upiId } = req.body;
+    const { amount, upiId, earningType } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -120,9 +120,40 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    if (user.balance < amount) {
-      res.status(400).json({ error: 'Insufficient balance' });
-      return;
+    const targetEarningType = earningType === 'referral' ? 'referral' : 'self';
+
+    if (targetEarningType === 'referral') {
+      if (user.referralBalance < amount) {
+        res.status(400).json({ error: 'Insufficient referral balance' });
+        return;
+      }
+
+      // Check referral withdrawal eligibility:
+      // A. Play time >= 50 hours (3000 minutes)
+      const usages = await prisma.dailyUsage.findMany({ where: { userId } });
+      const personalPlaytime = usages.reduce((acc, u) => acc + u.reelsMinutes + u.gamesMinutes, 0);
+      if (personalPlaytime < 3000) {
+        res.status(400).json({
+          error: `You need at least 50 hours of playtime to withdraw referral earnings. You currently have ${(personalPlaytime / 60).toFixed(1)} hours.`
+        });
+        return;
+      }
+
+      // B. Active referrals (direct Level 1 referred users) >= 2
+      const activeReferralsCount = await prisma.user.count({
+        where: { referredBy: user.referralCode }
+      });
+      if (activeReferralsCount < 2) {
+        res.status(400).json({
+          error: `You need at least 2 active referrals to withdraw referral earnings. You currently have ${activeReferralsCount}.`
+        });
+        return;
+      }
+    } else {
+      if (user.balance < amount) {
+        res.status(400).json({ error: 'Insufficient balance' });
+        return;
+      }
     }
 
     const targetUpi = upiId || user.upiId;
@@ -131,22 +162,40 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // 2. Process withdrawal transaction and deduct balance
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: { balance: { decrement: amount } }
-      }),
-      prisma.transaction.create({
-        data: {
-          userId,
-          amount: -amount, // Stored as a negative amount for withdrawals
-          type: 'withdrawal',
-          status: 'pending',
-          description: `Withdrawal request to UPI: ${targetUpi}`
-        }
-      })
-    ]);
+    // 2. Process withdrawal transaction and deduct correct balance pool
+    if (targetEarningType === 'referral') {
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { referralBalance: { decrement: amount } }
+        }),
+        prisma.transaction.create({
+          data: {
+            userId,
+            amount: -amount, // Stored as a negative amount for withdrawals
+            type: 'withdrawal',
+            status: 'pending',
+            description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`
+          }
+        })
+      ]);
+    } else {
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { balance: { decrement: amount } }
+        }),
+        prisma.transaction.create({
+          data: {
+            userId,
+            amount: -amount, // Stored as a negative amount for withdrawals
+            type: 'withdrawal',
+            status: 'pending',
+            description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`
+          }
+        })
+      ]);
+    }
 
     res.status(200).json({ success: true, message: 'Withdrawal request submitted successfully' });
   } catch (error) {

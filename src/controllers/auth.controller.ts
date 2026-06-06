@@ -39,8 +39,9 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    let referrer = null;
     if (referredBy) {
-      const referrer = await prisma.user.findUnique({ where: { referralCode: referredBy } });
+      referrer = await prisma.user.findUnique({ where: { referralCode: referredBy } });
       if (!referrer) {
          res.status(400).json({ error: 'Invalid referral code' });
          return;
@@ -60,7 +61,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const signupBonus = referredBy ? 500 : 100;
+    const signupBonus = referredBy ? 200 : 100;
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -86,6 +87,32 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
           description: referredBy ? 'Signup Bonus (Referred)' : 'Welcome Bonus',
         }
       });
+
+      if (referrer) {
+        const config = await tx.appConfig.findFirst();
+        const refRewardAmount = config?.referralBonus || 500;
+
+        // Reward the referrer
+        await tx.user.update({
+          where: { id: referrer.id },
+          data: {
+            balance: { increment: refRewardAmount },
+            totalEarned: { increment: refRewardAmount }
+          }
+        });
+
+        // Create referral transaction for the referrer
+        await tx.transaction.create({
+          data: {
+            userId: referrer.id,
+            amount: refRewardAmount,
+            type: 'earning',
+            status: 'success',
+            description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
+          }
+        });
+      }
+
       return newUser;
     });
 
@@ -233,8 +260,9 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
       return;
     }
 
+    let referrer = null;
     if (referredBy) {
-      const referrer = await prisma.user.findUnique({ where: { referralCode: referredBy } });
+      referrer = await prisma.user.findUnique({ where: { referralCode: referredBy } });
       if (!referrer) {
          res.status(400).json({ error: 'Invalid referral code' });
          return;
@@ -252,7 +280,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
       }
     }
 
-    const signupBonus = referredBy ? 500 : 100;
+    const signupBonus = referredBy ? 200 : 100;
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -277,6 +305,32 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
           description: referredBy ? 'Google Signup Bonus (Referred)' : 'Google Welcome Bonus',
         }
       });
+
+      if (referrer) {
+        const config = await tx.appConfig.findFirst();
+        const refRewardAmount = config?.referralBonus || 500;
+
+        // Reward the referrer
+        await tx.user.update({
+          where: { id: referrer.id },
+          data: {
+            balance: { increment: refRewardAmount },
+            totalEarned: { increment: refRewardAmount }
+          }
+        });
+
+        // Create referral transaction for the referrer
+        await tx.transaction.create({
+          data: {
+            userId: referrer.id,
+            amount: refRewardAmount,
+            type: 'earning',
+            status: 'success',
+            description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
+          }
+        });
+      }
+
       return newUser;
     });
 

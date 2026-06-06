@@ -34,8 +34,9 @@ const registerDirect = async (req, res) => {
             res.status(400).json({ error: 'User already exists. Please login.' });
             return;
         }
+        let referrer = null;
         if (referredBy) {
-            const referrer = await db_1.prisma.user.findUnique({ where: { referralCode: referredBy } });
+            referrer = await db_1.prisma.user.findUnique({ where: { referralCode: referredBy } });
             if (!referrer) {
                 res.status(400).json({ error: 'Invalid referral code' });
                 return;
@@ -53,7 +54,7 @@ const registerDirect = async (req, res) => {
             }
         }
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
-        const signupBonus = referredBy ? 500 : 100;
+        const signupBonus = referredBy ? 200 : 100;
         const user = await db_1.prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
                 data: {
@@ -77,6 +78,28 @@ const registerDirect = async (req, res) => {
                     description: referredBy ? 'Signup Bonus (Referred)' : 'Welcome Bonus',
                 }
             });
+            if (referrer) {
+                const config = await tx.appConfig.findFirst();
+                const refRewardAmount = config?.referralBonus || 500;
+                // Reward the referrer
+                await tx.user.update({
+                    where: { id: referrer.id },
+                    data: {
+                        balance: { increment: refRewardAmount },
+                        totalEarned: { increment: refRewardAmount }
+                    }
+                });
+                // Create referral transaction for the referrer
+                await tx.transaction.create({
+                    data: {
+                        userId: referrer.id,
+                        amount: refRewardAmount,
+                        type: 'earning',
+                        status: 'success',
+                        description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
+                    }
+                });
+            }
             return newUser;
         });
         const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
@@ -206,8 +229,9 @@ const completeGoogleSignup = async (req, res) => {
             res.status(400).json({ error: 'Phone number already registered to another account' });
             return;
         }
+        let referrer = null;
         if (referredBy) {
-            const referrer = await db_1.prisma.user.findUnique({ where: { referralCode: referredBy } });
+            referrer = await db_1.prisma.user.findUnique({ where: { referralCode: referredBy } });
             if (!referrer) {
                 res.status(400).json({ error: 'Invalid referral code' });
                 return;
@@ -224,7 +248,7 @@ const completeGoogleSignup = async (req, res) => {
                 isUnique = true;
             }
         }
-        const signupBonus = referredBy ? 500 : 100;
+        const signupBonus = referredBy ? 200 : 100;
         const user = await db_1.prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
                 data: {
@@ -247,6 +271,28 @@ const completeGoogleSignup = async (req, res) => {
                     description: referredBy ? 'Google Signup Bonus (Referred)' : 'Google Welcome Bonus',
                 }
             });
+            if (referrer) {
+                const config = await tx.appConfig.findFirst();
+                const refRewardAmount = config?.referralBonus || 500;
+                // Reward the referrer
+                await tx.user.update({
+                    where: { id: referrer.id },
+                    data: {
+                        balance: { increment: refRewardAmount },
+                        totalEarned: { increment: refRewardAmount }
+                    }
+                });
+                // Create referral transaction for the referrer
+                await tx.transaction.create({
+                    data: {
+                        userId: referrer.id,
+                        amount: refRewardAmount,
+                        type: 'earning',
+                        status: 'success',
+                        description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
+                    }
+                });
+            }
             return newUser;
         });
         const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });

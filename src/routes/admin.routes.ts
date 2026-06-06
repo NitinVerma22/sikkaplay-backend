@@ -14,7 +14,8 @@ import {
   getSupportTickets,
   replySupportTicket,
   toggleUserFreeze,
-  broadcastPushNotification
+  broadcastPushNotification,
+  changeUserPassword
 } from '../controllers/admin.controller';
 import { requireAdminJwt } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
@@ -39,6 +40,7 @@ router.put('/config', updateConfigs);
 router.get('/users', getUsers);
 router.put('/users/:id/balance', updateUserBalance);
 router.put('/users/:id/freeze', toggleUserFreeze);
+router.put('/users/:id/change-password', changeUserPassword);
 router.delete('/users/:id', deleteUser);
 router.post('/users/bulk-delete', bulkDeleteUsers);
 

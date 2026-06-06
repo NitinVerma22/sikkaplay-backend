@@ -37,7 +37,7 @@ exports.sendPushNotification = void 0;
 const db_1 = require("../config/db");
 const admin = __importStar(require("firebase-admin"));
 require("../config/firebase"); // Ensure Firebase Admin is initialized
-const sendPushNotification = async (fcmToken, title, body, type = 'alert') => {
+const sendPushNotification = async (fcmToken, title, body, type = 'alert', bannerUrl = null) => {
     if (!fcmToken)
         return;
     // 1. Save to database so it appears in the Notification Tab
@@ -50,6 +50,7 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert') => {
                     title,
                     body,
                     type,
+                    bannerUrl,
                 }
             });
         }
@@ -59,8 +60,8 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert') => {
     }
     // 2. Send real push notification via FCM
     try {
-        console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}]`);
-        await admin.messaging().send({
+        console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}, banner: ${bannerUrl}]`);
+        const message = {
             token: fcmToken,
             notification: { title, body },
             android: {
@@ -71,7 +72,11 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert') => {
                     icon: 'ic_launcher',
                 }
             }
-        });
+        };
+        if (bannerUrl && bannerUrl.trim() !== '') {
+            message.notification.imageUrl = bannerUrl;
+        }
+        await admin.messaging().send(message);
     }
     catch (error) {
         console.error('Error sending push notification via FCM:', error);
