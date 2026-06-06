@@ -347,7 +347,7 @@ const processWithdrawal = async (txId, status, referenceId) => {
         ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Ref: ${referenceId || 'N/A'}`
         : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`;
     if (targetUser?.fcmToken) {
-        await (0, push_service_1.sendPushNotification)(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal');
+        await (0, push_service_1.sendPushNotification)(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal', null, tx.userId);
     }
     else {
         await db_1.prisma.notification.create({
@@ -496,7 +496,7 @@ const replySupportTicket = async (req, res) => {
         const ticketNotifTitle = 'Support Ticket Reply ✉️';
         const ticketNotifBody = `Support team replied to your ticket: "${reply.substring(0, 40)}..."`;
         if (ticketUser?.fcmToken) {
-            await (0, push_service_1.sendPushNotification)(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert');
+            await (0, push_service_1.sendPushNotification)(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert', null, ticket.userId || undefined);
         }
         else if (ticket.userId) {
             await db_1.prisma.notification.create({
@@ -562,7 +562,7 @@ const broadcastPushNotification = async (req, res) => {
                 return;
             }
             if (user.fcmToken) {
-                await (0, push_service_1.sendPushNotification)(user.fcmToken, title, body, notificationType, bannerUrl);
+                await (0, push_service_1.sendPushNotification)(user.fcmToken, title, body, notificationType, bannerUrl, user.id);
             }
             else {
                 await db_1.prisma.notification.create({
@@ -571,7 +571,7 @@ const broadcastPushNotification = async (req, res) => {
                         title,
                         body,
                         type: notificationType,
-                        bannerUrl,
+                        bannerUrl: bannerUrl || null,
                     }
                 });
             }
@@ -597,20 +597,23 @@ const broadcastPushNotification = async (req, res) => {
                 res.status(200).json({ success: true, message: 'No users matched the criteria.' });
                 return;
             }
-            const usersWithToken = users.filter(u => u.fcmToken);
-            const usersWithoutToken = users.filter(u => !u.fcmToken);
-            const pushPromises = usersWithToken.map(u => (0, push_service_1.sendPushNotification)(u.fcmToken, title, body, notificationType, bannerUrl));
-            const dbEntries = usersWithoutToken.map(u => ({
+            // Create database notifications in bulk for all target users
+            const dbEntries = users.map(u => ({
                 userId: u.id,
                 title,
                 body,
                 type: notificationType,
-                bannerUrl,
+                bannerUrl: bannerUrl || null,
             }));
-            await Promise.all([
-                ...pushPromises,
-                dbEntries.length > 0 ? db_1.prisma.notification.createMany({ data: dbEntries }) : Promise.resolve()
-            ]);
+            if (dbEntries.length > 0) {
+                await db_1.prisma.notification.createMany({ data: dbEntries });
+            }
+            // Send push notifications in batches via FCM
+            const usersWithToken = users.filter(u => u.fcmToken);
+            const tokens = usersWithToken.map(u => u.fcmToken);
+            if (tokens.length > 0) {
+                await (0, push_service_1.sendPushNotificationBatch)(tokens, title, body, notificationType, bannerUrl);
+            }
         }
         res.status(200).json({ success: true, message: 'Notifications sent successfully' });
     }

@@ -1,14 +1,40 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimReward = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+const crypto_1 = __importDefault(require("crypto"));
 const claimReward = async (req, res) => {
     try {
         const userId = req.user?.userId;
         const { amount, type, description } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized: No user ID found in session' });
+            return;
+        }
+        const signature = req.headers['x-signature'];
+        const timestamp = req.headers['x-timestamp'];
+        const API_SIGNING_SECRET = process.env.API_SIGNING_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+        if (!signature || !timestamp) {
+            res.status(403).json({ error: 'Forbidden: Missing request signature verification' });
+            return;
+        }
+        const requestTime = parseInt(timestamp, 10);
+        const now = Date.now();
+        if (isNaN(requestTime) || Math.abs(now - requestTime) > 5 * 60 * 1000) {
+            res.status(403).json({ error: 'Forbidden: Signature verification expired' });
+            return;
+        }
+        const rawMessage = `${amount}:${type}:${timestamp}`;
+        const expectedSignature = crypto_1.default
+            .createHmac('sha256', API_SIGNING_SECRET)
+            .update(rawMessage)
+            .digest('hex');
+        if (signature !== expectedSignature) {
+            res.status(403).json({ error: 'Forbidden: Invalid request signature' });
             return;
         }
         if (typeof amount !== 'number') {

@@ -7,26 +7,30 @@ export const sendPushNotification = async (
   title: string, 
   body: string, 
   type: string = 'alert', 
-  bannerUrl: string | null = null
+  bannerUrl: string | null = null,
+  userId?: string,
+  skipDb: boolean = false
 ) => {
   if (!fcmToken) return;
 
   // 1. Save to database so it appears in the Notification Tab
-  try {
-    const user = await prisma.user.findFirst({ where: { fcmToken } });
-    if (user) {
-      await prisma.notification.create({
-        data: {
-          userId: user.id,
-          title,
-          body,
-          type,
-          bannerUrl,
-        }
-      });
+  if (!skipDb) {
+    try {
+      const uId = userId || (await prisma.user.findFirst({ where: { fcmToken } }))?.id;
+      if (uId) {
+        await prisma.notification.create({
+          data: {
+            userId: uId,
+            title,
+            body,
+            type,
+            bannerUrl,
+          }
+        });
+      }
+    } catch (dbError) {
+      console.error('Error saving notification to DB:', dbError);
     }
-  } catch (dbError) {
-    console.error('Error saving notification to DB:', dbError);
   }
 
   // 2. Send real push notification via FCM
@@ -55,3 +59,47 @@ export const sendPushNotification = async (
     console.error('Error sending push notification via FCM:', error);
   }
 };
+
+export const sendPushNotificationBatch = async (
+  tokens: string[],
+  title: string,
+  body: string,
+  type: string = 'alert',
+  bannerUrl: string | null = null
+) => {
+  if (!tokens || tokens.length === 0) return;
+
+  const batchSize = 500;
+  for (let i = 0; i < tokens.length; i += batchSize) {
+    const tokenBatch = tokens.slice(i, i + batchSize);
+    const messages = tokenBatch.map(token => {
+      const message: any = {
+        token,
+        notification: { title, body },
+        android: {
+          priority: 'high' as const,
+          notification: {
+            channelId: 'sikkaplay_high_channel',
+            color: '#7C3AED',
+            icon: 'ic_launcher',
+          }
+        }
+      };
+
+      if (bannerUrl && bannerUrl.trim() !== '') {
+        message.notification.imageUrl = bannerUrl;
+      }
+
+      return message;
+    });
+
+    try {
+      console.log(`Sending batch of ${messages.length} push notifications...`);
+      const response = await admin.messaging().sendEach(messages);
+      console.log(`Successfully sent ${response.successCount} messages; failed ${response.failureCount} messages.`);
+    } catch (error) {
+      console.error('Error sending batch push notifications via FCM:', error);
+    }
+  }
+};
+

@@ -47,7 +47,7 @@ const startCronJobs = () => {
             });
             for (const user of usersToRemind) {
                 if (user.fcmToken) {
-                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka!', `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`);
+                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka!', `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`, 'alert', null, user.id);
                     // Update user's updatedAt so we don't spam them every hour
                     await db_1.prisma.user.update({
                         where: { id: user.id },

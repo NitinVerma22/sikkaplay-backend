@@ -3,7 +3,7 @@ import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
-import { sendPushNotification } from '../services/push.service';
+import { sendPushNotification, sendPushNotificationBatch } from '../services/push.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -379,7 +379,7 @@ const processWithdrawal = async (txId: string, status: 'success' | 'failed', ref
     : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`;
 
   if (targetUser?.fcmToken) {
-    await sendPushNotification(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal');
+    await sendPushNotification(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal', null, tx.userId);
   } else {
     await prisma.notification.create({
       data: {
@@ -542,7 +542,7 @@ export const replySupportTicket = async (req: AdminAuthRequest, res: Response): 
     const ticketNotifBody = `Support team replied to your ticket: "${reply.substring(0, 40)}..."`;
 
     if (ticketUser?.fcmToken) {
-      await sendPushNotification(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert');
+      await sendPushNotification(ticketUser.fcmToken, ticketNotifTitle, ticketNotifBody, 'alert', null, ticket.userId || undefined);
     } else if (ticket.userId) {
       await prisma.notification.create({
         data: {
@@ -616,7 +616,7 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
       }
 
       if (user.fcmToken) {
-        await sendPushNotification(user.fcmToken, title, body, notificationType, bannerUrl);
+        await sendPushNotification(user.fcmToken, title, body, notificationType, bannerUrl, user.id);
       } else {
         await prisma.notification.create({
           data: {
@@ -624,7 +624,7 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
             title,
             body,
             type: notificationType,
-            bannerUrl,
+            bannerUrl: bannerUrl || null,
           }
         });
       }
@@ -651,25 +651,25 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
         return;
       }
 
-      const usersWithToken = users.filter(u => u.fcmToken);
-      const usersWithoutToken = users.filter(u => !u.fcmToken);
-
-      const pushPromises = usersWithToken.map(u => 
-        sendPushNotification(u.fcmToken!, title, body, notificationType, bannerUrl)
-      );
-
-      const dbEntries = usersWithoutToken.map(u => ({
+      // Create database notifications in bulk for all target users
+      const dbEntries = users.map(u => ({
         userId: u.id,
         title,
         body,
         type: notificationType,
-        bannerUrl,
+        bannerUrl: bannerUrl || null,
       }));
 
-      await Promise.all([
-        ...pushPromises,
-        dbEntries.length > 0 ? prisma.notification.createMany({ data: dbEntries }) : Promise.resolve()
-      ]);
+      if (dbEntries.length > 0) {
+        await prisma.notification.createMany({ data: dbEntries });
+      }
+
+      // Send push notifications in batches via FCM
+      const usersWithToken = users.filter(u => u.fcmToken);
+      const tokens = usersWithToken.map(u => u.fcmToken!);
+      if (tokens.length > 0) {
+        await sendPushNotificationBatch(tokens, title, body, notificationType, bannerUrl);
+      }
     }
 
     res.status(200).json({ success: true, message: 'Notifications sent successfully' });

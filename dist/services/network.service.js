@@ -75,7 +75,7 @@ const awardReferralBalance = async (userId, amount, description) => {
             select: { fcmToken: true }
         });
         if (userForPush?.fcmToken) {
-            (0, push_service_1.sendPushNotification)(userForPush.fcmToken, 'You earned Network Income!', `You just received ${amount} coins from your referral network!`);
+            (0, push_service_1.sendPushNotification)(userForPush.fcmToken, 'You earned Network Income!', `You just received ${amount} coins from your referral network!`, 'alert', null, userId);
         }
     });
 };
@@ -184,7 +184,7 @@ const distributePendingReferralCommissions = async () => {
                         select: { fcmToken: true }
                     });
                     if (referrer?.fcmToken) {
-                        (0, push_service_1.sendPushNotification)(referrer.fcmToken, 'You earned Network Income! ⚡', `You earned ${totalAmount} coins from your referral network in the last 3 hours!`);
+                        (0, push_service_1.sendPushNotification)(referrer.fcmToken, 'You earned Network Income! ⚡', `You earned ${totalAmount} coins from your referral network in the last 3 hours!`, 'alert', null, referrerId);
                     }
                 });
             }
