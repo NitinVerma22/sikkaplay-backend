@@ -14,7 +14,18 @@ const generateReferralCode = () => {
 };
 const registerDirect = async (req, res) => {
     try {
-        const { phoneNumber, name, city, referredBy, password } = req.body;
+        const { phoneNumber, name, city, referredBy, password, deviceId } = req.body;
+        const config = await db_1.prisma.appConfig.findFirst();
+        const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+        if (!allowMultiAccounts && deviceId) {
+            const existingDeviceUser = await db_1.prisma.user.findFirst({
+                where: { deviceId }
+            });
+            if (existingDeviceUser) {
+                res.status(400).json({ error: 'This device is already associated with another account.' });
+                return;
+            }
+        }
         if (!phoneNumber) {
             res.status(400).json({ error: 'Phone number is required' });
             return;
@@ -67,6 +78,7 @@ const registerDirect = async (req, res) => {
                     referredBy: referredBy || null,
                     balance: signupBonus,
                     totalEarned: signupBonus,
+                    deviceId: deviceId || null,
                 }
             });
             await tx.transaction.create({
@@ -113,7 +125,7 @@ const registerDirect = async (req, res) => {
 exports.registerDirect = registerDirect;
 const loginWithPassword = async (req, res) => {
     try {
-        const { phoneNumber, password } = req.body;
+        const { phoneNumber, password, deviceId } = req.body;
         // Make sure phoneNumber includes country code
         let formattedPhone = phoneNumber;
         if (!formattedPhone.startsWith('+')) {
@@ -138,6 +150,29 @@ const loginWithPassword = async (req, res) => {
         if (!isMatch) {
             res.status(400).json({ error: 'Invalid credentials' });
             return;
+        }
+        const config = await db_1.prisma.appConfig.findFirst();
+        const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+        if (deviceId) {
+            if (!allowMultiAccounts) {
+                const existingDeviceUser = await db_1.prisma.user.findFirst({
+                    where: {
+                        deviceId,
+                        id: { not: user.id }
+                    }
+                });
+                if (existingDeviceUser) {
+                    res.status(400).json({ error: 'This device is already associated with another account.' });
+                    return;
+                }
+            }
+            if (user.deviceId !== deviceId) {
+                await db_1.prisma.user.update({
+                    where: { id: user.id },
+                    data: { deviceId }
+                });
+                user.deviceId = deviceId;
+            }
         }
         const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
         res.status(200).json({ message: 'Login successful', token, user });
@@ -180,6 +215,7 @@ const googleLogin = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized. No valid Google token.' });
             return;
         }
+        const { deviceId } = req.body;
         // Check if user already exists
         const existingUser = await db_1.prisma.user.findUnique({
             where: { firebaseUid: firebaseUser.uid }
@@ -188,6 +224,29 @@ const googleLogin = async (req, res) => {
             if (existingUser.isBlocked) {
                 res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
                 return;
+            }
+            const config = await db_1.prisma.appConfig.findFirst();
+            const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+            if (deviceId) {
+                if (!allowMultiAccounts) {
+                    const existingDeviceUser = await db_1.prisma.user.findFirst({
+                        where: {
+                            deviceId,
+                            id: { not: existingUser.id }
+                        }
+                    });
+                    if (existingDeviceUser) {
+                        res.status(400).json({ error: 'This device is already associated with another account.' });
+                        return;
+                    }
+                }
+                if (existingUser.deviceId !== deviceId) {
+                    await db_1.prisma.user.update({
+                        where: { id: existingUser.id },
+                        data: { deviceId }
+                    });
+                    existingUser.deviceId = deviceId;
+                }
             }
             // User exists, just log them in
             const token = jsonwebtoken_1.default.sign({ userId: existingUser.id }, JWT_SECRET, { expiresIn: '30d' });
@@ -211,10 +270,21 @@ const googleLogin = async (req, res) => {
 exports.googleLogin = googleLogin;
 const completeGoogleSignup = async (req, res) => {
     try {
-        const { firebaseUid, phoneNumber, name, city, referredBy } = req.body;
+        const { firebaseUid, phoneNumber, name, city, referredBy, deviceId } = req.body;
         if (!firebaseUid || !phoneNumber) {
             res.status(400).json({ error: 'Missing required fields' });
             return;
+        }
+        const config = await db_1.prisma.appConfig.findFirst();
+        const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+        if (!allowMultiAccounts && deviceId) {
+            const existingDeviceUser = await db_1.prisma.user.findFirst({
+                where: { deviceId }
+            });
+            if (existingDeviceUser) {
+                res.status(400).json({ error: 'This device is already associated with another account.' });
+                return;
+            }
         }
         // Format phone number
         let formattedPhone = phoneNumber;
@@ -260,6 +330,7 @@ const completeGoogleSignup = async (req, res) => {
                     referredBy: referredBy || null,
                     balance: signupBonus,
                     totalEarned: signupBonus,
+                    deviceId: deviceId || null,
                 }
             });
             await tx.transaction.create({

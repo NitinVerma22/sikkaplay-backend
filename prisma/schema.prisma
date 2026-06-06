@@ -21,6 +21,7 @@ model User {
   balance         Int           @default(0)
   referralBalance Int           @default(0) // Earnings from MLM/Referrals
   fcmToken        String?       // Firebase Cloud Messaging Token
+  deviceId        String?       // Unique Device ID to prevent fraud
   upiId           String?       // User's preferred UPI ID for withdrawal
   totalEarned     Int           @default(0)
   withdrawalAmount Int          @default(0)
@@ -148,6 +149,7 @@ model AppConfig {
 
   // Ad Management Configurations
   adsEnabled          Boolean  @default(true)
+  allowMultiAccounts  Boolean  @default(false) // Toggle to permit/deny multiple accounts per device
   rewardedCapPerDay   Int      @default(15)
   dailyCodeAdRequired Boolean  @default(true)
   surveysAdRequired   Boolean  @default(true)

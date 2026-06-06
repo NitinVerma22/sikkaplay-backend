@@ -13,7 +13,20 @@ const generateReferralCode = (): string => {
 
 export const registerDirect = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, name, city, referredBy, password } = req.body;
+    const { phoneNumber, name, city, referredBy, password, deviceId } = req.body;
+
+    const config = await prisma.appConfig.findFirst();
+    const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+
+    if (!allowMultiAccounts && deviceId) {
+      const existingDeviceUser = await prisma.user.findFirst({
+        where: { deviceId }
+      });
+      if (existingDeviceUser) {
+        res.status(400).json({ error: 'This device is already associated with another account.' });
+        return;
+      }
+    }
 
     if (!phoneNumber) {
       res.status(400).json({ error: 'Phone number is required' });
@@ -75,6 +88,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
           referredBy: referredBy || null,
           balance: signupBonus,
           totalEarned: signupBonus,
+          deviceId: deviceId || null,
         }
       });
 
@@ -127,7 +141,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
 
 export const loginWithPassword = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, password } = req.body;
+    const { phoneNumber, password, deviceId } = req.body;
     
     // Make sure phoneNumber includes country code
     let formattedPhone = phoneNumber;
@@ -158,6 +172,32 @@ export const loginWithPassword = async (req: Request, res: Response): Promise<vo
     if (!isMatch) {
       res.status(400).json({ error: 'Invalid credentials' });
       return;
+    }
+
+    const config = await prisma.appConfig.findFirst();
+    const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+
+    if (deviceId) {
+      if (!allowMultiAccounts) {
+        const existingDeviceUser = await prisma.user.findFirst({
+          where: {
+            deviceId,
+            id: { not: user.id }
+          }
+        });
+        if (existingDeviceUser) {
+          res.status(400).json({ error: 'This device is already associated with another account.' });
+          return;
+        }
+      }
+
+      if (user.deviceId !== deviceId) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { deviceId }
+        });
+        user.deviceId = deviceId;
+      }
     }
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
@@ -204,6 +244,7 @@ export const googleLogin = async (req: AuthRequest, res: Response): Promise<void
       res.status(401).json({ error: 'Unauthorized. No valid Google token.' });
       return;
     }
+    const { deviceId } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -215,6 +256,33 @@ export const googleLogin = async (req: AuthRequest, res: Response): Promise<void
         res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
         return;
       }
+
+      const config = await prisma.appConfig.findFirst();
+      const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+
+      if (deviceId) {
+        if (!allowMultiAccounts) {
+          const existingDeviceUser = await prisma.user.findFirst({
+            where: {
+              deviceId,
+              id: { not: existingUser.id }
+            }
+          });
+          if (existingDeviceUser) {
+            res.status(400).json({ error: 'This device is already associated with another account.' });
+            return;
+          }
+        }
+
+        if (existingUser.deviceId !== deviceId) {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: { deviceId }
+          });
+          existingUser.deviceId = deviceId;
+        }
+      }
+
       // User exists, just log them in
       const token = jwt.sign({ userId: existingUser.id }, JWT_SECRET, { expiresIn: '30d' });
       res.status(200).json({ success: true, message: 'Login successful', token, user: existingUser });
@@ -237,11 +305,24 @@ export const googleLogin = async (req: AuthRequest, res: Response): Promise<void
 
 export const completeGoogleSignup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firebaseUid, phoneNumber, name, city, referredBy } = req.body;
+    const { firebaseUid, phoneNumber, name, city, referredBy, deviceId } = req.body;
 
     if (!firebaseUid || !phoneNumber) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
+    }
+
+    const config = await prisma.appConfig.findFirst();
+    const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+
+    if (!allowMultiAccounts && deviceId) {
+      const existingDeviceUser = await prisma.user.findFirst({
+        where: { deviceId }
+      });
+      if (existingDeviceUser) {
+        res.status(400).json({ error: 'This device is already associated with another account.' });
+        return;
+      }
     }
 
     // Format phone number
@@ -293,6 +374,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
           referredBy: referredBy || null,
           balance: signupBonus,
           totalEarned: signupBonus,
+          deviceId: deviceId || null,
         }
       });
 
