@@ -12,6 +12,7 @@ router.post('/login', admin_controller_1.loginAdmin);
 router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
 router.get('/stats', admin_controller_1.getDashboardStats);
+router.post('/referrals/distribute', admin_controller_1.triggerReferralDistribution);
 // App Config Settings
 router.get('/config', admin_controller_1.getConfigs);
 router.put('/config', admin_controller_1.updateConfigs);

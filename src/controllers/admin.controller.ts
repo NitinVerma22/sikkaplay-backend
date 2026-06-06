@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
 import { sendPushNotification, sendPushNotificationBatch } from '../services/push.service';
+import { distributePendingReferralCommissions } from '../services/network.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -710,6 +711,16 @@ export const changeUserPassword = async (req: AdminAuthRequest, res: Response): 
     res.status(200).json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change User Password Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const triggerReferralDistribution = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    await distributePendingReferralCommissions();
+    res.status(200).json({ success: true, message: 'Referral distribution processed successfully.' });
+  } catch (error) {
+    console.error('Trigger Referral Distribution Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

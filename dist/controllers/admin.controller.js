@@ -3,11 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
 const push_service_1 = require("../services/push.service");
+const network_service_1 = require("../services/network.service");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 // 1. Admin Login
 const loginAdmin = async (req, res) => {
@@ -653,3 +654,14 @@ const changeUserPassword = async (req, res) => {
     }
 };
 exports.changeUserPassword = changeUserPassword;
+const triggerReferralDistribution = async (req, res) => {
+    try {
+        await (0, network_service_1.distributePendingReferralCommissions)();
+        res.status(200).json({ success: true, message: 'Referral distribution processed successfully.' });
+    }
+    catch (error) {
+        console.error('Trigger Referral Distribution Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.triggerReferralDistribution = triggerReferralDistribution;

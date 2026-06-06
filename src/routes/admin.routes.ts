@@ -15,7 +15,8 @@ import {
   replySupportTicket,
   toggleUserFreeze,
   broadcastPushNotification,
-  changeUserPassword
+  changeUserPassword,
+  triggerReferralDistribution
 } from '../controllers/admin.controller';
 import { requireAdminJwt } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
@@ -31,6 +32,7 @@ router.use(requireAdminJwt);
 
 // Stats & Dashboard Overview
 router.get('/stats', getDashboardStats);
+router.post('/referrals/distribute', triggerReferralDistribution);
 
 // App Config Settings
 router.get('/config', getConfigs);
