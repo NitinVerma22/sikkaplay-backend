@@ -17,14 +17,25 @@ const claimReward = async (req, res) => {
         }
         const signature = req.headers['x-signature'];
         const timestamp = req.headers['x-timestamp'];
-        const API_SIGNING_SECRET = process.env.API_SIGNING_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+        let API_SIGNING_SECRET = process.env.API_SIGNING_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+        // Strip double/single quotes from the environment secret if present
+        if (API_SIGNING_SECRET.startsWith('"') && API_SIGNING_SECRET.endsWith('"')) {
+            API_SIGNING_SECRET = API_SIGNING_SECRET.substring(1, API_SIGNING_SECRET.length - 1);
+        }
+        else if (API_SIGNING_SECRET.startsWith("'") && API_SIGNING_SECRET.endsWith("'")) {
+            API_SIGNING_SECRET = API_SIGNING_SECRET.substring(1, API_SIGNING_SECRET.length - 1);
+        }
         if (!signature || !timestamp) {
+            console.error('Signature verification failed: Missing x-signature or x-timestamp headers.', { signature, timestamp });
             res.status(403).json({ error: 'Forbidden: Missing request signature verification' });
             return;
         }
         const requestTime = parseInt(timestamp, 10);
         const now = Date.now();
-        if (isNaN(requestTime) || Math.abs(now - requestTime) > 5 * 60 * 1000) {
+        const timeDiff = Math.abs(now - requestTime);
+        // Allow up to 15 minutes clock drift to prevent failures on devices with slightly incorrect time
+        if (isNaN(requestTime) || timeDiff > 15 * 60 * 1000) {
+            console.error('Signature verification failed: Timestamp expired or invalid.', { timestamp, requestTime, now, timeDiffMs: timeDiff });
             res.status(403).json({ error: 'Forbidden: Signature verification expired' });
             return;
         }
@@ -34,6 +45,17 @@ const claimReward = async (req, res) => {
             .update(rawMessage)
             .digest('hex');
         if (signature !== expectedSignature) {
+            console.error('Signature verification failed: Signature mismatch details:', {
+                amount,
+                type,
+                timestamp,
+                rawMessage,
+                receivedSignature: signature,
+                expectedSignature,
+                secretLength: API_SIGNING_SECRET.length,
+                secretStart: API_SIGNING_SECRET.substring(0, 3) + '...',
+                secretEnd: '...' + API_SIGNING_SECRET.substring(API_SIGNING_SECRET.length - 3)
+            });
             res.status(403).json({ error: 'Forbidden: Invalid request signature' });
             return;
         }
