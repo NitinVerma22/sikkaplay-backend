@@ -2,9 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { getCachedAppConfig } from '../services/config.service';
 
 /**
+ * In-memory cache for VPN check results per IP.
+ * Key: IP address, Value: { isVpn: boolean, expiresAt: number }
+ * TTL: 30 minutes — balances security with performance.
+ * First earn/claim request checks proxycheck.io, result reused for 30 min.
+ */
+const vpnCache = new Map<string, { isVpn: boolean; expiresAt: number }>();
+const VPN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
  * Express middleware to detect VPN and Proxy traffic.
- * If VPN detection is enabled and a proxy/VPN is identified,
- * returns 403 Forbidden with `{ isVpnBlocked: true }`.
+ * Result is cached per IP for 30 minutes — proxycheck.io is NOT
+ * called on every request, only on first earn/claim per IP per session.
  */
 export const vpnGuard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -29,33 +38,54 @@ export const vpnGuard = async (req: Request, res: Response, next: NextFunction):
       return;
     }
 
+    // --- Check cache first ---
+    const now = Date.now();
+    const cached = vpnCache.get(ip);
+    if (cached && now < cached.expiresAt) {
+      // Cached result available — no API call needed
+      if (cached.isVpn) {
+        res.status(403).json({
+          isVpnBlocked: true,
+          message: 'VPN or Proxy connections are not allowed on SikkaPlay.'
+        });
+        return;
+      }
+      next();
+      return;
+    }
+
+    // --- Cache miss — call proxycheck.io (only once per 30 min per IP) ---
     const apiKey = config.vpnApiKey || '';
     const url = apiKey
       ? `https://proxycheck.io/v2/${ip}?key=${apiKey}&vpn=1`
       : `https://proxycheck.io/v2/${ip}?vpn=1`;
 
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(url, { signal: AbortSignal.timeout(3000) }); // 3s timeout
       if (!response.ok) {
         console.error(`VPN detection API returned status: ${response.status}`);
+        // Fail-open on API error — don't block user, don't cache
         next();
         return;
       }
-      
+
       const data = await response.json();
-      if (data && data.status === 'ok') {
-        const ipInfo = data[ip];
-        if (ipInfo && ipInfo.proxy === 'yes') {
-          console.warn(`[VPN BLOCKED] Request blocked for IP: ${ip}. Info: ${JSON.stringify(ipInfo)}`);
-          res.status(403).json({
-            isVpnBlocked: true,
-            message: 'VPN or Proxy connections are not allowed on SikkaPlay.'
-          });
-          return;
-        }
+      const isVpn = !!(data && data.status === 'ok' && data[ip]?.proxy === 'yes');
+
+      // Cache result for 30 minutes
+      vpnCache.set(ip, { isVpn, expiresAt: now + VPN_CACHE_TTL_MS });
+
+      if (isVpn) {
+        console.warn(`[VPN BLOCKED] IP: ${ip}`);
+        res.status(403).json({
+          isVpnBlocked: true,
+          message: 'VPN or Proxy connections are not allowed on SikkaPlay.'
+        });
+        return;
       }
     } catch (apiError) {
       console.error('Error querying VPN detection API (fail-open):', apiError);
+      // Fail-open: allow request, don't cache on error
     }
 
     next();
@@ -70,11 +100,9 @@ export const vpnGuard = async (req: Request, res: Response, next: NextFunction):
  */
 function isLocalIp(ip: string): boolean {
   let cleanIp = ip;
-  // Normalize IPv6 mapped IPv4 address
   if (ip.startsWith('::ffff:')) {
     cleanIp = ip.substring(7);
   }
-
   return (
     cleanIp === '127.0.0.1' ||
     cleanIp === '::1' ||
