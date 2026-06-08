@@ -7,7 +7,7 @@
     "dev": "ts-node src/index.ts",
     "dev:staging": "dotenv -e .env.staging ts-node src/index.ts",
     "dev:production": "dotenv -e .env.production ts-node src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "start:staging": "dotenv -e .env.staging node dist/index.js",
     "start:production": "dotenv -e .env.production node dist/index.js",
