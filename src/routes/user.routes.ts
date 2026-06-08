@@ -19,9 +19,10 @@ import { getVisitLinks, claimVisitLinkReward } from '../controllers/visitLink.co
 
 const router = Router();
 
-// Protect all user routes with JWT validation and VPN detection
+// Protect all user routes with JWT validation
 router.use(requireJwt);
-router.use(vpnGuard);
+// NOTE: vpnGuard is applied only on earn/withdraw routes below to avoid
+// hitting proxycheck.io API on every single profile/home/wallet request.
 
 // GET /api/user/profile
 router.get('/profile', getProfile);
@@ -38,18 +39,18 @@ router.get('/transactions', getTransactions);
 // PUT /api/user/upi
 router.put('/upi', updateUpi);
 
-// POST /api/user/earn/...
-router.post('/earn/daily-streak', earnLimiter, claimDailyStreak);
-router.post('/earn/social-task', earnLimiter, claimSocialTask);
-router.post('/earn/survey', earnLimiter, claimSurvey);
-router.post('/earn/app-install', earnLimiter, claimAppInstall);
-router.post('/earn/milestone', earnLimiter, claimMilestone);
+// POST /api/user/earn/... — vpnGuard only on earn routes
+router.post('/earn/daily-streak', vpnGuard, earnLimiter, claimDailyStreak);
+router.post('/earn/social-task', vpnGuard, earnLimiter, claimSocialTask);
+router.post('/earn/survey', vpnGuard, earnLimiter, claimSurvey);
+router.post('/earn/app-install', vpnGuard, earnLimiter, claimAppInstall);
+router.post('/earn/milestone', vpnGuard, earnLimiter, claimMilestone);
 
 // POST /api/user/usage
 router.post('/usage', logUsage);
 
 // POST /api/user/daily-code/claim
-router.post('/daily-code/claim', earnLimiter, claimDailyCode);
+router.post('/daily-code/claim', vpnGuard, earnLimiter, claimDailyCode);
 
 // GET /api/user/network
 router.get('/network', getMyNetwork);
@@ -60,10 +61,10 @@ router.get('/home', getHomeState);
 // GET /api/user/wallet
 import { getWalletStats, requestWithdrawal } from '../controllers/wallet.controller';
 router.get('/wallet', getWalletStats);
-router.post('/withdraw', withdrawLimiter, requestWithdrawal);
+router.post('/withdraw', vpnGuard, withdrawLimiter, requestWithdrawal);
 
 // Visit Links
 router.get('/visit-links', getVisitLinks);
-router.post('/visit-links/claim', earnLimiter, claimVisitLinkReward);
+router.post('/visit-links/claim', vpnGuard, earnLimiter, claimVisitLinkReward);
 
 export default router;

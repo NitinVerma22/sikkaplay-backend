@@ -13,9 +13,10 @@ const rateLimiter_middleware_1 = require("../middleware/rateLimiter.middleware")
 const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
 const visitLink_controller_1 = require("../controllers/visitLink.controller");
 const router = (0, express_1.Router)();
-// Protect all user routes with JWT validation and VPN detection
+// Protect all user routes with JWT validation
 router.use(auth_middleware_1.requireJwt);
-router.use(vpn_middleware_1.vpnGuard);
+// NOTE: vpnGuard is applied only on earn/withdraw routes below to avoid
+// hitting proxycheck.io API on every single profile/home/wallet request.
 // GET /api/user/profile
 router.get('/profile', user_controller_1.getProfile);
 // GET /api/user/leaderboard
@@ -26,16 +27,16 @@ router.post('/fcm-token', user_controller_1.updateFcmToken);
 router.get('/transactions', user_controller_1.getTransactions);
 // PUT /api/user/upi
 router.put('/upi', user_controller_1.updateUpi);
-// POST /api/user/earn/...
-router.post('/earn/daily-streak', rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimDailyStreak);
-router.post('/earn/social-task', rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSocialTask);
-router.post('/earn/survey', rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSurvey);
-router.post('/earn/app-install', rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimAppInstall);
-router.post('/earn/milestone', rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimMilestone);
+// POST /api/user/earn/... — vpnGuard only on earn routes
+router.post('/earn/daily-streak', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimDailyStreak);
+router.post('/earn/social-task', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSocialTask);
+router.post('/earn/survey', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSurvey);
+router.post('/earn/app-install', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimAppInstall);
+router.post('/earn/milestone', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimMilestone);
 // POST /api/user/usage
 router.post('/usage', usage_controller_1.logUsage);
 // POST /api/user/daily-code/claim
-router.post('/daily-code/claim', rateLimiter_middleware_1.earnLimiter, dailyCode_controller_1.claimDailyCode);
+router.post('/daily-code/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, dailyCode_controller_1.claimDailyCode);
 // GET /api/user/network
 router.get('/network', network_controller_1.getMyNetwork);
 // GET /api/user/home
@@ -43,8 +44,8 @@ router.get('/home', home_controller_1.getHomeState);
 // GET /api/user/wallet
 const wallet_controller_1 = require("../controllers/wallet.controller");
 router.get('/wallet', wallet_controller_1.getWalletStats);
-router.post('/withdraw', rateLimiter_middleware_1.withdrawLimiter, wallet_controller_1.requestWithdrawal);
+router.post('/withdraw', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.withdrawLimiter, wallet_controller_1.requestWithdrawal);
 // Visit Links
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
-router.post('/visit-links/claim', rateLimiter_middleware_1.earnLimiter, visitLink_controller_1.claimVisitLinkReward);
+router.post('/visit-links/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, visitLink_controller_1.claimVisitLinkReward);
 exports.default = router;

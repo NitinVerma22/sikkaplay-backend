@@ -5,15 +5,14 @@ import { vpnGuard } from '../middleware/vpn.middleware';
 
 const router = Router();
 
-// Protect all game routes with JWT and VPN checks
+// Protect all game routes with JWT
 router.use(requireJwt);
-router.use(vpnGuard);
 
 // POST /api/game/start
 router.post('/start', startGame);
 
-// POST /api/game/spin
-router.post('/spin', spinWheel);
+// POST /api/game/spin — vpnGuard here only (real coins at stake)
+router.post('/spin', vpnGuard, spinWheel);
 
 // POST /api/game/end
 router.post('/end', endGame);
