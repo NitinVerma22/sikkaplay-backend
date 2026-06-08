@@ -1,17 +1,27 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi, getLeaderboard } from '../controllers/user.controller';
-import { claimReward } from '../controllers/earn.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi } from '../controllers/user.controller';
+import { getLeaderboard } from '../controllers/leaderboard.controller';
+import {
+  claimDailyStreak,
+  claimSocialTask,
+  claimSurvey,
+  claimAppInstall,
+  claimMilestone
+} from '../controllers/earn.controller';
 import { logUsage } from '../controllers/usage.controller';
 import { getMyNetwork } from '../controllers/network.controller';
 import { getHomeState } from '../controllers/home.controller';
 import { requireJwt } from '../middleware/auth.middleware';
+import { vpnGuard } from '../middleware/vpn.middleware';
+import { earnLimiter, withdrawLimiter } from '../middleware/rateLimiter.middleware';
 import { claimDailyCode } from '../controllers/dailyCode.controller';
 import { getVisitLinks, claimVisitLinkReward } from '../controllers/visitLink.controller';
 
 const router = Router();
 
-// Protect all user routes with JWT validation
+// Protect all user routes with JWT validation and VPN detection
 router.use(requireJwt);
+router.use(vpnGuard);
 
 // GET /api/user/profile
 router.get('/profile', getProfile);
@@ -28,14 +38,18 @@ router.get('/transactions', getTransactions);
 // PUT /api/user/upi
 router.put('/upi', updateUpi);
 
-// POST /api/user/earn
-router.post('/earn', claimReward);
+// POST /api/user/earn/...
+router.post('/earn/daily-streak', earnLimiter, claimDailyStreak);
+router.post('/earn/social-task', earnLimiter, claimSocialTask);
+router.post('/earn/survey', earnLimiter, claimSurvey);
+router.post('/earn/app-install', earnLimiter, claimAppInstall);
+router.post('/earn/milestone', earnLimiter, claimMilestone);
 
 // POST /api/user/usage
 router.post('/usage', logUsage);
 
 // POST /api/user/daily-code/claim
-router.post('/daily-code/claim', claimDailyCode);
+router.post('/daily-code/claim', earnLimiter, claimDailyCode);
 
 // GET /api/user/network
 router.get('/network', getMyNetwork);
@@ -46,10 +60,10 @@ router.get('/home', getHomeState);
 // GET /api/user/wallet
 import { getWalletStats, requestWithdrawal } from '../controllers/wallet.controller';
 router.get('/wallet', getWalletStats);
-router.post('/withdraw', requestWithdrawal);
+router.post('/withdraw', withdrawLimiter, requestWithdrawal);
 
 // Visit Links
 router.get('/visit-links', getVisitLinks);
-router.post('/visit-links/claim', claimVisitLinkReward);
+router.post('/visit-links/claim', earnLimiter, claimVisitLinkReward);
 
 export default router;

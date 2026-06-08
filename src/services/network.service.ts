@@ -175,66 +175,62 @@ export const distributePendingReferralCommissions = async (): Promise<void> => {
       }
     }
 
-    // Step 3: Apply the accumulated commissions to referrers
-    for (const [referrerId, totalAmount] of accumulatedCommissions.entries()) {
-      if (totalAmount <= 0) continue;
+    // Step 3 & 4: Apply the accumulated commissions and mark processed inside a single transaction
+    await prisma.$transaction(async (tx) => {
+      for (const [referrerId, totalAmount] of accumulatedCommissions.entries()) {
+        if (totalAmount <= 0) continue;
 
-      try {
-        await prisma.$transaction(async (tx) => {
-          // Update user balance
-          await tx.user.update({
-            where: { id: referrerId },
-            data: {
-              referralBalance: { increment: totalAmount }
-            }
-          });
-
-          // Create summary transaction
-          await tx.transaction.create({
-            data: {
-              userId: referrerId,
-              amount: totalAmount,
-              type: 'network_income',
-              status: 'success',
-              description: `Referral commission summary (last 3 hours)`,
-              isReferralProcessed: true // Don't process summary transactions recursively
-            }
-          });
-
-          // Fetch referrer fcmToken to notify
-          const referrer = await tx.user.findUnique({
-            where: { id: referrerId },
-            select: { fcmToken: true }
-          });
-
-          if (referrer?.fcmToken) {
-            sendPushNotification(
-              referrer.fcmToken,
-              'You earned Network Income! ⚡',
-              `You earned ${totalAmount} coins from your referral network in the last 3 hours!`,
-              'alert',
-              null,
-              referrerId
-            );
+        // Update user balance
+        await tx.user.update({
+          where: { id: referrerId },
+          data: {
+            referralBalance: { increment: totalAmount }
           }
         });
-      } catch (err) {
-        console.error(`Error applying batch commission to referrer ${referrerId}:`, err);
-      }
-    }
 
-    // Step 4: Mark all processed transactions as processed
-    const processedTxIds = pendingTransactions.map(tx => tx.id);
-    await prisma.transaction.updateMany({
-      where: {
-        id: { in: processedTxIds }
-      },
-      data: {
-        isReferralProcessed: true
+        // Create summary transaction
+        await tx.transaction.create({
+          data: {
+            userId: referrerId,
+            amount: totalAmount,
+            type: 'network_income',
+            status: 'success',
+            description: `Referral commission summary (last 3 hours)`,
+            isReferralProcessed: true // Don't process summary transactions recursively
+          }
+        });
+
+        // Fetch referrer fcmToken to notify
+        const referrer = await tx.user.findUnique({
+          where: { id: referrerId },
+          select: { fcmToken: true }
+        });
+
+        if (referrer?.fcmToken) {
+          sendPushNotification(
+            referrer.fcmToken,
+            'You earned Network Income! ⚡',
+            `You earned ${totalAmount} coins from your referral network in the last 3 hours!`,
+            'alert',
+            null,
+            referrerId
+          ).catch(err => console.error(`Error notifying referrer ${referrerId}:`, err));
+        }
       }
+
+      // Mark all processed source transactions as processed
+      const processedTxIds = pendingTransactions.map(tx => tx.id);
+      await tx.transaction.updateMany({
+        where: {
+          id: { in: processedTxIds }
+        },
+        data: {
+          isReferralProcessed: true
+        }
+      });
+
+      console.log(`Successfully completed batch distribution transaction for ${processedTxIds.length} transactions.`);
     });
-
-    console.log(`Successfully completed batch distribution for ${processedTxIds.length} transactions.`);
   } catch (error) {
     console.error('Error in distributePendingReferralCommissions:', error);
   }

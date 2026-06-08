@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { getISTDateString, getStartOfTodayIST } from '../utils/date.utils';
+import { getCachedAppConfig } from '../services/config.service';
 
 export const getHomeState = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -105,7 +106,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       if (matchPlay) playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
     });
 
-    const config = await prisma.appConfig.findFirst();
+    const config = await getCachedAppConfig();
     const completedSocialTasks: string[] = [];
     if (config) {
       const [hasTelegram, hasWhatsapp, hasGroup] = await Promise.all([

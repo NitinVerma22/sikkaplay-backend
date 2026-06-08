@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/db';
+import { getCachedAppConfig } from '../services/config.service';
 
 export const getAppConfig = async (req: Request, res: Response) => {
   try {
-    let config = await prisma.appConfig.findFirst();
+    let config = await getCachedAppConfig();
     if (!config) {
       config = await prisma.appConfig.create({
         data: {}

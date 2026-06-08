@@ -1,120 +1,471 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.claimReward = void 0;
+exports.claimMilestone = exports.claimAppInstall = exports.claimSurvey = exports.claimSocialTask = exports.claimDailyStreak = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
-const crypto_1 = __importDefault(require("crypto"));
-const claimReward = async (req, res) => {
+/**
+ * Claim Daily Streak Reward
+ * Server calculates user's active streak day, checks double-claiming, and awards preset coins.
+ */
+const claimDailyStreak = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { amount, type, description } = req.body;
         if (!userId) {
-            res.status(401).json({ error: 'Unauthorized: No user ID found in session' });
+            res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        const signature = req.headers['x-signature'];
-        const timestamp = req.headers['x-timestamp'];
-        let API_SIGNING_SECRET = process.env.API_SIGNING_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
-        // Strip double/single quotes from the environment secret if present
-        if (API_SIGNING_SECRET.startsWith('"') && API_SIGNING_SECRET.endsWith('"')) {
-            API_SIGNING_SECRET = API_SIGNING_SECRET.substring(1, API_SIGNING_SECRET.length - 1);
-        }
-        else if (API_SIGNING_SECRET.startsWith("'") && API_SIGNING_SECRET.endsWith("'")) {
-            API_SIGNING_SECRET = API_SIGNING_SECRET.substring(1, API_SIGNING_SECRET.length - 1);
-        }
-        if (!signature || !timestamp) {
-            console.error('Signature verification failed: Missing x-signature or x-timestamp headers.', { signature, timestamp });
-            res.status(403).json({ error: 'Forbidden: Missing request signature verification' });
+        const today = new Date();
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
+        // Verify user has not claimed today
+        const streakToday = await db_1.prisma.transaction.findFirst({
+            where: {
+                userId,
+                type: 'daily_streak',
+                createdAt: { gte: startOfToday }
+            }
+        });
+        if (streakToday) {
+            res.status(400).json({ error: 'Daily streak already claimed today' });
             return;
         }
-        const requestTime = parseInt(timestamp, 10);
-        const now = Date.now();
-        const timeDiff = Math.abs(now - requestTime);
-        // Allow up to 15 minutes clock drift to prevent failures on devices with slightly incorrect time
-        if (isNaN(requestTime) || timeDiff > 15 * 60 * 1000) {
-            console.error('Signature verification failed: Timestamp expired or invalid.', { timestamp, requestTime, now, timeDiffMs: timeDiff });
-            res.status(403).json({ error: 'Forbidden: Signature verification expired' });
-            return;
-        }
-        const rawMessage = `${amount}:${type}:${timestamp}`;
-        const expectedSignature = crypto_1.default
-            .createHmac('sha256', API_SIGNING_SECRET)
-            .update(rawMessage)
-            .digest('hex');
-        if (signature !== expectedSignature) {
-            console.error('Signature verification failed: Signature mismatch details:', {
-                amount,
-                type,
-                timestamp,
-                rawMessage,
-                receivedSignature: signature,
-                expectedSignature,
-                secretLength: API_SIGNING_SECRET.length,
-                secretStart: API_SIGNING_SECRET.substring(0, 3) + '...',
-                secretEnd: '...' + API_SIGNING_SECRET.substring(API_SIGNING_SECRET.length - 3)
-            });
-            res.status(403).json({ error: 'Forbidden: Invalid request signature' });
-            return;
-        }
-        if (typeof amount !== 'number') {
-            res.status(400).json({ error: 'Invalid amount' });
-            return;
-        }
-        if (!type || typeof type !== 'string') {
-            res.status(400).json({ error: 'Invalid reward type' });
-            return;
-        }
-        // Prevent double claiming of daily streak
-        if (type === 'daily_streak') {
-            const startOfToday = (0, date_utils_1.getStartOfTodayIST)();
-            const streakToday = await db_1.prisma.transaction.findFirst({
-                where: {
-                    userId,
-                    type: 'daily_streak',
-                    createdAt: { gte: startOfToday }
-                }
-            });
-            if (streakToday) {
-                res.status(400).json({ error: 'Daily streak already claimed today' });
-                return;
+        // Retrieve user's current streak count
+        const allStreaks = await db_1.prisma.transaction.findMany({
+            where: { userId, type: 'daily_streak' },
+            orderBy: { createdAt: 'desc' },
+        });
+        let currentStreak = 0;
+        const checkDate = new Date(today.getTime());
+        // Since hasClaimedToday is false, check starting from yesterday
+        checkDate.setDate(checkDate.getDate() - 1);
+        for (let i = 0; i < allStreaks.length; i++) {
+            const streakDateStr = (0, date_utils_1.getISTDateString)(allStreaks[i].createdAt);
+            const targetDateStr = (0, date_utils_1.getISTDateString)(checkDate);
+            if (streakDateStr === targetDateStr) {
+                currentStreak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+            }
+            else if (streakDateStr < targetDateStr) {
+                break;
             }
         }
-        // Execute within a transaction to ensure atomicity
+        const activeDay = Math.min(28, currentStreak + 1);
+        // Calculate coins for the day
+        const getCoinsForDay = (day) => {
+            if (day === 7)
+                return 500;
+            if (day === 14)
+                return 1000;
+            if (day === 21)
+                return 1500;
+            if (day === 28)
+                return 2000;
+            return day * 10;
+        };
+        const coinsReward = getCoinsForDay(activeDay);
         const result = await db_1.prisma.$transaction(async (tx) => {
-            // 1. Update User Balance & Total Earned
+            // Lock user row
+            await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
             const updatedUser = await tx.user.update({
                 where: { id: userId },
                 data: {
-                    balance: { increment: amount },
-                    totalEarned: { increment: amount },
-                },
+                    balance: { increment: coinsReward },
+                    totalEarned: { increment: coinsReward },
+                }
             });
-            // 2. Create Transaction Record
-            const newTransaction = await tx.transaction.create({
+            const transaction = await tx.transaction.create({
                 data: {
                     userId,
-                    amount,
-                    type, // 'earning', 'bonus', etc.
-                    status: 'success', // Auto success for simple tasks/rewards
-                    description: description || `Claimed ${amount} coins for ${type}`,
-                },
+                    amount: coinsReward,
+                    type: 'daily_streak',
+                    status: 'success',
+                    description: `Daily Streak Day ${activeDay} Reward`
+                }
             });
-            return { user: updatedUser, transaction: newTransaction };
+            return { user: updatedUser, transaction };
         });
         res.status(200).json({
             success: true,
-            message: 'Reward claimed successfully',
             balance: result.user.balance,
             totalEarned: result.user.totalEarned,
-            transaction: result.transaction,
+            transaction: result.transaction
         });
     }
     catch (error) {
-        console.error('Error claiming reward:', error);
-        res.status(500).json({ error: 'Internal server error while claiming reward' });
+        console.error('Error claiming daily streak:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
-exports.claimReward = claimReward;
+exports.claimDailyStreak = claimDailyStreak;
+/**
+ * Claim Social Join Task Reward
+ * Validates platform task, checks if completed, and awards fixed 55 coins.
+ */
+const claimSocialTask = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { platform } = req.body; // 'telegram', 'whatsapp', 'group'
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!platform || !['telegram', 'whatsapp', 'group'].includes(platform)) {
+            res.status(400).json({ error: 'Invalid platform specified' });
+            return;
+        }
+        const config = await db_1.prisma.appConfig.findFirst();
+        let taskUrl = '';
+        if (platform === 'telegram')
+            taskUrl = config?.telegramLink || 'https://t.me/sikkaplay';
+        else if (platform === 'whatsapp')
+            taskUrl = config?.whatsappLink || 'https://whatsapp.com/channel/sikkaplay';
+        else if (platform === 'group')
+            taskUrl = config?.groupLink || 'https://t.me/sikkaplay_group';
+        const description = `Joined ${platform}: ${taskUrl}`;
+        // Verify task not already completed
+        const existing = await db_1.prisma.transaction.findFirst({
+            where: {
+                userId,
+                type: 'social_task',
+                description
+            }
+        });
+        if (existing) {
+            res.status(400).json({ error: 'Social task already claimed' });
+            return;
+        }
+        const coinsReward = 55; // Fixed social task reward
+        const result = await db_1.prisma.$transaction(async (tx) => {
+            await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
+            const updatedUser = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    balance: { increment: coinsReward },
+                    totalEarned: { increment: coinsReward },
+                }
+            });
+            const transaction = await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: coinsReward,
+                    type: 'social_task',
+                    status: 'success',
+                    description
+                }
+            });
+            return { user: updatedUser, transaction };
+        });
+        res.status(200).json({
+            success: true,
+            balance: result.user.balance,
+            totalEarned: result.user.totalEarned,
+            transaction: result.transaction
+        });
+    }
+    catch (error) {
+        console.error('Error claiming social task:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.claimSocialTask = claimSocialTask;
+/**
+ * Claim Survey Reward (mock surveys and webviews)
+ * Validates survey provider, caps survey earnings daily.
+ */
+const claimSurvey = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { title, provider } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!title || !provider) {
+            res.status(400).json({ error: 'Title and provider are required' });
+            return;
+        }
+        // Server determines coins based on provider/title to prevent client manipulation
+        let coinsReward = 100; // default mock survey reward
+        if (provider.toLowerCase().includes('cpx')) {
+            coinsReward = 500;
+        }
+        else if (title.includes('Premium Survey')) {
+            coinsReward = 250;
+        }
+        // Daily cap of 2000 coins for survey claims to prevent scripts
+        const today = new Date();
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
+        const surveyTransactionsToday = await db_1.prisma.transaction.findMany({
+            where: {
+                userId,
+                type: 'survey',
+                createdAt: { gte: startOfToday }
+            }
+        });
+        const totalSurveyEarnedToday = surveyTransactionsToday.reduce((sum, tx) => sum + tx.amount, 0);
+        if (totalSurveyEarnedToday + coinsReward > 2000) {
+            res.status(400).json({ error: 'Daily survey reward limit (2000 coins) exceeded' });
+            return;
+        }
+        const result = await db_1.prisma.$transaction(async (tx) => {
+            await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
+            const updatedUser = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    balance: { increment: coinsReward },
+                    totalEarned: { increment: coinsReward },
+                }
+            });
+            const transaction = await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: coinsReward,
+                    type: 'survey',
+                    status: 'success',
+                    description: title || `${provider} Survey Completion`
+                }
+            });
+            return { user: updatedUser, transaction };
+        });
+        res.status(200).json({
+            success: true,
+            balance: result.user.balance,
+            totalEarned: result.user.totalEarned,
+            transaction: result.transaction
+        });
+    }
+    catch (error) {
+        console.error('Error claiming survey reward:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.claimSurvey = claimSurvey;
+/**
+ * Claim App Install Reward (mock downloads)
+ * Server-authoritative mapping of valid apps and coin rewards.
+ */
+const claimAppInstall = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { offerId } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        // Offers configuration map matching app_install_screen.dart
+        const OFFERS = {
+            binance: { title: 'Binance Crypto Exchange', rewardAmount: 350 },
+            phonepe: { title: 'PhonePe: UPI payments', rewardAmount: 180 },
+            telegram: { title: 'Telegram Messenger', rewardAmount: 60 },
+            gpay: { title: 'Google Pay payments', rewardAmount: 220 },
+            whatsapp_biz: { title: 'WhatsApp Business', rewardAmount: 80 }
+        };
+        const offer = OFFERS[offerId];
+        if (!offer) {
+            res.status(400).json({ error: 'Invalid offer ID' });
+            return;
+        }
+        const description = `Installed & verified ${offer.title}`;
+        // Verify user hasn't already claimed this app install
+        const existing = await db_1.prisma.transaction.findFirst({
+            where: {
+                userId,
+                type: 'app_install',
+                description
+            }
+        });
+        if (existing) {
+            res.status(400).json({ error: 'App offer already completed' });
+            return;
+        }
+        const result = await db_1.prisma.$transaction(async (tx) => {
+            await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
+            const updatedUser = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    balance: { increment: offer.rewardAmount },
+                    totalEarned: { increment: offer.rewardAmount },
+                }
+            });
+            const transaction = await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: offer.rewardAmount,
+                    type: 'app_install',
+                    status: 'success',
+                    description
+                }
+            });
+            return { user: updatedUser, transaction };
+        });
+        res.status(200).json({
+            success: true,
+            balance: result.user.balance,
+            totalEarned: result.user.totalEarned,
+            transaction: result.transaction
+        });
+    }
+    catch (error) {
+        console.error('Error claiming app install reward:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.claimAppInstall = claimAppInstall;
+/**
+ * Claim Milestones (Watch Reels / Play Games duration, daily code task, visit links task)
+ * Server verifies that the client has met the duration threshold / task completion today.
+ */
+const claimMilestone = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { type, minutes } = req.body; // type: 'watch' | 'play' | 'daily_code_task' | 'visit_all_task'
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!type || !['watch', 'play', 'daily_code_task', 'visit_all_task'].includes(type)) {
+            res.status(400).json({ error: 'Invalid type specified' });
+            return;
+        }
+        const config = await db_1.prisma.appConfig.findFirst();
+        if (!config) {
+            res.status(500).json({ error: 'App configuration not found' });
+            return;
+        }
+        let coinsReward = 0;
+        let description = '';
+        let dbTxType = 'earning';
+        const todayStr = (0, date_utils_1.getISTDateString)();
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)();
+        if (type === 'watch') {
+            if (typeof minutes !== 'number') {
+                res.status(400).json({ error: 'Minutes is required for watch milestones' });
+                return;
+            }
+            if (minutes === config.watchM1Mins)
+                coinsReward = config.watchM1Coins;
+            else if (minutes === config.watchM2Mins)
+                coinsReward = config.watchM2Coins;
+            else if (minutes === config.watchM3Mins)
+                coinsReward = config.watchM3Coins;
+            else {
+                res.status(400).json({ error: 'Invalid watch milestone minutes' });
+                return;
+            }
+            description = `Watched Reels for ${minutes} mins`;
+            dbTxType = 'watch_earn';
+        }
+        else if (type === 'play') {
+            if (typeof minutes !== 'number') {
+                res.status(400).json({ error: 'Minutes is required for play milestones' });
+                return;
+            }
+            if (minutes === config.playM1Mins)
+                coinsReward = config.playM1Coins;
+            else if (minutes === config.playM2Mins)
+                coinsReward = config.playM2Coins;
+            else if (minutes === config.playM3Mins)
+                coinsReward = config.playM3Coins;
+            else {
+                res.status(400).json({ error: 'Invalid play milestone minutes' });
+                return;
+            }
+            description = `Played Games for ${minutes} mins`;
+            dbTxType = 'earning';
+        }
+        else if (type === 'daily_code_task') {
+            coinsReward = config.dailyCodeTaskCoins;
+            description = 'Daily Task: Claimed Daily Code';
+            dbTxType = 'earning';
+            // Verify server side
+            const claimsToday = await db_1.prisma.dailyCodeClaim.count({
+                where: {
+                    userId,
+                    createdAt: { gte: startOfToday }
+                }
+            });
+            if (claimsToday === 0) {
+                res.status(400).json({ error: 'You must claim a Daily Code first today' });
+                return;
+            }
+        }
+        else if (type === 'visit_all_task') {
+            coinsReward = config.visitAllTaskCoins;
+            description = 'Daily Task: Visited All Links';
+            dbTxType = 'earning';
+            // Verify server side
+            const totalLinks = await db_1.prisma.visitEarnLink.count();
+            const visitedClaimsToday = await db_1.prisma.visitEarnClaim.findMany({
+                where: {
+                    userId,
+                    claimedAt: { gte: startOfToday }
+                },
+                select: { linkId: true }
+            });
+            const uniqueVisitedLinks = new Set(visitedClaimsToday.map(c => c.linkId));
+            if (totalLinks === 0 || uniqueVisitedLinks.size < totalLinks) {
+                res.status(400).json({ error: 'You must visit all links first today' });
+                return;
+            }
+        }
+        // For duration-based watch/play milestones, verify the actual logged minutes today
+        if (type === 'watch' || type === 'play') {
+            const usage = await db_1.prisma.dailyUsage.findUnique({
+                where: {
+                    userId_dateStr: { userId, dateStr: todayStr }
+                }
+            });
+            const actualMinutes = type === 'watch' ? (usage?.reelsMinutes || 0) : (usage?.gamesMinutes || 0);
+            const requiredMinutes = minutes;
+            if (actualMinutes < requiredMinutes) {
+                res.status(400).json({
+                    error: `Incomplete milestone. You have only ${actualMinutes}/${requiredMinutes} mins logged today.`
+                });
+                return;
+            }
+        }
+        // Verify user has not already claimed this milestone today
+        const existing = await db_1.prisma.transaction.findFirst({
+            where: {
+                userId,
+                type: dbTxType,
+                description,
+                createdAt: { gte: startOfToday }
+            }
+        });
+        if (existing) {
+            res.status(400).json({ error: 'Milestone already claimed today' });
+            return;
+        }
+        const result = await db_1.prisma.$transaction(async (tx) => {
+            await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
+            const updatedUser = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    balance: { increment: coinsReward },
+                    totalEarned: { increment: coinsReward }
+                }
+            });
+            const transaction = await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: coinsReward,
+                    type: dbTxType,
+                    status: 'success',
+                    description
+                }
+            });
+            return { user: updatedUser, transaction };
+        });
+        res.status(200).json({
+            success: true,
+            balance: result.user.balance,
+            totalEarned: result.user.totalEarned,
+            transaction: result.transaction
+        });
+    }
+    catch (error) {
+        console.error('Error claiming milestone:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.claimMilestone = claimMilestone;

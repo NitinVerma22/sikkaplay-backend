@@ -8,6 +8,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
+const config_service_1 = require("../services/config.service");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 const generateReferralCode = () => {
     return crypto_1.default.randomBytes(3).toString('hex').toUpperCase();
@@ -15,8 +16,9 @@ const generateReferralCode = () => {
 const registerDirect = async (req, res) => {
     try {
         const { phoneNumber, name, city, referredBy, password, deviceId } = req.body;
-        const config = await db_1.prisma.appConfig.findFirst();
+        const config = await (0, config_service_1.getCachedAppConfig)();
         const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+        const refRewardAmount = config?.referralBonus || 500;
         if (!allowMultiAccounts && deviceId) {
             const existingDeviceUser = await db_1.prisma.user.findFirst({
                 where: { deviceId }
@@ -91,8 +93,6 @@ const registerDirect = async (req, res) => {
                 }
             });
             if (referrer) {
-                const config = await tx.appConfig.findFirst();
-                const refRewardAmount = config?.referralBonus || 500;
                 // Reward the referrer
                 await tx.user.update({
                     where: { id: referrer.id },
@@ -151,7 +151,7 @@ const loginWithPassword = async (req, res) => {
             res.status(400).json({ error: 'Invalid credentials' });
             return;
         }
-        const config = await db_1.prisma.appConfig.findFirst();
+        const config = await (0, config_service_1.getCachedAppConfig)();
         const allowMultiAccounts = config?.allowMultiAccounts ?? false;
         if (deviceId) {
             if (!allowMultiAccounts) {
@@ -225,7 +225,7 @@ const googleLogin = async (req, res) => {
                 res.status(403).json({ error: 'Forbidden: Account has been suspended. Please contact support.' });
                 return;
             }
-            const config = await db_1.prisma.appConfig.findFirst();
+            const config = await (0, config_service_1.getCachedAppConfig)();
             const allowMultiAccounts = config?.allowMultiAccounts ?? false;
             if (deviceId) {
                 if (!allowMultiAccounts) {
@@ -275,8 +275,9 @@ const completeGoogleSignup = async (req, res) => {
             res.status(400).json({ error: 'Missing required fields' });
             return;
         }
-        const config = await db_1.prisma.appConfig.findFirst();
+        const config = await (0, config_service_1.getCachedAppConfig)();
         const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+        const refRewardAmount = config?.referralBonus || 500;
         if (!allowMultiAccounts && deviceId) {
             const existingDeviceUser = await db_1.prisma.user.findFirst({
                 where: { deviceId }
@@ -343,8 +344,6 @@ const completeGoogleSignup = async (req, res) => {
                 }
             });
             if (referrer) {
-                const config = await tx.appConfig.findFirst();
-                const refRewardAmount = config?.referralBonus || 500;
                 // Reward the referrer
                 await tx.user.update({
                     where: { id: referrer.id },

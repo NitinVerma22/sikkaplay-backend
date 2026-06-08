@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
+import { getCachedAppConfig } from '../services/config.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -15,8 +16,9 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
   try {
     const { phoneNumber, name, city, referredBy, password, deviceId } = req.body;
 
-    const config = await prisma.appConfig.findFirst();
+    const config = await getCachedAppConfig();
     const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+    const refRewardAmount = config?.referralBonus || 500;
 
     if (!allowMultiAccounts && deviceId) {
       const existingDeviceUser = await prisma.user.findFirst({
@@ -103,9 +105,6 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
       });
 
       if (referrer) {
-        const config = await tx.appConfig.findFirst();
-        const refRewardAmount = config?.referralBonus || 500;
-
         // Reward the referrer
         await tx.user.update({
           where: { id: referrer.id },
@@ -174,7 +173,7 @@ export const loginWithPassword = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const config = await prisma.appConfig.findFirst();
+    const config = await getCachedAppConfig();
     const allowMultiAccounts = config?.allowMultiAccounts ?? false;
 
     if (deviceId) {
@@ -257,7 +256,7 @@ export const googleLogin = async (req: AuthRequest, res: Response): Promise<void
         return;
       }
 
-      const config = await prisma.appConfig.findFirst();
+      const config = await getCachedAppConfig();
       const allowMultiAccounts = config?.allowMultiAccounts ?? false;
 
       if (deviceId) {
@@ -312,8 +311,9 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
       return;
     }
 
-    const config = await prisma.appConfig.findFirst();
+    const config = await getCachedAppConfig();
     const allowMultiAccounts = config?.allowMultiAccounts ?? false;
+    const refRewardAmount = config?.referralBonus || 500;
 
     if (!allowMultiAccounts && deviceId) {
       const existingDeviceUser = await prisma.user.findFirst({
@@ -389,9 +389,6 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
       });
 
       if (referrer) {
-        const config = await tx.appConfig.findFirst();
-        const refRewardAmount = config?.referralBonus || 500;
-
         // Reward the referrer
         await tx.user.update({
           where: { id: referrer.id },

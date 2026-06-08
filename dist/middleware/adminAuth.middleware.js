@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAdminJwt = void 0;
+exports.requireRole = exports.requireAdminJwt = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 const requireAdminJwt = (req, res, next) => {
@@ -29,3 +29,18 @@ const requireAdminJwt = (req, res, next) => {
     }
 };
 exports.requireAdminJwt = requireAdminJwt;
+const requireRole = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.admin) {
+            res.status(401).json({ error: 'Unauthorized: No session found' });
+            return;
+        }
+        const { role } = req.admin;
+        if (!role || !allowedRoles.includes(role)) {
+            res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+            return;
+        }
+        next();
+    };
+};
+exports.requireRole = requireRole;

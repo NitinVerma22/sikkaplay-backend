@@ -3,7 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_controller_1 = require("../controllers/auth.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
+const vpn_middleware_1 = require("../middleware/vpn.middleware");
+const rateLimiter_middleware_1 = require("../middleware/rateLimiter.middleware");
 const router = (0, express_1.Router)();
+// Apply VPN detection and Rate Limiting globally on all auth routes
+router.use(vpn_middleware_1.vpnGuard);
+router.use(rateLimiter_middleware_1.authLimiter);
 // Register: App sends Phone + Password + Name + City + Referral (No OTP)
 router.post('/register', auth_controller_1.registerDirect);
 // Login: App sends Phone + Password (No OTP)

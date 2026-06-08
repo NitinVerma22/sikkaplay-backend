@@ -62,6 +62,9 @@ async function main() {
                 dailyCodeAdRequired: true,
                 surveysAdRequired: true,
                 reelsAdInterval: 5,
+                vpnDetectionEnabled: false,
+                vpnApiKey: "",
+                maintenanceMode: false,
             }
         });
         console.log('Default AppConfig created');
@@ -90,6 +93,9 @@ async function main() {
                 dailyCodeAdRequired: true,
                 surveysAdRequired: true,
                 reelsAdInterval: 5,
+                vpnDetectionEnabled: false,
+                vpnApiKey: "",
+                maintenanceMode: false,
                 telegramLink: 'https://t.me/sikkaplay',
                 whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
                 groupLink: 'https://t.me/sikkaplay_group',

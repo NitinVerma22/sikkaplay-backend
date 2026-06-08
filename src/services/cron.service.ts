@@ -43,6 +43,8 @@ export const startCronJobs = () => {
         take: 1000 // limit batch size
       });
 
+      const userIdsToUpdate = usersToRemind.filter(u => u.fcmToken).map(u => u.id);
+
       for (const user of usersToRemind) {
         if (user.fcmToken) {
           sendPushNotification(
@@ -52,14 +54,19 @@ export const startCronJobs = () => {
             'alert',
             null,
             user.id
-          );
-          
-          // Update user's updatedAt so we don't spam them every hour
-          await prisma.user.update({
-             where: { id: user.id },
-             data: { updatedAt: new Date() }
-          });
+          ).catch(e => console.error(`Failed to send inactivity push to ${user.id}:`, e));
         }
+      }
+
+      if (userIdsToUpdate.length > 0) {
+        await prisma.user.updateMany({
+          where: {
+            id: { in: userIdsToUpdate }
+          },
+          data: {
+            updatedAt: new Date()
+          }
+        });
       }
     } catch (error) {
       console.error('Error in inactivity cron:', error);

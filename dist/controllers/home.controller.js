@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHomeState = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+const config_service_1 = require("../services/config.service");
 const getHomeState = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -91,7 +92,7 @@ const getHomeState = async (req, res) => {
             if (matchPlay)
                 playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
         });
-        const config = await db_1.prisma.appConfig.findFirst();
+        const config = await (0, config_service_1.getCachedAppConfig)();
         const completedSocialTasks = [];
         if (config) {
             const [hasTelegram, hasWhatsapp, hasGroup] = await Promise.all([

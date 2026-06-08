@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { getStartOfTodayIST, getStartOfYesterdayIST, getStartOfWeekIST, getStartOfMonthIST } from '../utils/date.utils';
+import { getCachedAppConfig } from '../services/config.service';
+import { logAdminAction } from '../services/audit.service';
 
 export const getWalletStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -104,14 +106,124 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
     }
 
     // 1. Fetch user and app configuration
-    const [user, config] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.appConfig.findFirst()
-    ]);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const config = await getCachedAppConfig();
 
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
+    }
+
+    // --- WITHDRAWAL FRAUD ENGINE CHECKS ---
+    
+    // Check A: Playtime check (Max 18 hours / 1080 minutes combined playtime in last 7 days)
+    const recentUsages = await prisma.dailyUsage.findMany({
+      where: { userId },
+      orderBy: { dateStr: 'desc' },
+      take: 7
+    });
+    
+    const hasAbnormalPlaytime = recentUsages.some(
+      (u) => (u.reelsMinutes + u.gamesMinutes) > 1080
+    );
+    
+    if (hasAbnormalPlaytime) {
+      console.warn(`[FRAUD ENGINE] Auto-blocking user ${userId} due to abnormal playtime (>18h/day).`);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { isBlocked: true }
+      });
+      
+      const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+      await logAdminAction(
+        'system',
+        'Fraud Engine',
+        'AUTO_FREEZE_USER',
+        { userId, reason: 'Abnormal playtime detected (>18 hours in a single day)', recentUsages },
+        ip
+      );
+      
+      res.status(403).json({ error: 'Your account has been frozen due to suspicious activity. Please contact support.' });
+      return;
+    }
+
+    // Check B: Excessive Self Earnings (>10,000 coins in last 24 hours)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentEarnings = await prisma.transaction.findMany({
+      where: {
+        userId,
+        createdAt: { gte: oneDayAgo },
+        status: 'success',
+        type: {
+          in: ['earning', 'bonus', 'daily_streak', 'social_task']
+        }
+      }
+    });
+    
+    const totalRecentSelfEarnings = recentEarnings.reduce((sum, tx) => sum + tx.amount, 0);
+    if (totalRecentSelfEarnings > 10000) {
+      console.warn(`[FRAUD ENGINE] Auto-blocking user ${userId} due to excessive self-earnings (${totalRecentSelfEarnings} coins in 24h).`);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { isBlocked: true }
+      });
+      
+      const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+      await logAdminAction(
+        'system',
+        'Fraud Engine',
+        'AUTO_FREEZE_USER',
+        { userId, reason: `Excessive non-referral earnings detected (${totalRecentSelfEarnings} coins in 24h)`, totalRecentSelfEarnings },
+        ip
+      );
+      
+      res.status(403).json({ error: 'Your account has been frozen due to suspicious activity. Please contact support.' });
+      return;
+    }
+
+    // Check C: Duplicate UPI ID across multiple accounts
+    const targetUpi = upiId || user.upiId;
+    if (targetUpi) {
+      // Check if another user profile has the same UPI ID
+      const upiInUse = await prisma.user.findFirst({
+        where: {
+          upiId: targetUpi,
+          id: { not: userId }
+        }
+      });
+      
+      // Check if another user has withdrawn to this same UPI ID in success or pending states
+      const upiInTx = await prisma.transaction.findFirst({
+        where: {
+          description: { contains: targetUpi },
+          userId: { not: userId },
+          status: { in: ['pending', 'success'] }
+        }
+      });
+      
+      if (upiInUse || upiInTx) {
+        console.warn(`[FRAUD ENGINE] Auto-blocking user ${userId} due to duplicate UPI ID usage (${targetUpi}).`);
+        await prisma.user.update({
+          where: { id: userId },
+          data: { isBlocked: true }
+        });
+        
+        const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+        await logAdminAction(
+          'system',
+          'Fraud Engine',
+          'AUTO_FREEZE_USER',
+          {
+            userId,
+            reason: `Duplicate UPI ID detected: ${targetUpi}`,
+            duplicateWithUserId: upiInUse?.id || upiInTx?.userId
+          },
+          ip
+        );
+        
+        res.status(403).json({ error: 'Your account has been frozen due to suspicious activity. Please contact support.' });
+        return;
+      }
     }
 
     const minLimit = config?.minWithdrawalLimit || 1000;
@@ -156,46 +268,66 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
       }
     }
 
-    const targetUpi = upiId || user.upiId;
+    // targetUpi is already defined and checked above
     if (!targetUpi) {
       res.status(400).json({ error: 'UPI ID is required for withdrawal' });
       return;
     }
 
-    // 2. Process withdrawal transaction and deduct correct balance pool
-    if (targetEarningType === 'referral') {
-      await prisma.$transaction([
-        prisma.user.update({
+    // 2. Process withdrawal transaction inside an interactive transaction with FOR UPDATE locking
+    await prisma.$transaction(async (tx) => {
+      // Lock user row and fetch latest balance
+      const users = await tx.$queryRawUnsafe<any[]>(
+        'SELECT balance, "referralBalance" FROM "User" WHERE id = $1 FOR UPDATE',
+        userId
+      );
+
+      if (!users || users.length === 0) {
+        throw new Error('User not found');
+      }
+
+      const latestUser = users[0];
+
+      if (targetEarningType === 'referral') {
+        if (latestUser.referralBalance < amount) {
+          throw new Error('Insufficient referral balance');
+        }
+
+        await tx.user.update({
           where: { id: userId },
           data: { referralBalance: { decrement: amount } }
-        }),
-        prisma.transaction.create({
+        });
+
+        await tx.transaction.create({
           data: {
             userId,
-            amount: -amount, // Stored as a negative amount for withdrawals
+            amount: -amount,
             type: 'withdrawal',
             status: 'pending',
             description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`
           }
-        })
-      ]);
-    } else {
-      await prisma.$transaction([
-        prisma.user.update({
+        });
+      } else {
+        if (latestUser.balance < amount) {
+          throw new Error('Insufficient balance');
+        }
+
+        await tx.user.update({
           where: { id: userId },
           data: { balance: { decrement: amount } }
-        }),
-        prisma.transaction.create({
+        });
+
+        await tx.transaction.create({
           data: {
             userId,
-            amount: -amount, // Stored as a negative amount for withdrawals
+            amount: -amount,
             type: 'withdrawal',
             status: 'pending',
             description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`
           }
-        })
-      ]);
-    }
+        });
+      }
+    });
 
     res.status(200).json({ success: true, message: 'Withdrawal request submitted successfully' });
   } catch (error) {

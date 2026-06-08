@@ -31,3 +31,20 @@ export const requireAdminJwt = (req: AdminAuthRequest, res: Response, next: Next
     res.status(401).json({ error: 'Unauthorized: Invalid admin session' });
   }
 };
+
+export const requireRole = (allowedRoles: string[]) => {
+  return (req: AdminAuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.admin) {
+      res.status(401).json({ error: 'Unauthorized: No session found' });
+      return;
+    }
+
+    const { role } = req.admin;
+    if (!role || !allowedRoles.includes(role)) {
+      res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+      return;
+    }
+
+    next();
+  };
+};

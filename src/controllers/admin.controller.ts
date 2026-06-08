@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
 import { sendPushNotification, sendPushNotificationBatch } from '../services/push.service';
 import { distributePendingReferralCommissions } from '../services/network.service';
+import { logAdminAction } from '../services/audit.service';
+import { invalidateConfigCache } from '../services/config.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -90,6 +92,90 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       }
     });
 
+    // --- REAL-TIME TIME-SERIES STATS FOR CHARTS ---
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // Go back 5 months + current month = 6 months
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    const financeTxs = await prisma.transaction.findMany({
+      where: {
+        createdAt: { gte: sixMonthsAgo },
+        status: 'success'
+      },
+      select: {
+        amount: true,
+        type: true,
+        createdAt: true
+      }
+    });
+
+    const newUsers = await prisma.user.findMany({
+      where: {
+        createdAt: { gte: sixMonthsAgo }
+      },
+      select: {
+        createdAt: true
+      }
+    });
+
+    const monthsList: { name: string; dateStart: Date; dateEnd: Date; earnings: number; withdrawals: number; users: number }[] = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const name = monthNames[d.getMonth()];
+      
+      const dateStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const dateEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      monthsList.push({
+        name,
+        dateStart,
+        dateEnd,
+        earnings: 0,
+        withdrawals: 0,
+        users: 0
+      });
+    }
+
+    for (const tx of financeTxs) {
+      const txTime = tx.createdAt.getTime();
+      for (const m of monthsList) {
+        if (txTime >= m.dateStart.getTime() && txTime <= m.dateEnd.getTime()) {
+          if (tx.type === 'withdrawal') {
+            m.withdrawals += Math.abs(tx.amount);
+          } else {
+            m.earnings += tx.amount;
+          }
+          break;
+        }
+      }
+    }
+
+    let runningUserCount = await prisma.user.count({
+      where: {
+        createdAt: { lt: sixMonthsAgo }
+      }
+    });
+
+    for (const m of monthsList) {
+      const monthlyRegs = newUsers.filter(u => {
+        const uTime = u.createdAt.getTime();
+        return uTime >= m.dateStart.getTime() && uTime <= m.dateEnd.getTime();
+      }).length;
+      runningUserCount += monthlyRegs;
+      m.users = runningUserCount;
+    }
+
+    const monthlyStats = monthsList.map(m => ({
+      name: m.name,
+      earnings: m.earnings,
+      withdrawals: m.withdrawals,
+      users: m.users
+    }));
+
     res.status(200).json({
       success: true,
       stats: {
@@ -101,7 +187,8 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
         openTicketsCount,
         totalWithdrawn: Math.abs(totalWithdrawnAmount._sum.amount || 0),
       },
-      recentTransactions
+      recentTransactions,
+      monthlyStats
     });
   } catch (error) {
     console.error('Get Stats Error:', error);
@@ -137,6 +224,14 @@ export const updateConfigs = async (req: AdminAuthRequest, res: Response): Promi
         data: configData
       });
     }
+
+    // Invalidate configuration cache to refresh it on the next fetch
+    invalidateConfigCache();
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'UPDATE_CONFIG', configData, ip);
 
     res.status(200).json({ success: true, message: 'Configuration updated successfully', config });
   } catch (error) {
@@ -223,6 +318,24 @@ export const updateUserBalance = async (req: AdminAuthRequest, res: Response): P
       }
     });
 
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(
+      adminId,
+      adminName,
+      'ADJUST_BALANCE',
+      {
+        userId: id,
+        userPhone: user.phoneNumber,
+        actionType: type,
+        amount: balance,
+        oldBalance: user.balance,
+        newBalance: finalBalance
+      },
+      ip
+    );
+
     res.status(200).json({ success: true, message: 'User balance updated', user: updatedUser });
   } catch (error) {
     console.error('Update Balance Error:', error);
@@ -243,6 +356,11 @@ export const deleteUser = async (req: AdminAuthRequest, res: Response): Promise<
     await prisma.visitEarnClaim.deleteMany({ where: { userId: id } });
 
     await prisma.user.delete({ where: { id } });
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'DELETE_USER', { userId: id }, ip);
 
     res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
@@ -269,6 +387,11 @@ export const bulkDeleteUsers = async (req: AdminAuthRequest, res: Response): Pro
       prisma.visitEarnClaim.deleteMany({ where: { userId: { in: userIds } } }),
       prisma.user.deleteMany({ where: { id: { in: userIds } } }),
     ]);
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'BULK_DELETE_USERS', { userIds }, ip);
 
     res.status(200).json({ success: true, message: `${userIds.length} users deleted successfully` });
   } catch (error) {
@@ -316,7 +439,14 @@ export const getWithdrawals = async (req: AdminAuthRequest, res: Response): Prom
   }
 };
 
-const processWithdrawal = async (txId: string, status: 'success' | 'failed', referenceId?: string) => {
+const processWithdrawal = async (
+  txId: string,
+  status: 'success' | 'failed',
+  referenceId?: string,
+  adminId: string = 'unknown-id',
+  adminName: string = 'unknown-admin',
+  ipAddress?: string
+) => {
   const tx = await prisma.transaction.findUnique({
     where: { id: txId },
     include: { user: true }
@@ -392,6 +522,21 @@ const processWithdrawal = async (txId: string, status: 'success' | 'failed', ref
     });
   }
 
+  await logAdminAction(
+    adminId,
+    adminName,
+    'PROCESS_WITHDRAWAL',
+    {
+      transactionId: txId,
+      userId: tx.userId,
+      userPhone: tx.user.phoneNumber,
+      amount: tx.amount,
+      status,
+      referenceId
+    },
+    ipAddress
+  );
+
   return updatedTx;
 };
 
@@ -405,7 +550,11 @@ export const updateWithdrawalStatus = async (req: AdminAuthRequest, res: Respons
        return;
     }
 
-    const updatedTx = await processWithdrawal(id, status, referenceId);
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
+    const updatedTx = await processWithdrawal(id, status, referenceId, adminId, adminName, ip);
     res.status(200).json({ success: true, message: 'Withdrawal status updated', transaction: updatedTx });
   } catch (error: any) {
     console.error('Update Withdrawal Error:', error);
@@ -442,12 +591,16 @@ export const bulkUpdateWithdrawalStatus = async (req: AdminAuthRequest, res: Res
       return;
     }
 
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
     const results = [];
     const errors = [];
 
     for (const id of targetIds) {
       try {
-        const updated = await processWithdrawal(id, status, referenceId);
+        const updated = await processWithdrawal(id, status, referenceId, adminId, adminName, ip);
         results.push(updated);
       } catch (err: any) {
         console.error(`Error processing bulk withdrawal ${id}:`, err);
@@ -577,6 +730,17 @@ export const toggleUserFreeze = async (req: AdminAuthRequest, res: Response): Pr
       data: { isBlocked: !user.isBlocked }
     });
 
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(
+      adminId,
+      adminName,
+      'TOGGLE_FREEZE_USER',
+      { userId: id, phone: user.phoneNumber, newFreezeState: updatedUser.isBlocked },
+      ip
+    );
+
     res.status(200).json({ success: true, isBlocked: updatedUser.isBlocked });
   } catch (error) {
     console.error('Toggle User Freeze Error:', error);
@@ -673,6 +837,17 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
       }
     }
 
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(
+      adminId,
+      adminName,
+      'BROADCAST_NOTIFICATION',
+      { title, type, targetType, phoneNumber },
+      ip
+    );
+
     res.status(200).json({ success: true, message: 'Notifications sent successfully' });
   } catch (error) {
     console.error('Broadcast Push Error:', error);
@@ -708,6 +883,17 @@ export const changeUserPassword = async (req: AdminAuthRequest, res: Response): 
       data: { passwordHash }
     });
 
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(
+      adminId,
+      adminName,
+      'CHANGE_USER_PASSWORD',
+      { userId: id, phone: user.phoneNumber },
+      ip
+    );
+
     res.status(200).json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change User Password Error:', error);
@@ -718,9 +904,41 @@ export const changeUserPassword = async (req: AdminAuthRequest, res: Response): 
 export const triggerReferralDistribution = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
     await distributePendingReferralCommissions();
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'TRIGGER_REFERRAL_DISTRIBUTION', {}, ip);
+
     res.status(200).json({ success: true, message: 'Referral distribution processed successfully.' });
   } catch (error) {
     console.error('Trigger Referral Distribution Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getAuditLogs = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    const auditLogs = await prisma.adminAuditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit
+    });
+
+    const total = await prisma.adminAuditLog.count();
+
+    res.status(200).json({
+      success: true,
+      auditLogs,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get Audit Logs Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

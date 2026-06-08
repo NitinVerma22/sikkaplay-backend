@@ -13,22 +13,23 @@ router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
 router.get('/stats', admin_controller_1.getDashboardStats);
 router.post('/referrals/distribute', admin_controller_1.triggerReferralDistribution);
+router.get('/audit-logs', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.getAuditLogs);
 // App Config Settings
 router.get('/config', admin_controller_1.getConfigs);
-router.put('/config', admin_controller_1.updateConfigs);
+router.put('/config', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.updateConfigs);
 // User Management
 router.get('/users', admin_controller_1.getUsers);
 router.put('/users/:id/balance', admin_controller_1.updateUserBalance);
 router.put('/users/:id/freeze', admin_controller_1.toggleUserFreeze);
 router.put('/users/:id/change-password', admin_controller_1.changeUserPassword);
-router.delete('/users/:id', admin_controller_1.deleteUser);
-router.post('/users/bulk-delete', admin_controller_1.bulkDeleteUsers);
+router.delete('/users/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.deleteUser);
+router.post('/users/bulk-delete', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkDeleteUsers);
 // Push Notification Broadcast
 router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 // Withdrawal Management
 router.get('/withdrawals', admin_controller_1.getWithdrawals);
-router.put('/withdrawals/:id', admin_controller_1.updateWithdrawalStatus);
-router.post('/withdrawals/bulk', admin_controller_1.bulkUpdateWithdrawalStatus);
+router.put('/withdrawals/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.updateWithdrawalStatus);
+router.post('/withdrawals/bulk', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkUpdateWithdrawalStatus);
 // Support & FAQ Tickets Management
 router.get('/tickets', admin_controller_1.getSupportTickets);
 router.post('/tickets/:id/reply', admin_controller_1.replySupportTicket);

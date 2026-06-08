@@ -45,15 +45,21 @@ const startCronJobs = () => {
                 select: { id: true, fcmToken: true, name: true },
                 take: 1000 // limit batch size
             });
+            const userIdsToUpdate = usersToRemind.filter(u => u.fcmToken).map(u => u.id);
             for (const user of usersToRemind) {
                 if (user.fcmToken) {
-                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka!', `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`, 'alert', null, user.id);
-                    // Update user's updatedAt so we don't spam them every hour
-                    await db_1.prisma.user.update({
-                        where: { id: user.id },
-                        data: { updatedAt: new Date() }
-                    });
+                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka!', `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`, 'alert', null, user.id).catch(e => console.error(`Failed to send inactivity push to ${user.id}:`, e));
                 }
+            }
+            if (userIdsToUpdate.length > 0) {
+                await db_1.prisma.user.updateMany({
+                    where: {
+                        id: { in: userIdsToUpdate }
+                    },
+                    data: {
+                        updatedAt: new Date()
+                    }
+                });
             }
         }
         catch (error) {

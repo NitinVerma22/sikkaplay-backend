@@ -48,13 +48,10 @@ const handleCpxCallback = async (req, res) => {
             res.status(404).send('User not found');
             return;
         }
+        const externalTxId = `cpx-${transactionId}`;
         // Check if transaction already exists (avoid double claiming)
-        const existingTx = await db_1.prisma.transaction.findFirst({
-            where: {
-                description: {
-                    contains: `CPX-${transactionId}`,
-                },
-            },
+        const existingTx = await db_1.prisma.transaction.findUnique({
+            where: { externalTransactionId: externalTxId }
         });
         if (existingTx) {
             // Return ok immediately to prevent CPX retries
@@ -79,6 +76,7 @@ const handleCpxCallback = async (req, res) => {
                     type: 'earning',
                     status: 'success',
                     description: `Completed CPX Survey (ID: CPX-${transactionId})`,
+                    externalTransactionId: externalTxId,
                 },
             });
         });
@@ -169,13 +167,10 @@ const handleAdmobSsvCallback = async (req, res) => {
             console.warn('AdMob SSV Callback: Bypassing signature verification (BYPASS_ADMOB_SSV_SIGNATURE is set to true)');
         }
         const amount = parseInt(rewardAmountStr) || 0;
+        const externalTxId = `admob-${transactionId}`;
         // Check if transaction already exists (avoid double claiming)
-        const existingTx = await db_1.prisma.transaction.findFirst({
-            where: {
-                description: {
-                    contains: `AdMob-${transactionId}`,
-                },
-            },
+        const existingTx = await db_1.prisma.transaction.findUnique({
+            where: { externalTransactionId: externalTxId }
         });
         if (existingTx) {
             res.status(200).send('OK');
@@ -210,6 +205,7 @@ const handleAdmobSsvCallback = async (req, res) => {
                     type: 'earning',
                     status: 'success',
                     description: `Watched Sponsored Video (ID: AdMob-${transactionId})`,
+                    externalTransactionId: externalTxId,
                 },
             });
         });

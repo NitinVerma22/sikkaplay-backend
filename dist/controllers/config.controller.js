@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAppConfig = void 0;
 const db_1 = require("../config/db");
+const config_service_1 = require("../services/config.service");
 const getAppConfig = async (req, res) => {
     try {
-        let config = await db_1.prisma.appConfig.findFirst();
+        let config = await (0, config_service_1.getCachedAppConfig)();
         if (!config) {
             config = await db_1.prisma.appConfig.create({
                 data: {}

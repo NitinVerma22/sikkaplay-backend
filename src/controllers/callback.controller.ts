@@ -53,13 +53,11 @@ export const handleCpxCallback = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    const externalTxId = `cpx-${transactionId}`;
+
     // Check if transaction already exists (avoid double claiming)
-    const existingTx = await prisma.transaction.findFirst({
-      where: {
-        description: {
-          contains: `CPX-${transactionId}`,
-        },
-      },
+    const existingTx = await prisma.transaction.findUnique({
+      where: { externalTransactionId: externalTxId }
     });
 
     if (existingTx) {
@@ -87,6 +85,7 @@ export const handleCpxCallback = async (req: Request, res: Response): Promise<vo
           type: 'earning',
           status: 'success',
           description: `Completed CPX Survey (ID: CPX-${transactionId})`,
+          externalTransactionId: externalTxId,
         },
       });
     });
@@ -189,13 +188,11 @@ export const handleAdmobSsvCallback = async (req: Request, res: Response): Promi
 
     const amount = parseInt(rewardAmountStr) || 0;
 
+    const externalTxId = `admob-${transactionId}`;
+
     // Check if transaction already exists (avoid double claiming)
-    const existingTx = await prisma.transaction.findFirst({
-      where: {
-        description: {
-          contains: `AdMob-${transactionId}`,
-        },
-      },
+    const existingTx = await prisma.transaction.findUnique({
+      where: { externalTransactionId: externalTxId }
     });
 
     if (existingTx) {
@@ -236,6 +233,7 @@ export const handleAdmobSsvCallback = async (req: Request, res: Response): Promi
           type: 'earning',
           status: 'success',
           description: `Watched Sponsored Video (ID: AdMob-${transactionId})`,
+          externalTransactionId: externalTxId,
         },
       });
     });

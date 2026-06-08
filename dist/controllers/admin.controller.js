@@ -3,12 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
 const push_service_1 = require("../services/push.service");
 const network_service_1 = require("../services/network.service");
+const audit_service_1 = require("../services/audit.service");
+const config_service_1 = require("../services/config.service");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 // 1. Admin Login
 const loginAdmin = async (req, res) => {
@@ -78,6 +80,80 @@ const getDashboardStats = async (req, res) => {
                 }
             }
         });
+        // --- REAL-TIME TIME-SERIES STATS FOR CHARTS ---
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // Go back 5 months + current month = 6 months
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+        const financeTxs = await db_1.prisma.transaction.findMany({
+            where: {
+                createdAt: { gte: sixMonthsAgo },
+                status: 'success'
+            },
+            select: {
+                amount: true,
+                type: true,
+                createdAt: true
+            }
+        });
+        const newUsers = await db_1.prisma.user.findMany({
+            where: {
+                createdAt: { gte: sixMonthsAgo }
+            },
+            select: {
+                createdAt: true
+            }
+        });
+        const monthsList = [];
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const name = monthNames[d.getMonth()];
+            const dateStart = new Date(d.getFullYear(), d.getMonth(), 1);
+            const dateEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+            monthsList.push({
+                name,
+                dateStart,
+                dateEnd,
+                earnings: 0,
+                withdrawals: 0,
+                users: 0
+            });
+        }
+        for (const tx of financeTxs) {
+            const txTime = tx.createdAt.getTime();
+            for (const m of monthsList) {
+                if (txTime >= m.dateStart.getTime() && txTime <= m.dateEnd.getTime()) {
+                    if (tx.type === 'withdrawal') {
+                        m.withdrawals += Math.abs(tx.amount);
+                    }
+                    else {
+                        m.earnings += tx.amount;
+                    }
+                    break;
+                }
+            }
+        }
+        let runningUserCount = await db_1.prisma.user.count({
+            where: {
+                createdAt: { lt: sixMonthsAgo }
+            }
+        });
+        for (const m of monthsList) {
+            const monthlyRegs = newUsers.filter(u => {
+                const uTime = u.createdAt.getTime();
+                return uTime >= m.dateStart.getTime() && uTime <= m.dateEnd.getTime();
+            }).length;
+            runningUserCount += monthlyRegs;
+            m.users = runningUserCount;
+        }
+        const monthlyStats = monthsList.map(m => ({
+            name: m.name,
+            earnings: m.earnings,
+            withdrawals: m.withdrawals,
+            users: m.users
+        }));
         res.status(200).json({
             success: true,
             stats: {
@@ -89,7 +165,8 @@ const getDashboardStats = async (req, res) => {
                 openTicketsCount,
                 totalWithdrawn: Math.abs(totalWithdrawnAmount._sum.amount || 0),
             },
-            recentTransactions
+            recentTransactions,
+            monthlyStats
         });
     }
     catch (error) {
@@ -127,6 +204,12 @@ const updateConfigs = async (req, res) => {
                 data: configData
             });
         }
+        // Invalidate configuration cache to refresh it on the next fetch
+        (0, config_service_1.invalidateConfigCache)();
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'UPDATE_CONFIG', configData, ip);
         res.status(200).json({ success: true, message: 'Configuration updated successfully', config });
     }
     catch (error) {
@@ -204,6 +287,17 @@ const updateUserBalance = async (req, res) => {
                 description: 'Admin balance adjustment',
             }
         });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'ADJUST_BALANCE', {
+            userId: id,
+            userPhone: user.phoneNumber,
+            actionType: type,
+            amount: balance,
+            oldBalance: user.balance,
+            newBalance: finalBalance
+        }, ip);
         res.status(200).json({ success: true, message: 'User balance updated', user: updatedUser });
     }
     catch (error) {
@@ -223,6 +317,10 @@ const deleteUser = async (req, res) => {
         await db_1.prisma.supportTicket.deleteMany({ where: { userId: id } });
         await db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: id } });
         await db_1.prisma.user.delete({ where: { id } });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'DELETE_USER', { userId: id }, ip);
         res.status(200).json({ success: true, message: 'User deleted successfully' });
     }
     catch (error) {
@@ -247,6 +345,10 @@ const bulkDeleteUsers = async (req, res) => {
             db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: { in: userIds } } }),
             db_1.prisma.user.deleteMany({ where: { id: { in: userIds } } }),
         ]);
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'BULK_DELETE_USERS', { userIds }, ip);
         res.status(200).json({ success: true, message: `${userIds.length} users deleted successfully` });
     }
     catch (error) {
@@ -291,7 +393,7 @@ const getWithdrawals = async (req, res) => {
     }
 };
 exports.getWithdrawals = getWithdrawals;
-const processWithdrawal = async (txId, status, referenceId) => {
+const processWithdrawal = async (txId, status, referenceId, adminId = 'unknown-id', adminName = 'unknown-admin', ipAddress) => {
     const tx = await db_1.prisma.transaction.findUnique({
         where: { id: txId },
         include: { user: true }
@@ -360,6 +462,14 @@ const processWithdrawal = async (txId, status, referenceId) => {
             }
         });
     }
+    await (0, audit_service_1.logAdminAction)(adminId, adminName, 'PROCESS_WITHDRAWAL', {
+        transactionId: txId,
+        userId: tx.userId,
+        userPhone: tx.user.phoneNumber,
+        amount: tx.amount,
+        status,
+        referenceId
+    }, ipAddress);
     return updatedTx;
 };
 const updateWithdrawalStatus = async (req, res) => {
@@ -370,7 +480,10 @@ const updateWithdrawalStatus = async (req, res) => {
             res.status(400).json({ error: 'Invalid status. Must be success or failed' });
             return;
         }
-        const updatedTx = await processWithdrawal(id, status, referenceId);
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const updatedTx = await processWithdrawal(id, status, referenceId, adminId, adminName, ip);
         res.status(200).json({ success: true, message: 'Withdrawal status updated', transaction: updatedTx });
     }
     catch (error) {
@@ -405,11 +518,14 @@ const bulkUpdateWithdrawalStatus = async (req, res) => {
             res.status(200).json({ success: true, message: 'No withdrawals to process' });
             return;
         }
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const results = [];
         const errors = [];
         for (const id of targetIds) {
             try {
-                const updated = await processWithdrawal(id, status, referenceId);
+                const updated = await processWithdrawal(id, status, referenceId, adminId, adminName, ip);
                 results.push(updated);
             }
             catch (err) {
@@ -529,6 +645,10 @@ const toggleUserFreeze = async (req, res) => {
             where: { id },
             data: { isBlocked: !user.isBlocked }
         });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'TOGGLE_FREEZE_USER', { userId: id, phone: user.phoneNumber, newFreezeState: updatedUser.isBlocked }, ip);
         res.status(200).json({ success: true, isBlocked: updatedUser.isBlocked });
     }
     catch (error) {
@@ -616,6 +736,10 @@ const broadcastPushNotification = async (req, res) => {
                 await (0, push_service_1.sendPushNotificationBatch)(tokens, title, body, notificationType, bannerUrl);
             }
         }
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'BROADCAST_NOTIFICATION', { title, type, targetType, phoneNumber }, ip);
         res.status(200).json({ success: true, message: 'Notifications sent successfully' });
     }
     catch (error) {
@@ -646,6 +770,10 @@ const changeUserPassword = async (req, res) => {
             where: { id },
             data: { passwordHash }
         });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'CHANGE_USER_PASSWORD', { userId: id, phone: user.phoneNumber }, ip);
         res.status(200).json({ success: true, message: 'Password changed successfully' });
     }
     catch (error) {
@@ -657,6 +785,10 @@ exports.changeUserPassword = changeUserPassword;
 const triggerReferralDistribution = async (req, res) => {
     try {
         await (0, network_service_1.distributePendingReferralCommissions)();
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'TRIGGER_REFERRAL_DISTRIBUTION', {}, ip);
         res.status(200).json({ success: true, message: 'Referral distribution processed successfully.' });
     }
     catch (error) {
@@ -665,3 +797,27 @@ const triggerReferralDistribution = async (req, res) => {
     }
 };
 exports.triggerReferralDistribution = triggerReferralDistribution;
+const getAuditLogs = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const auditLogs = await db_1.prisma.adminAuditLog.findMany({
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit
+        });
+        const total = await db_1.prisma.adminAuditLog.count();
+        res.status(200).json({
+            success: true,
+            auditLogs,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
+    }
+    catch (error) {
+        console.error('Get Audit Logs Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getAuditLogs = getAuditLogs;
