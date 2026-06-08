@@ -3,25 +3,49 @@ import { Request } from 'express';
 import RedisStore from 'rate-limit-redis';
 import Redis from 'ioredis';
 
-// Create a Redis client.
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-});
+const redisUrl = process.env.REDIS_URL;
+// Only use Redis if a non-localhost URL is provided
+const useRedis = redisUrl && !redisUrl.includes('localhost') && !redisUrl.includes('127.0.0.1');
 
-redisClient.on('error', (err) => {
-  console.error('Redis error:', err);
-});
+let authStore: any = undefined;
+let earnStore: any = undefined;
+let withdrawStore: any = undefined;
+
+if (useRedis) {
+  console.log('[RATE LIMITER] Redis configured. Connecting to:', redisUrl);
+  const redisClient = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+
+  redisClient.on('error', (err) => {
+    console.error('[RATE LIMITER] Redis connection error:', err);
+  });
+
+  authStore = new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
+    prefix: 'rl:auth:',
+  });
+
+  earnStore = new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
+    prefix: 'rl:earn:',
+  });
+
+  withdrawStore = new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
+    prefix: 'rl:withdraw:',
+  });
+} else {
+  console.log('[RATE LIMITER] No external Redis URL found or set to localhost. Falling back to default in-memory store.');
+}
 
 /**
  * 1. Authentication Rate Limiter (IP-based)
  * Limits registration, login, and Google signup attempts to prevent brute-force attacks.
  */
 export const authLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
-    prefix: 'rl:auth:',
-  }),
+  store: authStore,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 requests per window
   standardHeaders: true,
@@ -36,10 +60,7 @@ export const authLimiter = rateLimit({
  * Limits coin claiming and task logs to prevent rapid automated scripting abuse.
  */
 export const earnLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
-    prefix: 'rl:earn:',
-  }),
+  store: earnStore,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 60, // Limit each user to 60 requests per window (avg 4 claims/min)
   standardHeaders: true,
@@ -57,10 +78,7 @@ export const earnLimiter = rateLimit({
  * Limits withdrawal requests to prevent transaction spamming or double-claiming.
  */
 export const withdrawLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redisClient.call(args[0], ...args.slice(1)) as Promise<any>,
-    prefix: 'rl:withdraw:',
-  }),
+  store: withdrawStore,
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 3, // Limit each user to 3 requests per hour
   standardHeaders: true,
@@ -72,4 +90,5 @@ export const withdrawLimiter = rateLimit({
     error: 'Too many withdrawal requests. You can only request withdrawals up to 3 times per hour.'
   }
 });
+
 
