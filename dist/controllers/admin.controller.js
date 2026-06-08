@@ -328,7 +328,7 @@ const deleteUser = async (req, res) => {
     }
     catch (error) {
         console.error('Delete User Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error.message || 'Internal server error' });
     }
 };
 exports.deleteUser = deleteUser;
@@ -359,7 +359,7 @@ const bulkDeleteUsers = async (req, res) => {
     }
     catch (error) {
         console.error('Bulk Delete Users Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error.message || 'Internal server error' });
     }
 };
 exports.bulkDeleteUsers = bulkDeleteUsers;

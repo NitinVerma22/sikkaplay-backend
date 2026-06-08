@@ -366,9 +366,9 @@ export const deleteUser = async (req: AdminAuthRequest, res: Response): Promise<
     await logAdminAction(adminId, adminName, 'DELETE_USER', { userId: id }, ip);
 
     res.status(200).json({ success: true, message: 'User deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete User Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
 
@@ -400,9 +400,9 @@ export const bulkDeleteUsers = async (req: AdminAuthRequest, res: Response): Pro
     await logAdminAction(adminId, adminName, 'BULK_DELETE_USERS', { userIds }, ip);
 
     res.status(200).json({ success: true, message: `${userIds.length} users deleted successfully` });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Bulk Delete Users Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
 
