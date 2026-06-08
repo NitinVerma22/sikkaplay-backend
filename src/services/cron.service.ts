@@ -3,9 +3,33 @@ import { prisma } from '../config/db';
 import { sendPushNotification } from './push.service';
 import { distributePendingReferralCommissions } from './network.service';
 
+export const pruneOldGameSessions = async () => {
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const deleteResult = await prisma.gameSession.deleteMany({
+      where: {
+        createdAt: { lt: twentyFourHoursAgo }
+      }
+    });
+    console.log(`[PRUNING] Pruned ${deleteResult.count} game sessions older than 24 hours.`);
+  } catch (error) {
+    console.error('Error running GameSession pruning:', error);
+  }
+};
+
 export const startCronJobs = () => {
   // Process any pending commissions immediately on startup
   distributePendingReferralCommissions().catch(e => console.error('Error processing startup commissions:', e));
+  
+  // Prune game sessions immediately on startup
+  pruneOldGameSessions().catch(e => console.error('Error processing startup pruning:', e));
+
+  // Run daily at 02:00 AM to prune game sessions older than 24 hours
+  cron.schedule('0 2 * * *', async () => {
+    console.log('Running daily cron job for GameSession pruning...');
+    await pruneOldGameSessions();
+  });
+
 
   // Run every night at midnight (00:00)
   cron.schedule('0 0 * * *', async () => {

@@ -3,14 +3,36 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startCronJobs = void 0;
+exports.startCronJobs = exports.pruneOldGameSessions = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const db_1 = require("../config/db");
 const push_service_1 = require("./push.service");
 const network_service_1 = require("./network.service");
+const pruneOldGameSessions = async () => {
+    try {
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const deleteResult = await db_1.prisma.gameSession.deleteMany({
+            where: {
+                createdAt: { lt: twentyFourHoursAgo }
+            }
+        });
+        console.log(`[PRUNING] Pruned ${deleteResult.count} game sessions older than 24 hours.`);
+    }
+    catch (error) {
+        console.error('Error running GameSession pruning:', error);
+    }
+};
+exports.pruneOldGameSessions = pruneOldGameSessions;
 const startCronJobs = () => {
     // Process any pending commissions immediately on startup
     (0, network_service_1.distributePendingReferralCommissions)().catch(e => console.error('Error processing startup commissions:', e));
+    // Prune game sessions immediately on startup
+    (0, exports.pruneOldGameSessions)().catch(e => console.error('Error processing startup pruning:', e));
+    // Run daily at 02:00 AM to prune game sessions older than 24 hours
+    node_cron_1.default.schedule('0 2 * * *', async () => {
+        console.log('Running daily cron job for GameSession pruning...');
+        await (0, exports.pruneOldGameSessions)();
+    });
     // Run every night at midnight (00:00)
     node_cron_1.default.schedule('0 0 * * *', async () => {
         console.log('Running daily cron job for referral rewards...');
