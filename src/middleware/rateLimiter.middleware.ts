@@ -50,6 +50,7 @@ export const authLimiter = rateLimit({
   max: 10, // Limit each IP to 10 requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { ip: false },
   message: {
     error: 'Too many authentication attempts. Please try again after 15 minutes.'
   }
@@ -65,6 +66,7 @@ export const earnLimiter = rateLimit({
   max: 60, // Limit each user to 60 requests per window (avg 4 claims/min)
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { ip: false },
   keyGenerator: (req: Request) => {
     return (req as any).user?.userId || req.ip || '';
   },
@@ -83,6 +85,7 @@ export const withdrawLimiter = rateLimit({
   max: 3, // Limit each user to 3 requests per hour
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { ip: false },
   keyGenerator: (req: Request) => {
     return (req as any).user?.userId || req.ip || '';
   },
