@@ -309,13 +309,16 @@ exports.updateUserBalance = updateUserBalance;
 const deleteUser = async (req, res) => {
     try {
         const id = req.params.id;
-        // We should delete user dependencies first
+        // We should delete user dependencies first to satisfy foreign key constraints
         await db_1.prisma.transaction.deleteMany({ where: { userId: id } });
         await db_1.prisma.dailyUsage.deleteMany({ where: { userId: id } });
         await db_1.prisma.referralReward.deleteMany({ where: { userId: id } });
         await db_1.prisma.notification.deleteMany({ where: { userId: id } });
         await db_1.prisma.supportTicket.deleteMany({ where: { userId: id } });
         await db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: id } });
+        await db_1.prisma.dailyCodeClaim.deleteMany({ where: { userId: id } });
+        await db_1.prisma.gameSession.deleteMany({ where: { userId: id } });
+        await db_1.prisma.adImpression.deleteMany({ where: { userId: id } });
         await db_1.prisma.user.delete({ where: { id } });
         const adminId = req.admin?.adminId || 'unknown-id';
         const adminName = req.admin?.username || 'unknown-admin';
@@ -343,6 +346,9 @@ const bulkDeleteUsers = async (req, res) => {
             db_1.prisma.notification.deleteMany({ where: { userId: { in: userIds } } }),
             db_1.prisma.supportTicket.deleteMany({ where: { userId: { in: userIds } } }),
             db_1.prisma.visitEarnClaim.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.dailyCodeClaim.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.gameSession.deleteMany({ where: { userId: { in: userIds } } }),
+            db_1.prisma.adImpression.deleteMany({ where: { userId: { in: userIds } } }),
             db_1.prisma.user.deleteMany({ where: { id: { in: userIds } } }),
         ]);
         const adminId = req.admin?.adminId || 'unknown-id';
