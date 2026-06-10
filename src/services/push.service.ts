@@ -52,6 +52,9 @@ export const sendPushNotification = async (
 
     if (bannerUrl && bannerUrl.trim() !== '') {
       message.notification.imageUrl = bannerUrl;
+      if (message.android && message.android.notification) {
+        message.android.notification.imageUrl = bannerUrl;
+      }
     }
 
     await admin.messaging().send(message);
@@ -88,6 +91,9 @@ export const sendPushNotificationBatch = async (
 
       if (bannerUrl && bannerUrl.trim() !== '') {
         message.notification.imageUrl = bannerUrl;
+        if (message.android && message.android.notification) {
+          message.android.notification.imageUrl = bannerUrl;
+        }
       }
 
       return message;

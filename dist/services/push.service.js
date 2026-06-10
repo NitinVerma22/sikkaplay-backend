@@ -77,6 +77,9 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
         };
         if (bannerUrl && bannerUrl.trim() !== '') {
             message.notification.imageUrl = bannerUrl;
+            if (message.android && message.android.notification) {
+                message.android.notification.imageUrl = bannerUrl;
+            }
         }
         await admin.messaging().send(message);
     }
@@ -106,6 +109,9 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
             };
             if (bannerUrl && bannerUrl.trim() !== '') {
                 message.notification.imageUrl = bannerUrl;
+                if (message.android && message.android.notification) {
+                    message.android.notification.imageUrl = bannerUrl;
+                }
             }
             return message;
         });

@@ -7,15 +7,34 @@ const fetchUsersWithStats = async (codes) => {
         return [];
     const users = await db_1.prisma.user.findMany({
         where: { referredBy: { in: codes } },
-        select: { id: true, name: true, createdAt: true, referralCode: true, totalEarned: true, dailyUsages: true },
+        select: { id: true, name: true, createdAt: true, referralCode: true, totalEarned: true },
     });
+    if (users.length === 0)
+        return [];
+    const userIds = users.map(u => u.id);
+    // Group by userId and sum minutes directly in database
+    const playtimes = await db_1.prisma.dailyUsage.groupBy({
+        by: ['userId'],
+        _sum: {
+            reelsMinutes: true,
+            gamesMinutes: true,
+        },
+        where: {
+            userId: { in: userIds }
+        }
+    });
+    const playtimeMap = new Map();
+    for (const pt of playtimes) {
+        const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+        playtimeMap.set(pt.userId, total);
+    }
     return users.map(u => ({
         id: u.id,
         name: u.name,
         createdAt: u.createdAt,
         referralCode: u.referralCode,
         totalEarned: u.totalEarned,
-        playtime: u.dailyUsages.reduce((acc, d) => acc + d.reelsMinutes + d.gamesMinutes, 0),
+        playtime: playtimeMap.get(u.id) ?? 0,
     }));
 };
 const getMyNetwork = async (req, res) => {
@@ -33,9 +52,15 @@ const getMyNetwork = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        // Personal Playtime
-        const usages = await db_1.prisma.dailyUsage.findMany({ where: { userId } });
-        const personalPlaytime = usages.reduce((acc, u) => acc + u.reelsMinutes + u.gamesMinutes, 0);
+        // Personal Playtime aggregate directly in database
+        const playtimeAggregate = await db_1.prisma.dailyUsage.aggregate({
+            where: { userId },
+            _sum: {
+                reelsMinutes: true,
+                gamesMinutes: true,
+            }
+        });
+        const personalPlaytime = (playtimeAggregate._sum.reelsMinutes ?? 0) + (playtimeAggregate._sum.gamesMinutes ?? 0);
         // Level 1: Users referred directly by this user
         const level1 = await fetchUsersWithStats([user.referralCode]);
         const level1Codes = level1.map(u => u.referralCode);

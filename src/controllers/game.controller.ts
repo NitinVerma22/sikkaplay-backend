@@ -84,12 +84,6 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         throw new Error('User not found');
       }
 
-      const user = users[0];
-
-      if (user.balance < 10) {
-        throw new Error('Insufficient balance to spin');
-      }
-
       // Generate a spin reward matching the client's wheel slots: 1, 2, 3, 5, 7, 10, 15, 20, 30
       const rand = Math.random() * 100;
       let reward = 1;
@@ -104,13 +98,11 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         reward = common[Math.floor(Math.random() * common.length)]; // Common
       }
 
-      const netCost = 10 - reward;
-
-      // Update User balance and total earned
+      // Update User balance and total earned (spin is free, only increment reward)
       const updatedUser = await tx.user.update({
         where: { id: userId },
         data: {
-          balance: { decrement: netCost },
+          balance: reward > 0 ? { increment: reward } : undefined,
           totalEarned: reward > 0 ? { increment: reward } : undefined
         }
       });
@@ -124,18 +116,7 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
       });
 
       // Create transaction logs
-      // 1. Debit for spin
-      await tx.transaction.create({
-        data: {
-          userId,
-          amount: -10,
-          type: 'game',
-          status: 'success',
-          description: 'Spin cost'
-        }
-      });
-
-      // 2. Credit reward if won
+      // Credit reward if won
       if (reward > 0) {
         await tx.transaction.create({
           data: {
@@ -166,7 +147,7 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
 export const endGame = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { sessionId, coinsEarned: reqCoins } = req.body;
+    const { sessionId, coinsEarned: reqCoins, bypassFee } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -179,6 +160,7 @@ export const endGame = async (req: AuthRequest, res: Response): Promise<void> =>
     }
 
     const requestedCoins = typeof reqCoins === 'number' ? Math.floor(reqCoins) : 0;
+    const fee = typeof bypassFee === 'number' ? Math.floor(bypassFee) : 0;
 
     const result = await prisma.$transaction(async (tx) => {
       const session = await tx.gameSession.findUnique({
@@ -227,26 +209,52 @@ export const endGame = async (req: AuthRequest, res: Response): Promise<void> =>
           finalCoinsEarned = requestedCoins;
         }
 
-        if (finalCoinsEarned > 0) {
-          // Update User balance
+        // Verify if user can afford the bypass fee if selected
+        if (fee > 0) {
+          const userCheck = await tx.user.findUnique({
+            where: { id: userId },
+            select: { balance: true }
+          });
+          if ((userCheck?.balance ?? 0) + finalCoinsEarned < fee) {
+            throw new Error('Insufficient balance to pay bypass fee');
+          }
+        }
+
+        if (finalCoinsEarned > 0 || fee > 0) {
+          // Update User balance (net increase is earned - fee)
           await tx.user.update({
             where: { id: userId },
             data: {
-              balance: { increment: finalCoinsEarned },
+              balance: { increment: finalCoinsEarned - fee },
               totalEarned: { increment: finalCoinsEarned }
             }
           });
 
-          // Create transaction record
-          await tx.transaction.create({
-            data: {
-              userId,
-              amount: finalCoinsEarned,
-              type: 'game',
-              status: 'success',
-              description: `Completed ${session.gameType} gameplay reward`
-            }
-          });
+          // Create transaction record for rewards
+          if (finalCoinsEarned > 0) {
+            await tx.transaction.create({
+              data: {
+                userId,
+                amount: finalCoinsEarned,
+                type: 'game',
+                status: 'success',
+                description: `Completed ${session.gameType} gameplay reward`
+              }
+            });
+          }
+
+          // Create transaction record for fee
+          if (fee > 0) {
+            await tx.transaction.create({
+              data: {
+                userId,
+                amount: -fee,
+                type: 'game',
+                status: 'success',
+                description: `Bypassed video ad fee for ${session.gameType}`
+              }
+            });
+          }
         }
       } else {
         // Spin sessions already award coins per spin action, so endGame just closes the session
