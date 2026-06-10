@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { getStartOfTodayIST } from '../utils/date.utils';
 
 export const startGame = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -38,9 +39,35 @@ export const startGame = async (req: AuthRequest, res: Response): Promise<void> 
       }
     });
 
+    let spinsLeft = 3;
+    if (gameType === 'spin') {
+      const today = new Date();
+      const startOfToday = getStartOfTodayIST(today);
+
+      const adsToday = await prisma.adImpression.count({
+        where: {
+          userId,
+          adType: 'rewarded_spin',
+          createdAt: { gte: startOfToday }
+        }
+      });
+
+      const spinsToday = await prisma.transaction.count({
+        where: {
+          userId,
+          type: 'game',
+          description: { startsWith: 'Spin reward won:' },
+          createdAt: { gte: startOfToday }
+        }
+      });
+
+      spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+    }
+
     res.status(200).json({
       success: true,
       sessionId: session.id,
+      spinsLeft,
       message: 'Game session started successfully'
     });
   } catch (error) {
@@ -72,6 +99,32 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
 
       if (!session || session.userId !== userId || session.status !== 'active' || session.gameType !== 'spin') {
         throw new Error('Invalid or inactive spin session');
+      }
+
+      // Calculate remaining spins
+      const today = new Date();
+      const startOfToday = getStartOfTodayIST(today);
+
+      const adsToday = await tx.adImpression.count({
+        where: {
+          userId,
+          adType: 'rewarded_spin',
+          createdAt: { gte: startOfToday }
+        }
+      });
+
+      const spinsToday = await tx.transaction.count({
+        where: {
+          userId,
+          type: 'game',
+          description: { startsWith: 'Spin reward won:' },
+          createdAt: { gte: startOfToday }
+        }
+      });
+
+      const spinsLeft = 3 + adsToday * 3 - spinsToday;
+      if (spinsLeft <= 0) {
+        throw new Error('No spins remaining today');
       }
 
       // Lock the user row to prevent balance race conditions
@@ -129,13 +182,14 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         });
       }
 
-      return { reward, balance: updatedUser.balance };
+      return { reward, balance: updatedUser.balance, spinsLeft: spinsLeft - 1 };
     });
 
     res.status(200).json({
       success: true,
       reward: result.reward,
       balance: result.balance,
+      spinsLeft: result.spinsLeft,
       message: 'Wheel spun successfully'
     });
   } catch (error: any) {
@@ -289,5 +343,58 @@ export const endGame = async (req: AuthRequest, res: Response): Promise<void> =>
   } catch (error: any) {
     console.error('Error ending game session:', error);
     res.status(400).json({ error: error.message || 'Internal server error' });
+  }
+};
+
+export const recordSpinAd = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const today = new Date();
+    const startOfToday = getStartOfTodayIST(today);
+
+    // Create an ad impression record
+    await prisma.adImpression.create({
+      data: {
+        userId,
+        adType: 'rewarded_spin',
+        adNetwork: 'admob',
+        coinsAwarded: 0,
+        externalTxId: `spin-ad-${userId}-${Date.now()}`
+      }
+    });
+
+    // Calculate updated spinsLeft
+    const adsToday = await prisma.adImpression.count({
+      where: {
+        userId,
+        adType: 'rewarded_spin',
+        createdAt: { gte: startOfToday }
+      }
+    });
+
+    const spinsToday = await prisma.transaction.count({
+      where: {
+        userId,
+        type: 'game',
+        description: { startsWith: 'Spin reward won:' },
+        createdAt: { gte: startOfToday }
+      }
+    });
+
+    const spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+
+    res.status(200).json({
+      success: true,
+      spinsLeft,
+      message: 'Ad watch recorded successfully. 3 spins added.'
+    });
+  } catch (error) {
+    console.error('Error recording spin ad:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

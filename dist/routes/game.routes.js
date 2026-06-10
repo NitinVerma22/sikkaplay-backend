@@ -11,6 +11,8 @@ router.use(auth_middleware_1.requireJwt);
 router.post('/start', game_controller_1.startGame);
 // POST /api/game/spin — vpnGuard here only (real coins at stake)
 router.post('/spin', vpn_middleware_1.vpnGuard, game_controller_1.spinWheel);
+// POST /api/game/spin-ad
+router.post('/spin-ad', game_controller_1.recordSpinAd);
 // POST /api/game/end
 router.post('/end', game_controller_1.endGame);
 exports.default = router;

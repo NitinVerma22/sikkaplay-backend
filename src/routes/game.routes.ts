@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startGame, spinWheel, endGame } from '../controllers/game.controller';
+import { startGame, spinWheel, endGame, recordSpinAd } from '../controllers/game.controller';
 import { requireJwt } from '../middleware/auth.middleware';
 import { vpnGuard } from '../middleware/vpn.middleware';
 
@@ -13,6 +13,9 @@ router.post('/start', startGame);
 
 // POST /api/game/spin — vpnGuard here only (real coins at stake)
 router.post('/spin', vpnGuard, spinWheel);
+
+// POST /api/game/spin-ad
+router.post('/spin-ad', recordSpinAd);
 
 // POST /api/game/end
 router.post('/end', endGame);
