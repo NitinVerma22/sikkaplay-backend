@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const getProfile = async (req, res) => {
     try {
@@ -24,7 +24,22 @@ const getProfile = async (req, res) => {
         }
         // Exclude passwordHash from response
         const { passwordHash, ...userProfile } = user;
-        res.status(200).json({ user: userProfile });
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const gullakClaimsToday = await db_1.prisma.gameSession.count({
+            where: {
+                userId,
+                status: 'completed',
+                gameType: { not: 'spin' },
+                endTime: { gte: startOfDay }
+            }
+        });
+        res.status(200).json({
+            user: {
+                ...userProfile,
+                gullakClaimsToday
+            }
+        });
     }
     catch (error) {
         console.error('Error fetching user profile:', error);
@@ -113,3 +128,34 @@ const updateUpi = async (req, res) => {
     }
 };
 exports.updateUpi = updateUpi;
+const recordAdImpression = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { adType, adNetwork, coinsAwarded, externalTxId } = req.body;
+        console.log('[AD IMPRESSION RECEIVED] User:', userId, 'Type:', adType, 'Network:', adNetwork);
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized: No user ID found in session' });
+            return;
+        }
+        if (!adType || !adNetwork) {
+            res.status(400).json({ error: 'adType and adNetwork are required' });
+            return;
+        }
+        const impression = await db_1.prisma.adImpression.create({
+            data: {
+                userId,
+                adType,
+                adNetwork,
+                coinsAwarded: coinsAwarded || 0,
+                externalTxId: externalTxId || null,
+                verifiedByServer: false
+            }
+        });
+        res.status(200).json({ success: true, impression });
+    }
+    catch (error) {
+        console.error('Error recording ad impression:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.recordAdImpression = recordAdImpression;

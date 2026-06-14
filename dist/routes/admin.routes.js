@@ -5,6 +5,7 @@ const admin_controller_1 = require("../controllers/admin.controller");
 const adminAuth_middleware_1 = require("../middleware/adminAuth.middleware");
 const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
 const visitLink_controller_1 = require("../controllers/visitLink.controller");
+const socialTask_controller_1 = require("../controllers/socialTask.controller");
 const router = (0, express_1.Router)();
 // Public route for Admin login
 router.post('/login', admin_controller_1.loginAdmin);
@@ -12,13 +13,24 @@ router.post('/login', admin_controller_1.loginAdmin);
 router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
 router.get('/stats', admin_controller_1.getDashboardStats);
+router.get('/ad-stats', admin_controller_1.getAdAnalysisStats);
 router.post('/referrals/distribute', admin_controller_1.triggerReferralDistribution);
 router.get('/audit-logs', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.getAuditLogs);
+// Moderator/Admin Management
+router.get('/moderators', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.getModerators);
+router.post('/moderators', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.createModerator);
+router.delete('/moderators/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.deleteModerator);
+// Fraud Detection Radar
+router.get('/fraud/multi-accounts', admin_controller_1.getMultiAccountFraudGroups);
+router.post('/fraud/bulk-block', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkBlockUsers);
+router.get('/fraud/suspicious-games', admin_controller_1.getSuspiciousGames);
 // App Config Settings
 router.get('/config', admin_controller_1.getConfigs);
 router.put('/config', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.updateConfigs);
 // User Management
 router.get('/users', admin_controller_1.getUsers);
+router.get('/users/:id/ledger', admin_controller_1.getUserLedger);
+router.get('/users/:id/network', admin_controller_1.getUserNetwork);
 router.put('/users/:id/balance', admin_controller_1.updateUserBalance);
 router.put('/users/:id/freeze', admin_controller_1.toggleUserFreeze);
 router.put('/users/:id/change-password', admin_controller_1.changeUserPassword);
@@ -33,6 +45,11 @@ router.post('/withdrawals/bulk', (0, adminAuth_middleware_1.requireRole)(['super
 // Support & FAQ Tickets Management
 router.get('/tickets', admin_controller_1.getSupportTickets);
 router.post('/tickets/:id/reply', admin_controller_1.replySupportTicket);
+// FAQ CRUD Management
+router.get('/faqs', admin_controller_1.getAdminFaqs);
+router.post('/faqs', admin_controller_1.createAdminFaq);
+router.put('/faqs/:id', admin_controller_1.updateAdminFaq);
+router.delete('/faqs/:id', admin_controller_1.deleteAdminFaq);
 // Daily Code Management
 router.post('/daily-code', dailyCode_controller_1.createDailyCode);
 router.get('/daily-code', dailyCode_controller_1.getDailyCodes);
@@ -40,4 +57,9 @@ router.get('/daily-code', dailyCode_controller_1.getDailyCodes);
 router.post('/visit-links', visitLink_controller_1.createVisitLink);
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
 router.delete('/visit-links/:id', visitLink_controller_1.deleteVisitLink);
+// Social Tasks Management
+router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);
+router.post('/social-tasks', socialTask_controller_1.createSocialTaskAdmin);
+router.put('/social-tasks/:id', socialTask_controller_1.updateSocialTaskAdmin);
+router.delete('/social-tasks/:id', socialTask_controller_1.deleteSocialTaskAdmin);
 exports.default = router;

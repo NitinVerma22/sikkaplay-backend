@@ -12,6 +12,7 @@ const vpn_middleware_1 = require("../middleware/vpn.middleware");
 const rateLimiter_middleware_1 = require("../middleware/rateLimiter.middleware");
 const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
 const visitLink_controller_1 = require("../controllers/visitLink.controller");
+const socialTask_controller_1 = require("../controllers/socialTask.controller");
 const router = (0, express_1.Router)();
 // Protect all user routes with JWT validation
 router.use(auth_middleware_1.requireJwt);
@@ -35,8 +36,12 @@ router.post('/earn/app-install', vpn_middleware_1.vpnGuard, rateLimiter_middlewa
 router.post('/earn/milestone', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimMilestone);
 // POST /api/user/usage
 router.post('/usage', usage_controller_1.logUsage);
+// GET /api/user/daily-code/today
+router.get('/daily-code/today', dailyCode_controller_1.getTodayDailyCodeInfo);
 // POST /api/user/daily-code/claim
 router.post('/daily-code/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, dailyCode_controller_1.claimDailyCode);
+// POST /api/user/social-tasks/:id/claim
+router.post('/social-tasks/:id/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, socialTask_controller_1.claimSocialTaskUser);
 // GET /api/user/network
 router.get('/network', network_controller_1.getMyNetwork);
 // GET /api/user/home
@@ -48,4 +53,6 @@ router.post('/withdraw', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.wit
 // Visit Links
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
 router.post('/visit-links/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, visitLink_controller_1.claimVisitLinkReward);
+// Ad Impression Logging
+router.post('/ad-impression', user_controller_1.recordAdImpression);
 exports.default = router;

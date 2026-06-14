@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDailyCodes = exports.createDailyCode = exports.claimDailyCode = void 0;
+exports.getTodayDailyCodeInfo = exports.getDailyCodes = exports.createDailyCode = exports.claimDailyCode = void 0;
 const db_1 = require("../config/db");
 // --- USER ENDPOINTS ---
 // claimDailyCode: Allows users to enter a daily code and claim a reward
@@ -25,19 +25,25 @@ const claimDailyCode = async (req, res) => {
             res.status(400).json({ error: 'Invalid code of the day. Please check and try again!' });
             return;
         }
-        // 2. Count user's claims for this specific code
+        // 2. Count user's claims for this specific code to enforce exactly 1 claim per user
         const userClaimsCount = await db_1.prisma.dailyCodeClaim.count({
             where: {
                 userId,
                 dailyCodeId: dailyCode.id
             }
         });
-        if (userClaimsCount >= dailyCode.maxClaims) {
-            res.status(400).json({
-                error: dailyCode.maxClaims === 1
-                    ? 'You have already claimed this daily code!'
-                    : `You have reached the maximum claim limit for this code (Max: ${dailyCode.maxClaims})`
-            });
+        if (userClaimsCount >= 1) {
+            res.status(400).json({ error: 'You have already claimed this daily code!' });
+            return;
+        }
+        // 3. Count total claims across all users to enforce the global limit
+        const totalClaimsCount = await db_1.prisma.dailyCodeClaim.count({
+            where: {
+                dailyCodeId: dailyCode.id
+            }
+        });
+        if (totalClaimsCount >= dailyCode.maxClaims) {
+            res.status(400).json({ error: 'This daily code has reached its maximum claim limit! Better luck next time.' });
             return;
         }
         // 3. Use the coins reward assigned to this daily code
@@ -180,3 +186,90 @@ const getDailyCodes = async (req, res) => {
     }
 };
 exports.getDailyCodes = getDailyCodes;
+// getTodayDailyCodeInfo: Fetches today's active (latest) daily code details, limits, and top 3 first claimers
+const getTodayDailyCodeInfo = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized: No user ID found' });
+            return;
+        }
+        // Get the latest created daily code
+        const latestCode = await db_1.prisma.dailyCode.findFirst({
+            orderBy: { createdAt: 'desc' },
+            include: {
+                claims: {
+                    orderBy: { createdAt: 'asc' }, // Chronological order (first claimers first)
+                    take: 3,
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                phoneNumber: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if (!latestCode) {
+            res.status(200).json({
+                success: true,
+                codeExists: false,
+                message: 'No daily code active'
+            });
+            return;
+        }
+        // Map the top 3 claimers
+        const claimers = latestCode.claims.map((claim, index) => {
+            let displayName = 'User';
+            if (claim.user.name && claim.user.name.trim() !== '') {
+                displayName = claim.user.name;
+            }
+            else {
+                const phone = claim.user.phoneNumber;
+                if (phone.length > 4) {
+                    displayName = phone.substring(0, 3) + '***' + phone.substring(phone.length - 4);
+                }
+                else {
+                    displayName = 'User';
+                }
+            }
+            return {
+                name: displayName,
+                rank: index + 1,
+                claimedAt: claim.createdAt
+            };
+        });
+        // Check if the current user has claimed this code
+        const claimCount = await db_1.prisma.dailyCodeClaim.count({
+            where: {
+                userId,
+                dailyCodeId: latestCode.id
+            }
+        });
+        const hasClaimed = claimCount > 0;
+        // Get total claim count across all users
+        const totalClaims = await db_1.prisma.dailyCodeClaim.count({
+            where: {
+                dailyCodeId: latestCode.id
+            }
+        });
+        res.status(200).json({
+            success: true,
+            codeExists: true,
+            code: latestCode.code,
+            coins: latestCode.coins,
+            maxClaims: latestCode.maxClaims, // total allowed claims
+            totalClaims, // total claims done so far
+            hasClaimed,
+            claimers
+        });
+    }
+    catch (error) {
+        console.error('Error fetching today daily code details:', error);
+        res.status(500).json({ error: 'Internal server error while fetching today daily code details' });
+    }
+};
+exports.getTodayDailyCodeInfo = getTodayDailyCodeInfo;

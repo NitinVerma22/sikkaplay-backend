@@ -109,8 +109,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
         await tx.user.update({
           where: { id: referrer.id },
           data: {
-            balance: { increment: refRewardAmount },
-            totalEarned: { increment: refRewardAmount }
+            referralBalance: { increment: refRewardAmount }
           }
         });
 
@@ -119,7 +118,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
           data: {
             userId: referrer.id,
             amount: refRewardAmount,
-            type: 'earning',
+            type: 'network_income',
             status: 'success',
             description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
           }
@@ -393,8 +392,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
         await tx.user.update({
           where: { id: referrer.id },
           data: {
-            balance: { increment: refRewardAmount },
-            totalEarned: { increment: refRewardAmount }
+            referralBalance: { increment: refRewardAmount }
           }
         });
 
@@ -403,7 +401,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
           data: {
             userId: referrer.id,
             amount: refRewardAmount,
-            type: 'earning',
+            type: 'network_income',
             status: 'success',
             description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
           }

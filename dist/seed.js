@@ -65,6 +65,9 @@ async function main() {
                 vpnDetectionEnabled: false,
                 vpnApiKey: "",
                 maintenanceMode: false,
+                refWithdrawMinPlaytimeMins: 3000,
+                refWithdrawMinReferrals: 2,
+                gullakAdSequence: "interstitial,rewarded,none",
             }
         });
         console.log('Default AppConfig created');
@@ -96,6 +99,9 @@ async function main() {
                 vpnDetectionEnabled: false,
                 vpnApiKey: "",
                 maintenanceMode: false,
+                refWithdrawMinPlaytimeMins: 3000,
+                refWithdrawMinReferrals: 2,
+                gullakAdSequence: "interstitial,rewarded,none",
                 telegramLink: 'https://t.me/sikkaplay',
                 whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
                 groupLink: 'https://t.me/sikkaplay_group',

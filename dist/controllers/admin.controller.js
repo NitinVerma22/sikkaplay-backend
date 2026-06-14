@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -827,3 +827,501 @@ const getAuditLogs = async (req, res) => {
     }
 };
 exports.getAuditLogs = getAuditLogs;
+const getAdAnalysisStats = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const where = {};
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) {
+                where.createdAt.gte = new Date(startDate);
+            }
+            if (endDate) {
+                where.createdAt.lte = new Date(endDate);
+            }
+        }
+        // 1. General counts
+        const totalImpressions = await db_1.prisma.adImpression.count({ where });
+        // Group by adType (counts and sum of coins)
+        const statsByType = await db_1.prisma.adImpression.groupBy({
+            where,
+            by: ['adType'],
+            _count: { id: true },
+            _sum: { coinsAwarded: true }
+        });
+        // Group by adNetwork
+        const statsByNetwork = await db_1.prisma.adImpression.groupBy({
+            where,
+            by: ['adNetwork'],
+            _count: { id: true }
+        });
+        // 2. Count unique users for each group
+        const distinctUsersAnyAd = await db_1.prisma.adImpression.findMany({
+            where,
+            select: { userId: true },
+            distinct: ['userId']
+        });
+        const uniqueUsersCount = distinctUsersAnyAd.length;
+        // Distinct users for rewarded ads (adType containing 'rewarded')
+        const distinctUsersRewarded = await db_1.prisma.adImpression.findMany({
+            where: {
+                ...where,
+                adType: { contains: 'rewarded', mode: 'insensitive' }
+            },
+            select: { userId: true },
+            distinct: ['userId']
+        });
+        const uniqueUsersRewardedCount = distinctUsersRewarded.length;
+        // Distinct users for banners
+        const distinctUsersBanner = await db_1.prisma.adImpression.findMany({
+            where: {
+                ...where,
+                adType: { contains: 'banner', mode: 'insensitive' }
+            },
+            select: { userId: true },
+            distinct: ['userId']
+        });
+        const uniqueUsersBannerCount = distinctUsersBanner.length;
+        // Distinct users for interstitials
+        const distinctUsersInterstitial = await db_1.prisma.adImpression.findMany({
+            where: {
+                ...where,
+                adType: { contains: 'interstitial', mode: 'insensitive' }
+            },
+            select: { userId: true },
+            distinct: ['userId']
+        });
+        const uniqueUsersInterstitialCount = distinctUsersInterstitial.length;
+        // 3. Time series stats (daily stats)
+        const defaultStart = new Date();
+        defaultStart.setDate(defaultStart.getDate() - 14);
+        defaultStart.setHours(0, 0, 0, 0);
+        const timeSeriesStart = startDate ? new Date(startDate) : defaultStart;
+        const timeSeriesEnd = endDate ? new Date(endDate) : new Date();
+        const impressionsForChart = await db_1.prisma.adImpression.findMany({
+            where: {
+                createdAt: {
+                    gte: timeSeriesStart,
+                    lte: timeSeriesEnd
+                }
+            },
+            select: {
+                adType: true,
+                createdAt: true
+            }
+        });
+        // Group impressions by day and adType (rewarded, banner, interstitial)
+        const dailyDataMap = {};
+        // Initialize dates in range
+        const temp = new Date(timeSeriesStart);
+        while (temp <= timeSeriesEnd) {
+            const dateStr = temp.toISOString().split('T')[0];
+            dailyDataMap[dateStr] = { date: dateStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
+            temp.setDate(temp.getDate() + 1);
+        }
+        // Also make sure today is added if not there
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (!dailyDataMap[todayStr]) {
+            dailyDataMap[todayStr] = { date: todayStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
+        }
+        for (const imp of impressionsForChart) {
+            const dateStr = imp.createdAt.toISOString().split('T')[0];
+            if (dailyDataMap[dateStr]) {
+                dailyDataMap[dateStr].total++;
+                const type = imp.adType.toLowerCase();
+                if (type.includes('rewarded')) {
+                    dailyDataMap[dateStr].rewarded++;
+                }
+                else if (type.includes('banner')) {
+                    dailyDataMap[dateStr].banner++;
+                }
+                else if (type.includes('interstitial')) {
+                    dailyDataMap[dateStr].interstitial++;
+                }
+            }
+        }
+        const dailyStats = Object.values(dailyDataMap).sort((a, b) => a.date.localeCompare(b.date));
+        res.status(200).json({
+            success: true,
+            summary: {
+                totalImpressions,
+                uniqueUsersCount,
+                uniqueUsersRewardedCount,
+                uniqueUsersBannerCount,
+                uniqueUsersInterstitialCount
+            },
+            statsByType,
+            statsByNetwork,
+            dailyStats
+        });
+    }
+    catch (error) {
+        console.error('Get Ad Analysis Stats Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getAdAnalysisStats = getAdAnalysisStats;
+const getModerators = async (req, res) => {
+    try {
+        const moderators = await db_1.prisma.admin.findMany({
+            select: {
+                id: true,
+                username: true,
+                role: true,
+                createdAt: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.status(200).json({ success: true, moderators });
+    }
+    catch (error) {
+        console.error('Get Moderators Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getModerators = getModerators;
+const createModerator = async (req, res) => {
+    try {
+        const { username, password, role } = req.body;
+        if (!username || !password || !role) {
+            res.status(400).json({ error: 'Username, password and role are required' });
+            return;
+        }
+        if (password.length < 6) {
+            res.status(400).json({ error: 'Password must be at least 6 characters long' });
+            return;
+        }
+        const existingAdmin = await db_1.prisma.admin.findUnique({
+            where: { username: username.trim() }
+        });
+        if (existingAdmin) {
+            res.status(400).json({ error: 'Username is already taken' });
+            return;
+        }
+        const hashedPassword = await bcryptjs_1.default.hash(password, 10);
+        const newAdmin = await db_1.prisma.admin.create({
+            data: {
+                username: username.trim(),
+                password: hashedPassword,
+                role: role
+            },
+            select: {
+                id: true,
+                username: true,
+                role: true,
+                createdAt: true
+            }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'CREATE_MODERATOR', { createdUsername: newAdmin.username, role: newAdmin.role }, ip);
+        res.status(201).json({ success: true, moderator: newAdmin });
+    }
+    catch (error) {
+        console.error('Create Moderator Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.createModerator = createModerator;
+const deleteModerator = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const moderator = await db_1.prisma.admin.findUnique({ where: { id } });
+        if (!moderator) {
+            res.status(404).json({ error: 'Moderator account not found' });
+            return;
+        }
+        // Prevent deleting oneself
+        if (id === req.admin?.adminId) {
+            res.status(400).json({ error: 'You cannot delete your own admin account' });
+            return;
+        }
+        await db_1.prisma.admin.delete({ where: { id } });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'DELETE_MODERATOR', { deletedId: id, deletedUsername: moderator.username }, ip);
+        res.status(200).json({ success: true, message: 'Moderator account deleted successfully' });
+    }
+    catch (error) {
+        console.error('Delete Moderator Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.deleteModerator = deleteModerator;
+const getMultiAccountFraudGroups = async (req, res) => {
+    try {
+        const deviceGroups = await db_1.prisma.$queryRaw `
+      SELECT "deviceId", COUNT(id) as "userCount"
+      FROM "User"
+      WHERE "deviceId" IS NOT NULL AND "deviceId" != ''
+      GROUP BY "deviceId"
+      HAVING COUNT(id) > 1
+      ORDER BY "userCount" DESC
+    `;
+        const groups = [];
+        for (const g of deviceGroups) {
+            const users = await db_1.prisma.user.findMany({
+                where: { deviceId: g.deviceId },
+                select: {
+                    id: true,
+                    name: true,
+                    phoneNumber: true,
+                    balance: true,
+                    totalEarned: true,
+                    isBlocked: true,
+                    createdAt: true
+                }
+            });
+            groups.push({
+                deviceId: g.deviceId,
+                userCount: Number(g.userCount),
+                users
+            });
+        }
+        res.status(200).json({ success: true, groups });
+    }
+    catch (error) {
+        console.error('Get Multi-Account Fraud Groups Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getMultiAccountFraudGroups = getMultiAccountFraudGroups;
+const bulkBlockUsers = async (req, res) => {
+    try {
+        const { userIds, isBlocked } = req.body;
+        if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+            res.status(400).json({ error: 'Missing or invalid userIds array' });
+            return;
+        }
+        const blockState = isBlocked !== false;
+        await db_1.prisma.user.updateMany({
+            where: { id: { in: userIds } },
+            data: { isBlocked: blockState }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'BULK_BLOCK_USERS', { userIds, isBlocked: blockState }, ip);
+        res.status(200).json({ success: true, message: `Successfully updated block status for ${userIds.length} users.` });
+    }
+    catch (error) {
+        console.error('Bulk Block Users Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.bulkBlockUsers = bulkBlockUsers;
+const getSuspiciousGames = async (req, res) => {
+    try {
+        const suspiciousSessions = await db_1.prisma.gameSession.findMany({
+            where: {
+                OR: [
+                    { status: 'invalidated' },
+                    { coinsEarned: { gte: 50 } }
+                ]
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            include: {
+                user: {
+                    select: {
+                        name: true,
+                        phoneNumber: true,
+                        isBlocked: true
+                    }
+                }
+            }
+        });
+        res.status(200).json({ success: true, sessions: suspiciousSessions });
+    }
+    catch (error) {
+        console.error('Get Suspicious Games Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getSuspiciousGames = getSuspiciousGames;
+const getUserLedger = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const user = await db_1.prisma.user.findUnique({ where: { id } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const transactions = await db_1.prisma.transaction.findMany({
+            where: { userId: id },
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+        const gameSessions = await db_1.prisma.gameSession.findMany({
+            where: { userId: id },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+        const dailyUsages = await db_1.prisma.dailyUsage.findMany({
+            where: { userId: id },
+            orderBy: { dateStr: 'desc' },
+            take: 30
+        });
+        res.status(200).json({
+            success: true,
+            transactions,
+            gameSessions,
+            dailyUsages
+        });
+    }
+    catch (error) {
+        console.error('Get User Ledger Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getUserLedger = getUserLedger;
+const fetchUsersWithStatsHelper = async (codes) => {
+    if (codes.length === 0)
+        return [];
+    const users = await db_1.prisma.user.findMany({
+        where: { referredBy: { in: codes } },
+        select: { id: true, name: true, createdAt: true, referralCode: true, totalEarned: true, phoneNumber: true },
+    });
+    if (users.length === 0)
+        return [];
+    const userIds = users.map(u => u.id);
+    const playtimes = await db_1.prisma.dailyUsage.groupBy({
+        by: ['userId'],
+        _sum: {
+            reelsMinutes: true,
+            gamesMinutes: true,
+        },
+        where: {
+            userId: { in: userIds }
+        }
+    });
+    const playtimeMap = new Map();
+    for (const pt of playtimes) {
+        const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+        playtimeMap.set(pt.userId, total);
+    }
+    return users.map(u => ({
+        id: u.id,
+        name: u.name,
+        createdAt: u.createdAt,
+        referralCode: u.referralCode,
+        phoneNumber: u.phoneNumber,
+        totalEarned: u.totalEarned,
+        playtime: playtimeMap.get(u.id) ?? 0,
+    }));
+};
+const getUserNetwork = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const user = await db_1.prisma.user.findUnique({
+            where: { id },
+            select: { referralCode: true, referralBalance: true, name: true, phoneNumber: true },
+        });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const level1 = await fetchUsersWithStatsHelper([user.referralCode]);
+        const level1Codes = level1.map(u => u.referralCode);
+        const level2 = await fetchUsersWithStatsHelper(level1Codes);
+        const level2Codes = level2.map(u => u.referralCode);
+        const level3 = await fetchUsersWithStatsHelper(level2Codes);
+        res.status(200).json({
+            success: true,
+            referralCode: user.referralCode,
+            referralBalance: user.referralBalance,
+            network: {
+                level1,
+                level2,
+                level3,
+                totalTeam: level1.length + level2.length + level3.length,
+            }
+        });
+    }
+    catch (error) {
+        console.error('Get User Network Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getUserNetwork = getUserNetwork;
+const getAdminFaqs = async (req, res) => {
+    try {
+        const faqs = await db_1.prisma.fAQ.findMany();
+        res.status(200).json({ success: true, faqs });
+    }
+    catch (error) {
+        console.error('Get Admin FAQs Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getAdminFaqs = getAdminFaqs;
+const createAdminFaq = async (req, res) => {
+    try {
+        const { question, answer } = req.body;
+        if (!question || !answer) {
+            res.status(400).json({ error: 'Question and answer are required' });
+            return;
+        }
+        const faq = await db_1.prisma.fAQ.create({
+            data: { question, answer }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'CREATE_FAQ', { faqId: faq.id, question: faq.question }, ip);
+        res.status(201).json({ success: true, faq });
+    }
+    catch (error) {
+        console.error('Create Admin FAQ Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.createAdminFaq = createAdminFaq;
+const updateAdminFaq = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { question, answer } = req.body;
+        const existingFaq = await db_1.prisma.fAQ.findUnique({ where: { id } });
+        if (!existingFaq) {
+            res.status(404).json({ error: 'FAQ not found' });
+            return;
+        }
+        const faq = await db_1.prisma.fAQ.update({
+            where: { id },
+            data: { question, answer }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'UPDATE_FAQ', { faqId: faq.id, question: faq.question }, ip);
+        res.status(200).json({ success: true, faq });
+    }
+    catch (error) {
+        console.error('Update Admin FAQ Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.updateAdminFaq = updateAdminFaq;
+const deleteAdminFaq = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const existingFaq = await db_1.prisma.fAQ.findUnique({ where: { id } });
+        if (!existingFaq) {
+            res.status(404).json({ error: 'FAQ not found' });
+            return;
+        }
+        await db_1.prisma.fAQ.delete({ where: { id } });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'DELETE_FAQ', { faqId: id, question: existingFaq.question }, ip);
+        res.status(200).json({ success: true, message: 'FAQ deleted successfully' });
+    }
+    catch (error) {
+        console.error('Delete Admin FAQ Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.deleteAdminFaq = deleteAdminFaq;

@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHomeState = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
-const config_service_1 = require("../services/config.service");
 const getHomeState = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -92,48 +91,24 @@ const getHomeState = async (req, res) => {
             if (matchPlay)
                 playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
         });
-        const config = await (0, config_service_1.getCachedAppConfig)();
-        const completedSocialTasks = [];
-        if (config) {
-            const [hasTelegram, hasWhatsapp, hasGroup] = await Promise.all([
-                db_1.prisma.transaction.findFirst({
-                    where: {
-                        userId,
-                        type: 'social_task',
-                        description: `Joined telegram: ${config.telegramLink}`
-                    }
-                }),
-                db_1.prisma.transaction.findFirst({
-                    where: {
-                        userId,
-                        type: 'social_task',
-                        description: `Joined whatsapp: ${config.whatsappLink}`
-                    }
-                }),
-                db_1.prisma.transaction.findFirst({
-                    where: {
-                        userId,
-                        type: 'social_task',
-                        description: `Joined group: ${config.groupLink}`
-                    }
-                })
-            ]);
-            if (hasTelegram)
-                completedSocialTasks.push('telegram');
-            if (hasWhatsapp)
-                completedSocialTasks.push('whatsapp');
-            if (hasGroup)
-                completedSocialTasks.push('group');
-        }
-        else {
-            const allSocialTasks = await db_1.prisma.transaction.findMany({
-                where: { userId, type: 'social_task' }
-            });
-            allSocialTasks.forEach(t => {
-                const id = t.description.toLowerCase().split(' ').pop() || '';
-                completedSocialTasks.push(id);
-            });
-        }
+        // Fetch all claimed social task IDs
+        const claimedSocialTasks = await db_1.prisma.socialTaskClaim.findMany({
+            where: { userId },
+            select: { socialTaskId: true }
+        });
+        const completedSocialTasks = claimedSocialTasks.map(c => c.socialTaskId);
+        // Fetch all active social tasks
+        const activeSocialTasks = await db_1.prisma.socialTask.findMany({
+            orderBy: { createdAt: 'asc' }
+        });
+        const socialTasks = activeSocialTasks.map(task => ({
+            id: task.id,
+            platform: task.platform,
+            title: task.title,
+            link: task.link,
+            coinsReward: task.coinsReward,
+            isCompleted: completedSocialTasks.includes(task.id)
+        }));
         // 1. Visit All Links calculations
         const totalLinks = await db_1.prisma.visitEarnLink.count();
         const visitedClaimsToday = await db_1.prisma.visitEarnClaim.findMany({
@@ -170,6 +145,7 @@ const getHomeState = async (req, res) => {
             watchEarnClaimedMilestones,
             playEarnClaimedMilestones,
             completedSocialTasks,
+            socialTasks,
             dailyCodeTaskCompleted: hasClaimedDailyCodeToday,
             dailyCodeTaskClaimed,
             visitAllTaskCompleted: hasVisitedAllLinksToday,

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression } from '../controllers/user.controller';
 import { getLeaderboard } from '../controllers/leaderboard.controller';
 import {
   claimDailyStreak,
@@ -14,8 +14,9 @@ import { getHomeState } from '../controllers/home.controller';
 import { requireJwt } from '../middleware/auth.middleware';
 import { vpnGuard } from '../middleware/vpn.middleware';
 import { earnLimiter, withdrawLimiter } from '../middleware/rateLimiter.middleware';
-import { claimDailyCode } from '../controllers/dailyCode.controller';
+import { claimDailyCode, getTodayDailyCodeInfo } from '../controllers/dailyCode.controller';
 import { getVisitLinks, claimVisitLinkReward } from '../controllers/visitLink.controller';
+import { claimSocialTaskUser } from '../controllers/socialTask.controller';
 
 const router = Router();
 
@@ -49,8 +50,14 @@ router.post('/earn/milestone', vpnGuard, earnLimiter, claimMilestone);
 // POST /api/user/usage
 router.post('/usage', logUsage);
 
+// GET /api/user/daily-code/today
+router.get('/daily-code/today', getTodayDailyCodeInfo);
+
 // POST /api/user/daily-code/claim
 router.post('/daily-code/claim', vpnGuard, earnLimiter, claimDailyCode);
+
+// POST /api/user/social-tasks/:id/claim
+router.post('/social-tasks/:id/claim', vpnGuard, earnLimiter, claimSocialTaskUser);
 
 // GET /api/user/network
 router.get('/network', getMyNetwork);
@@ -66,5 +73,8 @@ router.post('/withdraw', vpnGuard, withdrawLimiter, requestWithdrawal);
 // Visit Links
 router.get('/visit-links', getVisitLinks);
 router.post('/visit-links/claim', vpnGuard, earnLimiter, claimVisitLinkReward);
+
+// Ad Impression Logging
+router.post('/ad-impression', recordAdImpression);
 
 export default router;

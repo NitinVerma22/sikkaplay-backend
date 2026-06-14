@@ -106,45 +106,26 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       if (matchPlay) playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
     });
 
-    const config = await getCachedAppConfig();
-    const completedSocialTasks: string[] = [];
-    if (config) {
-      const [hasTelegram, hasWhatsapp, hasGroup] = await Promise.all([
-        prisma.transaction.findFirst({
-          where: {
-            userId,
-            type: 'social_task',
-            description: `Joined telegram: ${config.telegramLink}`
-          }
-        }),
-        prisma.transaction.findFirst({
-          where: {
-            userId,
-            type: 'social_task',
-            description: `Joined whatsapp: ${config.whatsappLink}`
-          }
-        }),
-        prisma.transaction.findFirst({
-          where: {
-            userId,
-            type: 'social_task',
-            description: `Joined group: ${config.groupLink}`
-          }
-        })
-      ]);
+    // Fetch all claimed social task IDs
+    const claimedSocialTasks = await prisma.socialTaskClaim.findMany({
+      where: { userId },
+      select: { socialTaskId: true }
+    });
+    const completedSocialTasks = claimedSocialTasks.map(c => c.socialTaskId);
 
-      if (hasTelegram) completedSocialTasks.push('telegram');
-      if (hasWhatsapp) completedSocialTasks.push('whatsapp');
-      if (hasGroup) completedSocialTasks.push('group');
-    } else {
-      const allSocialTasks = await prisma.transaction.findMany({
-        where: { userId, type: 'social_task' }
-      });
-      allSocialTasks.forEach(t => {
-        const id = t.description.toLowerCase().split(' ').pop() || '';
-        completedSocialTasks.push(id);
-      });
-    }
+    // Fetch all active social tasks
+    const activeSocialTasks = await prisma.socialTask.findMany({
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const socialTasks = activeSocialTasks.map(task => ({
+      id: task.id,
+      platform: task.platform,
+      title: task.title,
+      link: task.link,
+      coinsReward: task.coinsReward,
+      isCompleted: completedSocialTasks.includes(task.id)
+    }));
 
     // 1. Visit All Links calculations
     const totalLinks = await prisma.visitEarnLink.count();
@@ -185,6 +166,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       watchEarnClaimedMilestones,
       playEarnClaimedMilestones,
       completedSocialTasks,
+      socialTasks,
       dailyCodeTaskCompleted: hasClaimedDailyCodeToday,
       dailyCodeTaskClaimed,
       visitAllTaskCompleted: hasVisitedAllLinksToday,

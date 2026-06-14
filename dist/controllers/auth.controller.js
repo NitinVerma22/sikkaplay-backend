@@ -97,8 +97,7 @@ const registerDirect = async (req, res) => {
                 await tx.user.update({
                     where: { id: referrer.id },
                     data: {
-                        balance: { increment: refRewardAmount },
-                        totalEarned: { increment: refRewardAmount }
+                        referralBalance: { increment: refRewardAmount }
                     }
                 });
                 // Create referral transaction for the referrer
@@ -106,7 +105,7 @@ const registerDirect = async (req, res) => {
                     data: {
                         userId: referrer.id,
                         amount: refRewardAmount,
-                        type: 'earning',
+                        type: 'network_income',
                         status: 'success',
                         description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
                     }
@@ -348,8 +347,7 @@ const completeGoogleSignup = async (req, res) => {
                 await tx.user.update({
                     where: { id: referrer.id },
                     data: {
-                        balance: { increment: refRewardAmount },
-                        totalEarned: { increment: refRewardAmount }
+                        referralBalance: { increment: refRewardAmount }
                     }
                 });
                 // Create referral transaction for the referrer
@@ -357,7 +355,7 @@ const completeGoogleSignup = async (req, res) => {
                     data: {
                         userId: referrer.id,
                         amount: refRewardAmount,
-                        type: 'earning',
+                        type: 'network_income',
                         status: 'success',
                         description: `Referral Reward: Referred ${newUser.name || newUser.phoneNumber}`,
                     }

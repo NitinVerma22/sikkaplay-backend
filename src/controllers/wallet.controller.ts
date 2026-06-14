@@ -241,23 +241,26 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
       }
 
       // Check referral withdrawal eligibility:
-      // A. Play time >= 50 hours (3000 minutes)
+      const minPlaytime = config?.refWithdrawMinPlaytimeMins ?? 3000;
+      const minReferrals = config?.refWithdrawMinReferrals ?? 2;
+
+      // A. Play time check
       const usages = await prisma.dailyUsage.findMany({ where: { userId } });
       const personalPlaytime = usages.reduce((acc, u) => acc + u.reelsMinutes + u.gamesMinutes, 0);
-      if (personalPlaytime < 3000) {
+      if (personalPlaytime < minPlaytime) {
         res.status(400).json({
-          error: `You need at least 50 hours of playtime to withdraw referral earnings. You currently have ${(personalPlaytime / 60).toFixed(1)} hours.`
+          error: `You need at least ${(minPlaytime / 60).toFixed(1)} hours of playtime to withdraw referral earnings. You currently have ${(personalPlaytime / 60).toFixed(1)} hours.`
         });
         return;
       }
 
-      // B. Active referrals (direct Level 1 referred users) >= 2
+      // B. Active referrals check
       const activeReferralsCount = await prisma.user.count({
         where: { referredBy: user.referralCode }
       });
-      if (activeReferralsCount < 2) {
+      if (activeReferralsCount < minReferrals) {
         res.status(400).json({
-          error: `You need at least 2 active referrals to withdraw referral earnings. You currently have ${activeReferralsCount}.`
+          error: `You need at least ${minReferrals} active referrals to withdraw referral earnings. You currently have ${activeReferralsCount}.`
         });
         return;
       }

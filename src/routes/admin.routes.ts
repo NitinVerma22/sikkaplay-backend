@@ -17,11 +17,30 @@ import {
   broadcastPushNotification,
   changeUserPassword,
   triggerReferralDistribution,
-  getAuditLogs
+  getAuditLogs,
+  getAdAnalysisStats,
+  getModerators,
+  createModerator,
+  deleteModerator,
+  getMultiAccountFraudGroups,
+  bulkBlockUsers,
+  getSuspiciousGames,
+  getUserLedger,
+  getUserNetwork,
+  getAdminFaqs,
+  createAdminFaq,
+  updateAdminFaq,
+  deleteAdminFaq
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
 import { createVisitLink, getVisitLinks, deleteVisitLink } from '../controllers/visitLink.controller';
+import {
+  getSocialTasksAdmin,
+  createSocialTaskAdmin,
+  updateSocialTaskAdmin,
+  deleteSocialTaskAdmin
+} from '../controllers/socialTask.controller';
 
 const router = Router();
 
@@ -33,8 +52,19 @@ router.use(requireAdminJwt);
 
 // Stats & Dashboard Overview
 router.get('/stats', getDashboardStats);
+router.get('/ad-stats', getAdAnalysisStats);
 router.post('/referrals/distribute', triggerReferralDistribution);
 router.get('/audit-logs', requireRole(['superadmin']), getAuditLogs);
+
+// Moderator/Admin Management
+router.get('/moderators', requireRole(['superadmin']), getModerators);
+router.post('/moderators', requireRole(['superadmin']), createModerator);
+router.delete('/moderators/:id', requireRole(['superadmin']), deleteModerator);
+
+// Fraud Detection Radar
+router.get('/fraud/multi-accounts', getMultiAccountFraudGroups);
+router.post('/fraud/bulk-block', requireRole(['superadmin']), bulkBlockUsers);
+router.get('/fraud/suspicious-games', getSuspiciousGames);
 
 // App Config Settings
 router.get('/config', getConfigs);
@@ -42,6 +72,8 @@ router.put('/config', requireRole(['superadmin']), updateConfigs);
 
 // User Management
 router.get('/users', getUsers);
+router.get('/users/:id/ledger', getUserLedger);
+router.get('/users/:id/network', getUserNetwork);
 router.put('/users/:id/balance', updateUserBalance);
 router.put('/users/:id/freeze', toggleUserFreeze);
 router.put('/users/:id/change-password', changeUserPassword);
@@ -60,6 +92,12 @@ router.post('/withdrawals/bulk', requireRole(['superadmin']), bulkUpdateWithdraw
 router.get('/tickets', getSupportTickets);
 router.post('/tickets/:id/reply', replySupportTicket);
 
+// FAQ CRUD Management
+router.get('/faqs', getAdminFaqs);
+router.post('/faqs', createAdminFaq);
+router.put('/faqs/:id', updateAdminFaq);
+router.delete('/faqs/:id', deleteAdminFaq);
+
 // Daily Code Management
 router.post('/daily-code', createDailyCode);
 router.get('/daily-code', getDailyCodes);
@@ -68,5 +106,11 @@ router.get('/daily-code', getDailyCodes);
 router.post('/visit-links', createVisitLink);
 router.get('/visit-links', getVisitLinks);
 router.delete('/visit-links/:id', deleteVisitLink);
+
+// Social Tasks Management
+router.get('/social-tasks', getSocialTasksAdmin);
+router.post('/social-tasks', createSocialTaskAdmin);
+router.put('/social-tasks/:id', updateSocialTaskAdmin);
+router.delete('/social-tasks/:id', deleteSocialTaskAdmin);
 
 export default router;

@@ -36,6 +36,7 @@ model User {
   dailyCodeClaims DailyCodeClaim[]
   gameSessions    GameSession[]
   adImpressions   AdImpression[]
+  socialTaskClaims SocialTaskClaim[]
 
   @@index([balance])
   @@index([totalEarned])
@@ -195,6 +196,13 @@ model AppConfig {
   vpnApiKey           String   @default("")
   maintenanceMode     Boolean  @default(false)
 
+  // Referral Withdrawal eligibility conditions
+  refWithdrawMinPlaytimeMins  Int      @default(3000)
+  refWithdrawMinReferrals     Int      @default(2)
+
+  // Dynamic Gullak Claim Ads Sequence
+  gullakAdSequence            String   @default("interstitial,rewarded,none")
+
   updatedAt           DateTime @updatedAt
 }
 
@@ -215,6 +223,28 @@ model DailyCodeClaim {
   createdAt   DateTime  @default(now())
   dailyCode   DailyCode @relation(fields: [dailyCodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SocialTask {
+  id          String   @id @default(uuid())
+  platform    String   // 'facebook', 'instagram', 'whatsapp', 'telegram', 'youtube', 'other'
+  title       String
+  link        String
+  coinsReward Int      @default(50)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  claims      SocialTaskClaim[]
+}
+
+model SocialTaskClaim {
+  id           String     @id @default(uuid())
+  userId       String
+  socialTaskId String
+  claimedAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialTask   SocialTask @relation(fields: [socialTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, socialTaskId])
 }
 
 model VisitEarnLink {
