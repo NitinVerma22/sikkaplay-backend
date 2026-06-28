@@ -12,6 +12,7 @@ import supportRoutes from './routes/support.routes';
 import adminRoutes from './routes/admin.routes';
 import callbackRoutes from './routes/callback.routes';
 import gameRoutes from './routes/game.routes';
+import playgroundRoutes from './routes/playground.routes';
 import { startCronJobs } from './services/cron.service';
 
 const app = express();
@@ -45,6 +46,19 @@ app.use(cors({
 
 app.use(express.json());
 
+// API Request/Response Logger
+app.use((req, res, next) => {
+  console.log(`[API REQUEST] ${req.method} ${req.url}`);
+  res.on('finish', () => {
+    if (res.statusCode >= 400) {
+      console.log(`[API ERROR RESPONSE] ${req.method} ${req.url} -> ${res.statusCode}`);
+    } else {
+      console.log(`[API RESPONSE] ${req.method} ${req.url} -> ${res.statusCode}`);
+    }
+  });
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -54,6 +68,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/callbacks', callbackRoutes);
 app.use('/api/game', gameRoutes);
+app.use('/api/playground', playgroundRoutes);
 
 // Basic health check route
 app.get('/', (req: Request, res: Response) => {

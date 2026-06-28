@@ -6,7 +6,8 @@ import {
   claimSocialTask,
   claimSurvey,
   claimAppInstall,
-  claimMilestone
+  claimMilestone,
+  resumeDailyStreak
 } from '../controllers/earn.controller';
 import { logUsage } from '../controllers/usage.controller';
 import { getMyNetwork } from '../controllers/network.controller';
@@ -42,6 +43,7 @@ router.put('/upi', updateUpi);
 
 // POST /api/user/earn/... — vpnGuard only on earn routes
 router.post('/earn/daily-streak', vpnGuard, earnLimiter, claimDailyStreak);
+router.post('/earn/daily-streak/resume', vpnGuard, earnLimiter, resumeDailyStreak);
 router.post('/earn/social-task', vpnGuard, earnLimiter, claimSocialTask);
 router.post('/earn/survey', vpnGuard, earnLimiter, claimSurvey);
 router.post('/earn/app-install', vpnGuard, earnLimiter, claimAppInstall);

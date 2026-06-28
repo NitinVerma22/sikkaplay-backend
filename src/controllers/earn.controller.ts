@@ -512,3 +512,120 @@ export const claimMilestone = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const resumeDailyStreak = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const today = new Date();
+    const todayStr = getISTDateString(today);
+
+    // Fetch all daily streak transactions
+    const allStreaks = await prisma.transaction.findMany({
+      where: { userId, type: 'daily_streak', status: 'success' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (allStreaks.length === 0) {
+      res.status(400).json({ error: 'No existing streak to resume' });
+      return;
+    }
+
+    const lastClaimDateStr = getISTDateString(allStreaks[0].createdAt);
+    const yesterdayStr = getISTDateString(new Date(today.getTime() - 24 * 60 * 60 * 1000));
+
+    if (lastClaimDateStr === todayStr || lastClaimDateStr === yesterdayStr) {
+      res.status(400).json({ error: 'Streak is already active, no need to resume' });
+      return;
+    }
+
+    const parseISTDate = (dateStr: string): Date => {
+      return new Date(`${dateStr}T00:00:00.000Z`);
+    };
+
+    const diffTime = Math.abs(parseISTDate(todayStr).getTime() - parseISTDate(lastClaimDateStr).getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const skippedDays = diffDays - 1;
+
+    if (skippedDays <= 0) {
+      res.status(400).json({ error: 'No skipped days found' });
+      return;
+    }
+
+    const cost = skippedDays * 15;
+
+    // Check user balance
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user || user.balance < cost) {
+      res.status(400).json({ error: `Insufficient balance. You need ${cost} coins to resume.` });
+      return;
+    }
+
+    // Perform transaction to deduct coins and insert dummy daily_streak rows
+    const result = await prisma.$transaction(async (tx) => {
+      // Lock user row
+      await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
+
+      // Deduct cost
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          balance: { decrement: cost }
+        }
+      });
+
+      // Create spend transaction for resume fee
+      const resumeFeeTx = await tx.transaction.create({
+        data: {
+          userId,
+          amount: -cost,
+          type: 'spend',
+          status: 'success',
+          description: `Daily Streak Resume Fee (${skippedDays} days)`
+        }
+      });
+
+      // Insert restored daily_streak records for skipped days
+      const lastClaimDate = new Date(allStreaks[0].createdAt);
+      for (let d = 1; d <= skippedDays; d++) {
+        const skippedDate = new Date(lastClaimDate.getTime());
+        skippedDate.setDate(skippedDate.getDate() + d);
+
+        // Position it at 12:00:00 PM IST
+        const skippedDateIST = getStartOfTodayIST(skippedDate);
+        skippedDateIST.setHours(skippedDateIST.getHours() + 12);
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            amount: 0,
+            type: 'daily_streak',
+            status: 'success',
+            description: `Daily Streak Restored (Paid)`,
+            createdAt: skippedDateIST
+          }
+        });
+      }
+
+      return { user: updatedUser, transaction: resumeFeeTx };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Streak successfully resumed! Charged ${cost} coins.`,
+      balance: result.user.balance,
+      transaction: result.transaction
+    });
+
+  } catch (error) {
+    console.error('Error resuming daily streak:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

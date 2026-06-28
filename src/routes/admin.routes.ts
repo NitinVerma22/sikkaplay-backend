@@ -8,6 +8,7 @@ import {
   updateUserBalance,
   deleteUser,
   bulkDeleteUsers,
+  clearUserDevice,
   getWithdrawals,
   updateWithdrawalStatus,
   bulkUpdateWithdrawalStatus,
@@ -41,6 +42,12 @@ import {
   updateSocialTaskAdmin,
   deleteSocialTaskAdmin
 } from '../controllers/socialTask.controller';
+import {
+  getCleanableTables,
+  previewMaintenanceRecords,
+  exportMaintenanceRecords,
+  cleanupMaintenanceRecords
+} from '../controllers/maintenance.controller';
 
 const router = Router();
 
@@ -79,6 +86,7 @@ router.put('/users/:id/freeze', toggleUserFreeze);
 router.put('/users/:id/change-password', changeUserPassword);
 router.delete('/users/:id', requireRole(['superadmin']), deleteUser);
 router.post('/users/bulk-delete', requireRole(['superadmin']), bulkDeleteUsers);
+router.post('/users/:id/clear-device', requireRole(['superadmin']), clearUserDevice);
 
 // Push Notification Broadcast
 router.post('/broadcast-push', broadcastPushNotification);
@@ -112,5 +120,11 @@ router.get('/social-tasks', getSocialTasksAdmin);
 router.post('/social-tasks', createSocialTaskAdmin);
 router.put('/social-tasks/:id', updateSocialTaskAdmin);
 router.delete('/social-tasks/:id', deleteSocialTaskAdmin);
+
+// Database Maintenance Management (Super Admin only)
+router.get('/maintenance/tables', requireRole(['superadmin']), getCleanableTables);
+router.post('/maintenance/preview', requireRole(['superadmin']), previewMaintenanceRecords);
+router.post('/maintenance/export', requireRole(['superadmin']), exportMaintenanceRecords);
+router.post('/maintenance/cleanup', requireRole(['superadmin']), cleanupMaintenanceRecords);
 
 export default router;

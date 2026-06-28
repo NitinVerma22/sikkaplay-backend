@@ -16,6 +16,7 @@ model User {
   passwordHash    String?
   name            String?
   city            String?
+  username        String?       @unique
   referralCode    String        @unique
   referredBy      String?
   balance         Int           @default(0)
@@ -37,11 +38,20 @@ model User {
   gameSessions    GameSession[]
   adImpressions   AdImpression[]
   socialTaskClaims SocialTaskClaim[]
+  adStats         AdStats[]
+  playgroundMinutes Int                 @default(0)
+  gender            String?
+  crateProgress     CrateProgress[]
+  friendshipsOne    Friendship[]        @relation("UserOneFriendships")
+  friendshipsTwo    Friendship[]        @relation("UserTwoFriendships")
+  giftInventory     UserGiftInventory[]
+  bans              PlaygroundBan[]
 
   @@index([balance])
   @@index([totalEarned])
   @@index([referredBy])
   @@index([isBlocked])
+  @@index([deviceId])
 }
 
 model GameSession {
@@ -58,6 +68,7 @@ model GameSession {
 
   @@index([userId])
   @@index([status])
+  @@index([createdAt])
 }
 
 model Transaction {
@@ -203,6 +214,19 @@ model AppConfig {
   // Dynamic Gullak Claim Ads Sequence
   gullakAdSequence            String   @default("interstitial,rewarded,none")
 
+  // Database Retention Settings (in Days)
+  gameSessionRetentionDays    Int      @default(1)
+  adImpressionRetentionDays   Int      @default(7)
+  notificationRetentionDays   Int      @default(30)
+  dailyUsageRetentionDays     Int      @default(45)
+  visitEarnClaimRetentionDays Int      @default(1)
+
+  // Playground Configs
+  playgroundCoinsPerMinute   Int      @default(240) // 1200 coins = 5 mins -> 240 coins/min
+  playgroundMaleFilterCost   Int      @default(50)
+  playgroundFemaleFilterCost Int      @default(50)
+  giftCommissionRate         Float    @default(0.20) // 20% platform commission on virtual gifts
+
   updatedAt           DateTime @updatedAt
 }
 
@@ -262,6 +286,8 @@ model VisitEarnClaim {
   claimedAt DateTime @default(now())
 
   @@index([userId, linkId])
+  @@index([userId])
+  @@index([claimedAt])
 }
 
 model AdminAuditLog {
@@ -287,6 +313,121 @@ model AdImpression {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model AdStats {
+  id              String   @id @default(uuid())
+  userId          String
+  date            DateTime
+  totalAdsWatched Int      @default(0)
+  rewardedAds     Int      @default(0)
+  interstitialAds Int      @default(0)
+  coinsEarned     Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+enum CrateLevel {
+  BRONZE
+  SILVER
+  GOLD
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model CrateProgress {
+  id              String       @id @default(uuid())
+  userId          String
+  dateStr         String       // YYYY-MM-DD
+  activeSeconds   Int          @default(0)
+  bronzeClaimed   Boolean      @default(false)
+  silverClaimed   Boolean      @default(false)
+  goldClaimed     Boolean      @default(false)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateStr])
+}
+
+model Friendship {
+  id            String           @id @default(uuid())
+  userOneId     String
+  userTwoId     String
+  status        FriendshipStatus @default(PENDING)
+  actionUserId  String           // Who sent the request
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  userOne       User             @relation("UserOneFriendships", fields: [userOneId], references: [id], onDelete: Cascade)
+  userTwo       User             @relation("UserTwoFriendships", fields: [userTwoId], references: [id], onDelete: Cascade)
+
+  @@unique([userOneId, userTwoId])
+}
+
+model PlaygroundSession {
+  id            String         @id @default(uuid())
+  channelName   String         @unique
+  userOneId     String
+  userTwoId     String
+  startTime     DateTime       @default(now())
+  endTime       DateTime?
+  status        String         @default("active") // "active", "completed"
+}
+
+model Gift {
+  id           String          @id @default(uuid())
+  name         String          // Rose, Chocolate, Ring
+  coinsPrice   Int
+  imageUrl     String
+  txs          GiftTransaction[]
+  userGifts    UserGiftInventory[]
+}
+
+model UserGiftInventory {
+  id         String   @id @default(uuid())
+  userId     String
+  giftId     String
+  count      Int      @default(1)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gift       Gift     @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, giftId])
+}
+
+model GiftTransaction {
+  id            String            @id @default(uuid())
+  senderId      String
+  receiverId    String
+  giftId        String
+  gift          Gift              @relation(fields: [giftId], references: [id])
+  coinsSpent    Int
+  createdAt     DateTime          @default(now())
+}
+
+model PlaygroundReport {
+  id            String         @id @default(uuid())
+  reporterId    String
+  reportedId    String
+  reason        String
+  createdAt     DateTime       @default(now())
+}
+
+model PlaygroundBan {
+  id            String         @id @default(uuid())
+  userId        String
+  expiresAt     DateTime
+  reason        String
+  createdAt     DateTime       @default(now())
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 

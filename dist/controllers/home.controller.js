@@ -67,6 +67,41 @@ const getHomeState = async (req, res) => {
                 break;
             }
         }
+        // New Daily Streak Resume Detection logic
+        let skippedDays = 0;
+        let streakBeforeSkip = 0;
+        let canStreakResume = false;
+        let resumeCost = 0;
+        if (allStreaks.length > 0) {
+            const lastClaimDateStr = (0, date_utils_1.getISTDateString)(allStreaks[0].createdAt);
+            const todayStr = (0, date_utils_1.getISTDateString)(today);
+            const yesterdayStr = (0, date_utils_1.getISTDateString)(new Date(today.getTime() - 24 * 60 * 60 * 1000));
+            if (lastClaimDateStr !== todayStr && lastClaimDateStr !== yesterdayStr) {
+                const parseISTDate = (dateStr) => {
+                    return new Date(`${dateStr}T00:00:00.000Z`);
+                };
+                const diffTime = Math.abs(parseISTDate(todayStr).getTime() - parseISTDate(lastClaimDateStr).getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                skippedDays = diffDays - 1;
+                if (skippedDays > 0) {
+                    canStreakResume = true;
+                    resumeCost = skippedDays * 15;
+                    // Calculate streak before the skip
+                    let tempCheckDate = new Date(allStreaks[0].createdAt);
+                    for (let i = 0; i < allStreaks.length; i++) {
+                        const streakDateStr = (0, date_utils_1.getISTDateString)(allStreaks[i].createdAt);
+                        const targetDateStr = (0, date_utils_1.getISTDateString)(tempCheckDate);
+                        if (streakDateStr === targetDateStr) {
+                            streakBeforeSkip++;
+                            tempCheckDate.setDate(tempCheckDate.getDate() - 1);
+                        }
+                        else if (streakDateStr < targetDateStr) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         // Today's claim is already processed inside the allStreaks loop since allStreaks contains today's transaction if claimed today.
         // Reconstruct recent rewards for home screen
         const recentRewards = topTransactions.map(t => ({
@@ -151,7 +186,11 @@ const getHomeState = async (req, res) => {
             visitAllTaskCompleted: hasVisitedAllLinksToday,
             visitAllTaskClaimed,
             visitAllTaskTotalLinks: totalLinks,
-            visitAllTaskVisitedLinks: uniqueVisitedLinks.size
+            visitAllTaskVisitedLinks: uniqueVisitedLinks.size,
+            canStreakResume,
+            streakResumeCost: resumeCost,
+            skippedDaysCount: skippedDays,
+            streakBeforeSkip
         });
     }
     catch (error) {

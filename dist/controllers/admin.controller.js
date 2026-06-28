@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -11,6 +11,7 @@ const push_service_1 = require("../services/push.service");
 const network_service_1 = require("../services/network.service");
 const audit_service_1 = require("../services/audit.service");
 const config_service_1 = require("../services/config.service");
+const firebase_1 = require("../config/firebase");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 // 1. Admin Login
 const loginAdmin = async (req, res) => {
@@ -309,6 +310,22 @@ exports.updateUserBalance = updateUserBalance;
 const deleteUser = async (req, res) => {
     try {
         const id = req.params.id;
+        // Fetch user details first to get firebaseUid
+        const user = await db_1.prisma.user.findUnique({ where: { id } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        // Delete user from Firebase Auth if exists
+        if (user.firebaseUid) {
+            try {
+                await firebase_1.auth.deleteUser(user.firebaseUid);
+                console.log(`Successfully deleted user ${user.firebaseUid} from Firebase Auth`);
+            }
+            catch (fbError) {
+                console.warn(`Firebase Auth user deletion failed or user not found:`, fbError);
+            }
+        }
         // We should delete user dependencies first to satisfy foreign key constraints
         await db_1.prisma.transaction.deleteMany({ where: { userId: id } });
         await db_1.prisma.dailyUsage.deleteMany({ where: { userId: id } });
@@ -338,6 +355,22 @@ const bulkDeleteUsers = async (req, res) => {
         if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
             res.status(400).json({ error: 'Missing or invalid userIds array' });
             return;
+        }
+        // Fetch firebaseUids of all these users
+        const users = await db_1.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { firebaseUid: true }
+        });
+        // Delete from Firebase Auth in parallel/batch
+        for (const u of users) {
+            if (u.firebaseUid) {
+                try {
+                    await firebase_1.auth.deleteUser(u.firebaseUid);
+                }
+                catch (fbError) {
+                    console.warn(`Firebase Auth bulk deletion: user ${u.firebaseUid} failed or not found:`, fbError);
+                }
+            }
         }
         await db_1.prisma.$transaction([
             db_1.prisma.transaction.deleteMany({ where: { userId: { in: userIds } } }),
@@ -1325,3 +1358,32 @@ const deleteAdminFaq = async (req, res) => {
     }
 };
 exports.deleteAdminFaq = deleteAdminFaq;
+const clearUserDevice = async (req, res) => {
+    try {
+        const id = req.params.id;
+        // Find user
+        const user = await db_1.prisma.user.findUnique({
+            where: { id }
+        });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const oldDeviceId = user.deviceId;
+        // Update user deviceId to null
+        await db_1.prisma.user.update({
+            where: { id },
+            data: { deviceId: null }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'CLEAR_USER_DEVICE', { userId: id, oldDeviceId }, ip);
+        res.status(200).json({ success: true, message: 'Device ID cleared successfully' });
+    }
+    catch (error) {
+        console.error('Clear User Device Error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.clearUserDevice = clearUserDevice;

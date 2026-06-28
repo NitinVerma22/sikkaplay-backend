@@ -116,9 +116,23 @@ const updateUpi = async (req, res) => {
             res.status(400).json({ error: 'Missing user ID or UPI ID' });
             return;
         }
+        // Check for duplicate UPI ID across SikkaPlay accounts
+        if (upiId && upiId.trim() !== '') {
+            const normalizedUpi = upiId.trim();
+            const duplicateUpi = await db_1.prisma.user.findFirst({
+                where: {
+                    upiId: normalizedUpi,
+                    id: { not: userId }
+                }
+            });
+            if (duplicateUpi) {
+                res.status(400).json({ error: 'This UPI ID is already linked to another SikkaPlay account' });
+                return;
+            }
+        }
         await db_1.prisma.user.update({
             where: { id: userId },
-            data: { upiId }
+            data: { upiId: upiId ? upiId.trim() : null }
         });
         res.status(200).json({ success: true, message: 'UPI ID updated successfully' });
     }

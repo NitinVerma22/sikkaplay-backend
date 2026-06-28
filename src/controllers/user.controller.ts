@@ -130,9 +130,25 @@ export const updateUpi = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
+    // Check for duplicate UPI ID across SikkaPlay accounts
+    if (upiId && upiId.trim() !== '') {
+      const normalizedUpi = upiId.trim();
+      const duplicateUpi = await prisma.user.findFirst({
+        where: {
+          upiId: normalizedUpi,
+          id: { not: userId }
+        }
+      });
+
+      if (duplicateUpi) {
+        res.status(400).json({ error: 'This UPI ID is already linked to another SikkaPlay account' });
+        return;
+      }
+    }
+
     await prisma.user.update({
       where: { id: userId },
-      data: { upiId }
+      data: { upiId: upiId ? upiId.trim() : null }
     });
 
     res.status(200).json({ success: true, message: 'UPI ID updated successfully' });

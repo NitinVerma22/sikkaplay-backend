@@ -6,6 +6,7 @@ const adminAuth_middleware_1 = require("../middleware/adminAuth.middleware");
 const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
 const visitLink_controller_1 = require("../controllers/visitLink.controller");
 const socialTask_controller_1 = require("../controllers/socialTask.controller");
+const maintenance_controller_1 = require("../controllers/maintenance.controller");
 const router = (0, express_1.Router)();
 // Public route for Admin login
 router.post('/login', admin_controller_1.loginAdmin);
@@ -36,6 +37,7 @@ router.put('/users/:id/freeze', admin_controller_1.toggleUserFreeze);
 router.put('/users/:id/change-password', admin_controller_1.changeUserPassword);
 router.delete('/users/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.deleteUser);
 router.post('/users/bulk-delete', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkDeleteUsers);
+router.post('/users/:id/clear-device', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.clearUserDevice);
 // Push Notification Broadcast
 router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 // Withdrawal Management
@@ -62,4 +64,9 @@ router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);
 router.post('/social-tasks', socialTask_controller_1.createSocialTaskAdmin);
 router.put('/social-tasks/:id', socialTask_controller_1.updateSocialTaskAdmin);
 router.delete('/social-tasks/:id', socialTask_controller_1.deleteSocialTaskAdmin);
+// Database Maintenance Management (Super Admin only)
+router.get('/maintenance/tables', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.getCleanableTables);
+router.post('/maintenance/preview', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.previewMaintenanceRecords);
+router.post('/maintenance/export', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.exportMaintenanceRecords);
+router.post('/maintenance/cleanup', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.cleanupMaintenanceRecords);
 exports.default = router;

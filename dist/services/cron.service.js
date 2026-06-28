@@ -3,35 +3,136 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startCronJobs = exports.pruneOldGameSessions = void 0;
+exports.startCronJobs = exports.pruneOldAdStats = exports.pruneAndSummarizeAdImpressions = exports.pruneOldVisitEarnClaims = exports.pruneOldGameSessions = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const db_1 = require("../config/db");
 const push_service_1 = require("./push.service");
 const network_service_1 = require("./network.service");
 const pruneOldGameSessions = async () => {
     try {
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const config = await db_1.prisma.appConfig.findFirst();
+        const retentionDays = config?.gameSessionRetentionDays ?? 1;
+        const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
         const deleteResult = await db_1.prisma.gameSession.deleteMany({
             where: {
-                createdAt: { lt: twentyFourHoursAgo }
+                createdAt: { lt: cutoffDate }
             }
         });
-        console.log(`[PRUNING] Pruned ${deleteResult.count} game sessions older than 24 hours.`);
+        console.log(`[PRUNING] Pruned ${deleteResult.count} game sessions older than ${retentionDays} days.`);
     }
     catch (error) {
         console.error('Error running GameSession pruning:', error);
     }
 };
 exports.pruneOldGameSessions = pruneOldGameSessions;
+const pruneOldVisitEarnClaims = async () => {
+    try {
+        const config = await db_1.prisma.appConfig.findFirst();
+        const retentionDays = config?.visitEarnClaimRetentionDays ?? 1;
+        const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+        const deleteResult = await db_1.prisma.visitEarnClaim.deleteMany({
+            where: {
+                claimedAt: { lt: cutoffDate }
+            }
+        });
+        console.log(`[PRUNING] Pruned ${deleteResult.count} visit-earn claims older than ${retentionDays} days.`);
+    }
+    catch (error) {
+        console.error('Error running VisitEarnClaim pruning:', error);
+    }
+};
+exports.pruneOldVisitEarnClaims = pruneOldVisitEarnClaims;
+const pruneAndSummarizeAdImpressions = async () => {
+    try {
+        const config = await db_1.prisma.appConfig.findFirst();
+        const retentionDays = config?.adImpressionRetentionDays ?? 7;
+        const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+        // Group and sum impressions older than retention period
+        const rawStats = await db_1.prisma.$queryRaw `
+      SELECT 
+        "userId", 
+        DATE("createdAt") as "impressionDate",
+        COUNT(*)::int as "totalCount",
+        SUM(CASE WHEN "adType" = 'rewarded' THEN 1 ELSE 0 END)::int as "rewardedCount",
+        SUM(CASE WHEN "adType" = 'interstitial' THEN 1 ELSE 0 END)::int as "interstitialCount",
+        SUM("coinsAwarded")::int as "totalCoins"
+      FROM "AdImpression"
+      WHERE "createdAt" < ${cutoffDate}
+      GROUP BY "userId", DATE("createdAt")
+    `;
+        console.log(`[PRUNING] Found ${rawStats.length} user-date ad stats to summarize.`);
+        for (const stat of rawStats) {
+            const totalCount = Number(stat.totalCount) || 0;
+            const rewardedCount = Number(stat.rewardedCount) || 0;
+            const interstitialCount = Number(stat.interstitialCount) || 0;
+            const totalCoins = Number(stat.totalCoins) || 0;
+            const statsDate = new Date(stat.impressionDate);
+            await db_1.prisma.adStats.upsert({
+                where: {
+                    userId_date: {
+                        userId: stat.userId,
+                        date: statsDate
+                    }
+                },
+                update: {
+                    totalAdsWatched: { increment: totalCount },
+                    rewardedAds: { increment: rewardedCount },
+                    interstitialAds: { increment: interstitialCount },
+                    coinsEarned: { increment: totalCoins }
+                },
+                create: {
+                    userId: stat.userId,
+                    date: statsDate,
+                    totalAdsWatched: totalCount,
+                    rewardedAds: rewardedCount,
+                    interstitialAds: interstitialCount,
+                    coinsEarned: totalCoins
+                }
+            });
+        }
+        const deleteResult = await db_1.prisma.adImpression.deleteMany({
+            where: {
+                createdAt: { lt: cutoffDate }
+            }
+        });
+        console.log(`[PRUNING] Pruned and summarized ${deleteResult.count} raw ad impressions older than ${retentionDays} days.`);
+    }
+    catch (error) {
+        console.error('Error running AdImpression pruning/summary:', error);
+    }
+};
+exports.pruneAndSummarizeAdImpressions = pruneAndSummarizeAdImpressions;
+const pruneOldAdStats = async () => {
+    try {
+        // Default retention for summarized statistics is 365 days
+        const cutoffDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+        const deleteResult = await db_1.prisma.adStats.deleteMany({
+            where: {
+                date: { lt: cutoffDate }
+            }
+        });
+        console.log(`[PRUNING] Pruned ${deleteResult.count} summarized ad stats older than 365 days.`);
+    }
+    catch (error) {
+        console.error('Error running AdStats pruning:', error);
+    }
+};
+exports.pruneOldAdStats = pruneOldAdStats;
 const startCronJobs = () => {
     // Process any pending commissions immediately on startup
     (0, network_service_1.distributePendingReferralCommissions)().catch(e => console.error('Error processing startup commissions:', e));
-    // Prune game sessions immediately on startup
-    (0, exports.pruneOldGameSessions)().catch(e => console.error('Error processing startup pruning:', e));
-    // Run daily at 02:00 AM to prune game sessions older than 24 hours
+    // Run startup cleanups
+    (0, exports.pruneOldGameSessions)().catch(e => console.error('Error processing startup game pruning:', e));
+    (0, exports.pruneOldVisitEarnClaims)().catch(e => console.error('Error processing startup visit claim pruning:', e));
+    (0, exports.pruneAndSummarizeAdImpressions)().catch(e => console.error('Error processing startup ad pruning:', e));
+    (0, exports.pruneOldAdStats)().catch(e => console.error('Error processing startup ad stats pruning:', e));
+    // Run daily at 02:00 AM to perform all automated cleanups
     node_cron_1.default.schedule('0 2 * * *', async () => {
-        console.log('Running daily cron job for GameSession pruning...');
+        console.log('Running daily cron job for database pruning and summarization...');
         await (0, exports.pruneOldGameSessions)();
+        await (0, exports.pruneOldVisitEarnClaims)();
+        await (0, exports.pruneAndSummarizeAdImpressions)();
+        await (0, exports.pruneOldAdStats)();
     });
     // Run every night at midnight (00:00)
     node_cron_1.default.schedule('0 0 * * *', async () => {

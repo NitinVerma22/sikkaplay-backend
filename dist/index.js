@@ -17,6 +17,7 @@ const support_routes_1 = __importDefault(require("./routes/support.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const callback_routes_1 = __importDefault(require("./routes/callback.routes"));
 const game_routes_1 = __importDefault(require("./routes/game.routes"));
+const playground_routes_1 = __importDefault(require("./routes/playground.routes"));
 const cron_service_1 = require("./services/cron.service");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,19 @@ app.use((0, cors_1.default)({
     credentials: true
 }));
 app.use(express_1.default.json());
+// API Request/Response Logger
+app.use((req, res, next) => {
+    console.log(`[API REQUEST] ${req.method} ${req.url}`);
+    res.on('finish', () => {
+        if (res.statusCode >= 400) {
+            console.log(`[API ERROR RESPONSE] ${req.method} ${req.url} -> ${res.statusCode}`);
+        }
+        else {
+            console.log(`[API RESPONSE] ${req.method} ${req.url} -> ${res.statusCode}`);
+        }
+    });
+    next();
+});
 // Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/user', user_routes_1.default);
@@ -53,6 +67,7 @@ app.use('/api/support', support_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/callbacks', callback_routes_1.default);
 app.use('/api/game', game_routes_1.default);
+app.use('/api/playground', playground_routes_1.default);
 // Basic health check route
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'SikkaPlay API is running' });

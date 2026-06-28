@@ -7,6 +7,7 @@ import { sendPushNotification, sendPushNotificationBatch } from '../services/pus
 import { distributePendingReferralCommissions } from '../services/network.service';
 import { logAdminAction } from '../services/audit.service';
 import { invalidateConfigCache } from '../services/config.service';
+import { auth as firebaseAuth } from '../config/firebase';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -347,6 +348,23 @@ export const deleteUser = async (req: AdminAuthRequest, res: Response): Promise<
   try {
     const id = req.params.id as string;
     
+    // Fetch user details first to get firebaseUid
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Delete user from Firebase Auth if exists
+    if (user.firebaseUid) {
+      try {
+        await firebaseAuth.deleteUser(user.firebaseUid);
+        console.log(`Successfully deleted user ${user.firebaseUid} from Firebase Auth`);
+      } catch (fbError) {
+        console.warn(`Firebase Auth user deletion failed or user not found:`, fbError);
+      }
+    }
+
     // We should delete user dependencies first to satisfy foreign key constraints
     await prisma.transaction.deleteMany({ where: { userId: id } });
     await prisma.dailyUsage.deleteMany({ where: { userId: id } });
@@ -379,6 +397,23 @@ export const bulkDeleteUsers = async (req: AdminAuthRequest, res: Response): Pro
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       res.status(400).json({ error: 'Missing or invalid userIds array' });
       return;
+    }
+
+    // Fetch firebaseUids of all these users
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { firebaseUid: true }
+    });
+
+    // Delete from Firebase Auth in parallel/batch
+    for (const u of users) {
+      if (u.firebaseUid) {
+        try {
+          await firebaseAuth.deleteUser(u.firebaseUid);
+        } catch (fbError) {
+          console.warn(`Firebase Auth bulk deletion: user ${u.firebaseUid} failed or not found:`, fbError);
+        }
+      }
     }
 
     await prisma.$transaction([
@@ -1512,6 +1547,40 @@ export const deleteAdminFaq = async (req: AdminAuthRequest, res: Response): Prom
   } catch (error) {
     console.error('Delete Admin FAQ Error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const clearUserDevice = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const oldDeviceId = user.deviceId;
+
+    // Update user deviceId to null
+    await prisma.user.update({
+      where: { id },
+      data: { deviceId: null }
+    });
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'CLEAR_USER_DEVICE', { userId: id, oldDeviceId }, ip);
+
+    res.status(200).json({ success: true, message: 'Device ID cleared successfully' });
+  } catch (error: any) {
+    console.error('Clear User Device Error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
 
