@@ -1066,11 +1066,11 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
   }
 };
 
-// 17. Sync Playground Messages (Seen verify & clean approach)
+// 17. Sync Playground Messages (Seen verify & 24 Hours Retention approach)
 export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { channelName, recipientId } = req.query;
+    const { channelName, recipientId, history } = req.query;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -1082,36 +1082,71 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    // 1. Fetch incoming messages (not sent by caller)
-    const incoming = await prisma.playgroundMessage.findMany({
-      where: {
-        channelName,
-        senderId: { not: userId }
-      },
-      orderBy: { createdAt: 'asc' }
-    });
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Mark incoming messages as seen
-    if (incoming.length > 0) {
-      await prisma.playgroundMessage.updateMany({
-        where: { id: { in: incoming.map(m => m.id) } },
-        data: { isSeen: true }
-      });
-    }
-
-    // 2. Fetch outgoing messages sent by caller to track their seen status
-    const outgoing = await prisma.playgroundMessage.findMany({
+    // Global cleanup of messages older than 24 hours
+    await prisma.playgroundMessage.deleteMany({
       where: {
-        channelName,
-        senderId: userId
+        createdAt: { lt: twentyFourHoursAgo }
       }
     });
 
-    // Clean up (delete) outgoing messages that have been marked as seen by recipient
-    const seenOutgoingIds = outgoing.filter(o => o.isSeen).map(o => o.id);
-    if (seenOutgoingIds.length > 0) {
-      await prisma.playgroundMessage.deleteMany({
-        where: { id: { in: seenOutgoingIds } }
+    let messages = [];
+    let outgoing = [];
+
+    if (history === 'true') {
+      // Fetch full history from the last 24 hours
+      messages = await prisma.playgroundMessage.findMany({
+        where: {
+          channelName,
+          createdAt: { gte: twentyFourHoursAgo }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Mark any unread incoming messages in history as seen
+      const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);
+      if (unreadIncoming.length > 0) {
+        await prisma.playgroundMessage.updateMany({
+          where: { id: { in: unreadIncoming.map(m => m.id) } },
+          data: { isSeen: true }
+        });
+        // Update in-memory objects to show seen
+        for (const m of messages) {
+          if (m.senderId !== userId) {
+            m.isSeen = true;
+          }
+        }
+      }
+
+      // Populate outgoing status for client history sync
+      outgoing = messages.filter(m => m.senderId === userId);
+    } else {
+      // Normal sync: fetch only unread incoming messages
+      messages = await prisma.playgroundMessage.findMany({
+        where: {
+          channelName,
+          senderId: { not: userId },
+          isSeen: false
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Mark incoming messages as seen
+      if (messages.length > 0) {
+        await prisma.playgroundMessage.updateMany({
+          where: { id: { in: messages.map(m => m.id) } },
+          data: { isSeen: true }
+        });
+      }
+
+      // Fetch outgoing messages from the last 24 hours to return their seen status
+      outgoing = await prisma.playgroundMessage.findMany({
+        where: {
+          channelName,
+          senderId: userId,
+          createdAt: { gte: twentyFourHoursAgo }
+        }
       });
     }
 
@@ -1123,7 +1158,7 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
 
     res.status(200).json({
       success: true,
-      messages: incoming,
+      messages,
       outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
       partnerOnline
     });

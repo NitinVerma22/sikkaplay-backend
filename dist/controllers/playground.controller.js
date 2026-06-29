@@ -951,11 +951,11 @@ const sendPlaygroundMessage = async (req, res) => {
     }
 };
 exports.sendPlaygroundMessage = sendPlaygroundMessage;
-// 17. Sync Playground Messages (Seen verify & clean approach)
+// 17. Sync Playground Messages (Seen verify & 24 Hours Retention approach)
 const syncPlaygroundMessages = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { channelName, recipientId } = req.query;
+        const { channelName, recipientId, history } = req.query;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -964,33 +964,65 @@ const syncPlaygroundMessages = async (req, res) => {
             res.status(400).json({ error: 'channelName parameter is required' });
             return;
         }
-        // 1. Fetch incoming messages (not sent by caller)
-        const incoming = await db_1.prisma.playgroundMessage.findMany({
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        // Global cleanup of messages older than 24 hours
+        await db_1.prisma.playgroundMessage.deleteMany({
             where: {
-                channelName,
-                senderId: { not: userId }
-            },
-            orderBy: { createdAt: 'asc' }
-        });
-        // Mark incoming messages as seen
-        if (incoming.length > 0) {
-            await db_1.prisma.playgroundMessage.updateMany({
-                where: { id: { in: incoming.map(m => m.id) } },
-                data: { isSeen: true }
-            });
-        }
-        // 2. Fetch outgoing messages sent by caller to track their seen status
-        const outgoing = await db_1.prisma.playgroundMessage.findMany({
-            where: {
-                channelName,
-                senderId: userId
+                createdAt: { lt: twentyFourHoursAgo }
             }
         });
-        // Clean up (delete) outgoing messages that have been marked as seen by recipient
-        const seenOutgoingIds = outgoing.filter(o => o.isSeen).map(o => o.id);
-        if (seenOutgoingIds.length > 0) {
-            await db_1.prisma.playgroundMessage.deleteMany({
-                where: { id: { in: seenOutgoingIds } }
+        let messages = [];
+        let outgoing = [];
+        if (history === 'true') {
+            // Fetch full history from the last 24 hours
+            messages = await db_1.prisma.playgroundMessage.findMany({
+                where: {
+                    channelName,
+                    createdAt: { gte: twentyFourHoursAgo }
+                },
+                orderBy: { createdAt: 'asc' }
+            });
+            // Mark any unread incoming messages in history as seen
+            const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);
+            if (unreadIncoming.length > 0) {
+                await db_1.prisma.playgroundMessage.updateMany({
+                    where: { id: { in: unreadIncoming.map(m => m.id) } },
+                    data: { isSeen: true }
+                });
+                // Update in-memory objects to show seen
+                for (const m of messages) {
+                    if (m.senderId !== userId) {
+                        m.isSeen = true;
+                    }
+                }
+            }
+            // Populate outgoing status for client history sync
+            outgoing = messages.filter(m => m.senderId === userId);
+        }
+        else {
+            // Normal sync: fetch only unread incoming messages
+            messages = await db_1.prisma.playgroundMessage.findMany({
+                where: {
+                    channelName,
+                    senderId: { not: userId },
+                    isSeen: false
+                },
+                orderBy: { createdAt: 'asc' }
+            });
+            // Mark incoming messages as seen
+            if (messages.length > 0) {
+                await db_1.prisma.playgroundMessage.updateMany({
+                    where: { id: { in: messages.map(m => m.id) } },
+                    data: { isSeen: true }
+                });
+            }
+            // Fetch outgoing messages from the last 24 hours to return their seen status
+            outgoing = await db_1.prisma.playgroundMessage.findMany({
+                where: {
+                    channelName,
+                    senderId: userId,
+                    createdAt: { gte: twentyFourHoursAgo }
+                }
             });
         }
         // Determine if recipient is online
@@ -1000,7 +1032,7 @@ const syncPlaygroundMessages = async (req, res) => {
         }
         res.status(200).json({
             success: true,
-            messages: incoming,
+            messages,
             outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
             partnerOnline
         });
