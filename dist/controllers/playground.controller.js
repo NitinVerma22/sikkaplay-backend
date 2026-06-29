@@ -1040,11 +1040,15 @@ const syncPlaygroundMessages = async (req, res) => {
         if (recipientId && typeof recipientId === 'string') {
             partnerOnline = auth_middleware_1.onlineUsersCache.has(recipientId);
         }
+        const totalDbCount = await db_1.prisma.playgroundMessage.count({
+            where: { channelName: finalChannelName }
+        });
         res.status(200).json({
             success: true,
             messages,
             outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
-            partnerOnline
+            partnerOnline,
+            totalDbCount
         });
     }
     catch (error) {

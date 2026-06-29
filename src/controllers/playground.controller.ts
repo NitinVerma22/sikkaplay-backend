@@ -1168,11 +1168,16 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       partnerOnline = onlineUsersCache.has(recipientId);
     }
 
+    const totalDbCount = await prisma.playgroundMessage.count({
+      where: { channelName: finalChannelName }
+    });
+
     res.status(200).json({
       success: true,
       messages,
       outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
-      partnerOnline
+      partnerOnline,
+      totalDbCount
     });
   } catch (error) {
     console.error('Error syncing messages:', error);
