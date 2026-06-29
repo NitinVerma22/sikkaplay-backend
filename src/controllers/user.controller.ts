@@ -193,4 +193,38 @@ export const recordAdImpression = async (req: AuthRequest, res: Response): Promi
   }
 };
 
+export const updateBio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { bio } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (bio === undefined) {
+      res.status(400).json({ error: 'Bio parameter is required' });
+      return;
+    }
+
+    const cleanBio = bio ? bio.trim() : '';
+
+    if (cleanBio.length > 100) {
+      res.status(400).json({ error: 'Bio cannot exceed 100 characters' });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { bio: cleanBio }
+    });
+
+    res.status(200).json({ success: true, bio: updatedUser.bio });
+  } catch (error) {
+    console.error('Error updating bio:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 

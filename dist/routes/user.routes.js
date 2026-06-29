@@ -28,6 +28,8 @@ router.post('/fcm-token', user_controller_1.updateFcmToken);
 router.get('/transactions', user_controller_1.getTransactions);
 // PUT /api/user/upi
 router.put('/upi', user_controller_1.updateUpi);
+// PUT /api/user/bio
+router.put('/bio', user_controller_1.updateBio);
 // POST /api/user/earn/... — vpnGuard only on earn routes
 router.post('/earn/daily-streak', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimDailyStreak);
 router.post('/earn/daily-streak/resume', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.resumeDailyStreak);

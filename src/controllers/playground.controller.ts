@@ -1203,9 +1203,15 @@ export const updateBio = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
+    const cleanBio = bio ? bio.trim() : '';
+    if (cleanBio.length > 100) {
+      res.status(400).json({ error: 'Bio cannot exceed 100 characters' });
+      return;
+    }
+
     await prisma.user.update({
       where: { id: userId },
-      data: { bio: bio ? bio.trim() : null }
+      data: { bio: cleanBio || null }
     });
 
     res.status(200).json({ success: true, message: 'Bio updated successfully' });
@@ -1269,6 +1275,22 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
     // Calculate level based on total earned coins
     const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
 
+    // Fetch friend count (ACCEPTED status)
+    const friendCount = await prisma.friendship.count({
+      where: {
+        status: 'ACCEPTED',
+        OR: [
+          { userOneId: targetUser.id },
+          { userTwoId: targetUser.id }
+        ]
+      }
+    });
+
+    // Fetch total gifts received (count of all-time GiftTransactions received)
+    const totalGiftsReceived = await prisma.giftTransaction.count({
+      where: { receiverId: targetUser.id }
+    });
+
     res.status(200).json({
       success: true,
       user: {
@@ -1280,7 +1302,9 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
         totalEarned: targetUser.totalEarned,
         bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
         friendshipState,
-        friendshipId
+        friendshipId,
+        friendCount,
+        totalGiftsReceived
       }
     });
   } catch (error) {

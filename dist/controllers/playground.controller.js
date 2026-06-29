@@ -1134,6 +1134,20 @@ const getPublicProfile = async (req, res) => {
         }
         // Calculate level based on total earned coins
         const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
+        // Fetch friend count (ACCEPTED status)
+        const friendCount = await db_1.prisma.friendship.count({
+            where: {
+                status: 'ACCEPTED',
+                OR: [
+                    { userOneId: targetUser.id },
+                    { userTwoId: targetUser.id }
+                ]
+            }
+        });
+        // Fetch total gifts received (count of all-time GiftTransactions received)
+        const totalGiftsReceived = await db_1.prisma.giftTransaction.count({
+            where: { receiverId: targetUser.id }
+        });
         res.status(200).json({
             success: true,
             user: {
@@ -1145,7 +1159,9 @@ const getPublicProfile = async (req, res) => {
                 totalEarned: targetUser.totalEarned,
                 bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
                 friendshipState,
-                friendshipId
+                friendshipId,
+                friendCount,
+                totalGiftsReceived
             }
         });
     }

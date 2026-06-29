@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const getProfile = async (req, res) => {
     try {
@@ -173,3 +173,32 @@ const recordAdImpression = async (req, res) => {
     }
 };
 exports.recordAdImpression = recordAdImpression;
+const updateBio = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { bio } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (bio === undefined) {
+            res.status(400).json({ error: 'Bio parameter is required' });
+            return;
+        }
+        const cleanBio = bio ? bio.trim() : '';
+        if (cleanBio.length > 100) {
+            res.status(400).json({ error: 'Bio cannot exceed 100 characters' });
+            return;
+        }
+        const updatedUser = await db_1.prisma.user.update({
+            where: { id: userId },
+            data: { bio: cleanBio }
+        });
+        res.status(200).json({ success: true, bio: updatedUser.bio });
+    }
+    catch (error) {
+        console.error('Error updating bio:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.updateBio = updateBio;
