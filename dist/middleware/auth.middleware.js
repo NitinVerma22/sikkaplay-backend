@@ -3,10 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireJwt = exports.verifyToken = void 0;
+exports.requireJwt = exports.verifyToken = exports.onlineUsersCache = void 0;
 const firebase_1 = require("../config/firebase");
 const db_1 = require("../config/db");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const node_cache_1 = __importDefault(require("node-cache"));
+exports.onlineUsersCache = new node_cache_1.default({ stdTTL: 15 });
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -36,6 +38,7 @@ const requireJwt = async (req, res, next) => {
     try {
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         req.user = decoded; // Contains userId
+        exports.onlineUsersCache.set(decoded.userId, true);
         // Dynamic anti-fraud/suspension check
         const user = await db_1.prisma.user.findUnique({
             where: { id: decoded.userId },

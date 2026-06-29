@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { auth } from '../config/firebase';
 import { prisma } from '../config/db';
 import jwt from 'jsonwebtoken';
+import NodeCache from 'node-cache';
+
+export const onlineUsersCache = new NodeCache({ stdTTL: 15 });
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -42,6 +45,7 @@ export const requireJwt = async (req: AuthRequest, res: Response, next: NextFunc
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     req.user = decoded; // Contains userId
+    onlineUsersCache.set(decoded.userId, true);
 
     // Dynamic anti-fraud/suspension check
     const user = await prisma.user.findUnique({

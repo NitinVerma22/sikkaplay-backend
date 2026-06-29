@@ -28,6 +28,7 @@ router.post('/gifts/sell', playground_controller_1.sellVirtualGift);
 // Chat messaging Polling Relay
 router.post('/chat/send', playground_controller_1.sendPlaygroundMessage);
 router.get('/chat/sync', playground_controller_1.syncPlaygroundMessages);
+router.post('/chat/active', playground_controller_1.updateActiveChannel);
 // Profile
 router.post('/profile/bio', playground_controller_1.updateBio);
 router.get('/profile/search', playground_controller_1.getPublicProfile);

@@ -1,9 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPublicProfile = exports.updateBio = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = void 0;
+exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
+const node_cache_1 = __importDefault(require("node-cache"));
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const push_service_1 = require("../services/push.service");
+exports.userActiveChannelCache = new node_cache_1.default({ stdTTL: 15 });
 // Seeding helper to populate the shop and gifts if they are empty
 const ensureSeedData = async () => {
     try {
@@ -535,7 +542,8 @@ const getFriendsList = async (req, res) => {
                     name: friendUser.name || 'Friend',
                     gender: friendUser.gender,
                     username: friendUser.username,
-                    createdAt: f.createdAt
+                    createdAt: f.createdAt,
+                    isOnline: auth_middleware_1.onlineUsersCache.has(friendUser.id)
                 };
                 if (f.status === 'ACCEPTED') {
                     friends.push(item);
@@ -902,11 +910,11 @@ const reportUser = async (req, res) => {
     }
 };
 exports.reportUser = reportUser;
-// 16. Send Playground Message (Temporary Polling Buffer)
+// 16. Send Playground Message (Temporary Polling Buffer with FCM Push notification fallback)
 const sendPlaygroundMessage = async (req, res) => {
     try {
         const senderId = req.user?.userId;
-        const { channelName, text } = req.body;
+        const { channelName, text, recipientId } = req.body;
         if (!senderId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -922,6 +930,19 @@ const sendPlaygroundMessage = async (req, res) => {
                 text
             }
         });
+        // Check if recipient is active in the same channel. If not, send push notification
+        if (recipientId && typeof recipientId === 'string') {
+            const activeChannel = exports.userActiveChannelCache.get(recipientId);
+            if (activeChannel !== channelName) {
+                // Recipient is not viewing this channel - send push!
+                const sender = await db_1.prisma.user.findUnique({ where: { id: senderId } });
+                const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+                const recipientUser = await db_1.prisma.user.findUnique({ where: { id: recipientId } });
+                if (recipientUser?.fcmToken && !text.startsWith('__')) {
+                    await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, `Message from ${senderName}`, text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text, 'playground_chat', null, recipientId);
+                }
+            }
+        }
         res.status(200).json({ success: true, message: msg });
     }
     catch (error) {
@@ -930,11 +951,11 @@ const sendPlaygroundMessage = async (req, res) => {
     }
 };
 exports.sendPlaygroundMessage = sendPlaygroundMessage;
-// 17. Sync Playground Messages (Mailbox pull-then-delete approach)
+// 17. Sync Playground Messages (Seen verify & clean approach)
 const syncPlaygroundMessages = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { channelName } = req.query;
+        const { channelName, recipientId } = req.query;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -943,22 +964,46 @@ const syncPlaygroundMessages = async (req, res) => {
             res.status(400).json({ error: 'channelName parameter is required' });
             return;
         }
-        // Find all messages in the channel that were NOT sent by the current user
-        const messages = await db_1.prisma.playgroundMessage.findMany({
+        // 1. Fetch incoming messages (not sent by caller)
+        const incoming = await db_1.prisma.playgroundMessage.findMany({
             where: {
                 channelName,
                 senderId: { not: userId }
             },
             orderBy: { createdAt: 'asc' }
         });
-        // Delete them immediately so they are cleared from DB storage
-        if (messages.length > 0) {
-            const ids = messages.map(m => m.id);
-            await db_1.prisma.playgroundMessage.deleteMany({
-                where: { id: { in: ids } }
+        // Mark incoming messages as seen
+        if (incoming.length > 0) {
+            await db_1.prisma.playgroundMessage.updateMany({
+                where: { id: { in: incoming.map(m => m.id) } },
+                data: { isSeen: true }
             });
         }
-        res.status(200).json({ success: true, messages });
+        // 2. Fetch outgoing messages sent by caller to track their seen status
+        const outgoing = await db_1.prisma.playgroundMessage.findMany({
+            where: {
+                channelName,
+                senderId: userId
+            }
+        });
+        // Clean up (delete) outgoing messages that have been marked as seen by recipient
+        const seenOutgoingIds = outgoing.filter(o => o.isSeen).map(o => o.id);
+        if (seenOutgoingIds.length > 0) {
+            await db_1.prisma.playgroundMessage.deleteMany({
+                where: { id: { in: seenOutgoingIds } }
+            });
+        }
+        // Determine if recipient is online
+        let partnerOnline = false;
+        if (recipientId && typeof recipientId === 'string') {
+            partnerOnline = auth_middleware_1.onlineUsersCache.has(recipientId);
+        }
+        res.status(200).json({
+            success: true,
+            messages: incoming,
+            outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
+            partnerOnline
+        });
     }
     catch (error) {
         console.error('Error syncing messages:', error);
@@ -966,6 +1011,29 @@ const syncPlaygroundMessages = async (req, res) => {
     }
 };
 exports.syncPlaygroundMessages = syncPlaygroundMessages;
+// 17b. Heartbeat active channel tracking
+const updateActiveChannel = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { channelName } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (channelName) {
+            exports.userActiveChannelCache.set(userId, channelName);
+        }
+        else {
+            exports.userActiveChannelCache.del(userId);
+        }
+        res.status(200).json({ success: true });
+    }
+    catch (error) {
+        console.error('Error updating active channel:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.updateActiveChannel = updateActiveChannel;
 // 18. Update personal Bio description
 const updateBio = async (req, res) => {
     try {

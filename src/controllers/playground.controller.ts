@@ -3,7 +3,11 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { getISTDateString } from '../utils/date.utils';
 import { encrypt } from '../utils/crypto.utils';
+import NodeCache from 'node-cache';
+import { onlineUsersCache } from '../middleware/auth.middleware';
+import { sendPushNotification } from '../services/push.service';
 
+export const userActiveChannelCache = new NodeCache({ stdTTL: 15 });
 // Seeding helper to populate the shop and gifts if they are empty
 const ensureSeedData = async () => {
   try {
@@ -602,7 +606,8 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
           name: friendUser.name || 'Friend',
           gender: friendUser.gender,
           username: friendUser.username,
-          createdAt: f.createdAt
+          createdAt: f.createdAt,
+          isOnline: onlineUsersCache.has(friendUser.id)
         };
 
         if (f.status === 'ACCEPTED') {
@@ -1008,11 +1013,11 @@ export const reportUser = async (req: AuthRequest, res: Response): Promise<void>
   }
 };
 
-// 16. Send Playground Message (Temporary Polling Buffer)
+// 16. Send Playground Message (Temporary Polling Buffer with FCM Push notification fallback)
 export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const senderId = req.user?.userId;
-    const { channelName, text } = req.body;
+    const { channelName, text, recipientId } = req.body;
 
     if (!senderId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -1032,6 +1037,28 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
       }
     });
 
+    // Check if recipient is active in the same channel. If not, send push notification
+    if (recipientId && typeof recipientId === 'string') {
+      const activeChannel = userActiveChannelCache.get(recipientId);
+      if (activeChannel !== channelName) {
+        // Recipient is not viewing this channel - send push!
+        const sender = await prisma.user.findUnique({ where: { id: senderId } });
+        const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+
+        const recipientUser = await prisma.user.findUnique({ where: { id: recipientId } });
+        if (recipientUser?.fcmToken && !text.startsWith('__')) {
+          await sendPushNotification(
+            recipientUser.fcmToken,
+            `Message from ${senderName}`,
+            text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text,
+            'playground_chat',
+            null,
+            recipientId
+          );
+        }
+      }
+    }
+
     res.status(200).json({ success: true, message: msg });
   } catch (error) {
     console.error('Error sending message:', error);
@@ -1039,11 +1066,11 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
   }
 };
 
-// 17. Sync Playground Messages (Mailbox pull-then-delete approach)
+// 17. Sync Playground Messages (Seen verify & clean approach)
 export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { channelName } = req.query;
+    const { channelName, recipientId } = req.query;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -1055,8 +1082,8 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    // Find all messages in the channel that were NOT sent by the current user
-    const messages = await prisma.playgroundMessage.findMany({
+    // 1. Fetch incoming messages (not sent by caller)
+    const incoming = await prisma.playgroundMessage.findMany({
       where: {
         channelName,
         senderId: { not: userId }
@@ -1064,17 +1091,68 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       orderBy: { createdAt: 'asc' }
     });
 
-    // Delete them immediately so they are cleared from DB storage
-    if (messages.length > 0) {
-      const ids = messages.map(m => m.id);
-      await prisma.playgroundMessage.deleteMany({
-        where: { id: { in: ids } }
+    // Mark incoming messages as seen
+    if (incoming.length > 0) {
+      await prisma.playgroundMessage.updateMany({
+        where: { id: { in: incoming.map(m => m.id) } },
+        data: { isSeen: true }
       });
     }
 
-    res.status(200).json({ success: true, messages });
+    // 2. Fetch outgoing messages sent by caller to track their seen status
+    const outgoing = await prisma.playgroundMessage.findMany({
+      where: {
+        channelName,
+        senderId: userId
+      }
+    });
+
+    // Clean up (delete) outgoing messages that have been marked as seen by recipient
+    const seenOutgoingIds = outgoing.filter(o => o.isSeen).map(o => o.id);
+    if (seenOutgoingIds.length > 0) {
+      await prisma.playgroundMessage.deleteMany({
+        where: { id: { in: seenOutgoingIds } }
+      });
+    }
+
+    // Determine if recipient is online
+    let partnerOnline = false;
+    if (recipientId && typeof recipientId === 'string') {
+      partnerOnline = onlineUsersCache.has(recipientId);
+    }
+
+    res.status(200).json({
+      success: true,
+      messages: incoming,
+      outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
+      partnerOnline
+    });
   } catch (error) {
     console.error('Error syncing messages:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 17b. Heartbeat active channel tracking
+export const updateActiveChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { channelName } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (channelName) {
+      userActiveChannelCache.set(userId, channelName);
+    } else {
+      userActiveChannelCache.del(userId);
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error updating active channel:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

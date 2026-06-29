@@ -19,7 +19,8 @@ import {
   sendPlaygroundMessage,
   syncPlaygroundMessages,
   updateBio,
-  getPublicProfile
+  getPublicProfile,
+  updateActiveChannel
 } from '../controllers/playground.controller';
 
 const router = Router();
@@ -55,6 +56,7 @@ router.post('/gifts/sell', sellVirtualGift);
 // Chat messaging Polling Relay
 router.post('/chat/send', sendPlaygroundMessage);
 router.get('/chat/sync', syncPlaygroundMessages);
+router.post('/chat/active', updateActiveChannel);
 
 // Profile
 router.post('/profile/bio', updateBio);

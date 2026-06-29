@@ -436,6 +436,7 @@ model PlaygroundMessage {
   channelName String
   senderId    String
   text        String
+  isSeen      Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   @@index([channelName])
