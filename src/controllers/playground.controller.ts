@@ -1007,3 +1007,171 @@ export const reportUser = async (req: AuthRequest, res: Response): Promise<void>
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+// 16. Send Playground Message (Temporary Polling Buffer)
+export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const senderId = req.user?.userId;
+    const { channelName, text } = req.body;
+
+    if (!senderId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!channelName || !text) {
+      res.status(400).json({ error: 'Missing parameters' });
+      return;
+    }
+
+    const msg = await prisma.playgroundMessage.create({
+      data: {
+        channelName,
+        senderId,
+        text
+      }
+    });
+
+    res.status(200).json({ success: true, message: msg });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 17. Sync Playground Messages (Mailbox pull-then-delete approach)
+export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { channelName } = req.query;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!channelName || typeof channelName !== 'string') {
+      res.status(400).json({ error: 'channelName parameter is required' });
+      return;
+    }
+
+    // Find all messages in the channel that were NOT sent by the current user
+    const messages = await prisma.playgroundMessage.findMany({
+      where: {
+        channelName,
+        senderId: { not: userId }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Delete them immediately so they are cleared from DB storage
+    if (messages.length > 0) {
+      const ids = messages.map(m => m.id);
+      await prisma.playgroundMessage.deleteMany({
+        where: { id: { in: ids } }
+      });
+    }
+
+    res.status(200).json({ success: true, messages });
+  } catch (error) {
+    console.error('Error syncing messages:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 18. Update personal Bio description
+export const updateBio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { bio } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { bio: bio ? bio.trim() : null }
+    });
+
+    res.status(200).json({ success: true, message: 'Bio updated successfully' });
+  } catch (error) {
+    console.error('Error updating bio:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 19. Get Public Profile details by username
+export const getPublicProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { username } = req.query;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!username || typeof username !== 'string') {
+      res.status(400).json({ error: 'Username parameter is required' });
+      return;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { username: username.trim().toLowerCase() }
+    });
+
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Check friendship status between current user and target user
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { userOneId: userId, userTwoId: targetUser.id },
+          { userOneId: targetUser.id, userTwoId: userId }
+        ]
+      }
+    });
+
+    let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS'
+    let friendshipId: string | null = null;
+
+    if (friendship) {
+      friendshipId = friendship.id;
+      if (friendship.status === 'ACCEPTED') {
+        friendshipState = 'FRIENDS';
+      } else if (friendship.status === 'PENDING') {
+        if (friendship.actionUserId === userId) {
+          friendshipState = 'PENDING_SENT';
+        } else {
+          friendshipState = 'PENDING_RECEIVED';
+        }
+      }
+    }
+
+    // Calculate level based on total earned coins
+    const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: targetUser.id,
+        name: targetUser.name || 'SikkaPlay Player',
+        username: targetUser.username,
+        gender: targetUser.gender || 'male',
+        level,
+        totalEarned: targetUser.totalEarned,
+        bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
+        friendshipState,
+        friendshipId
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching public profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

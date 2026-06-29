@@ -15,7 +15,11 @@ import {
   acceptFriendRequest,
   sendVirtualGift,
   sellVirtualGift,
-  reportUser
+  reportUser,
+  sendPlaygroundMessage,
+  syncPlaygroundMessages,
+  updateBio,
+  getPublicProfile
 } from '../controllers/playground.controller';
 
 const router = Router();
@@ -47,6 +51,14 @@ router.post('/friends/accept', acceptFriendRequest);
 // Gifts
 router.post('/gifts/send', sendVirtualGift);
 router.post('/gifts/sell', sellVirtualGift);
+
+// Chat messaging Polling Relay
+router.post('/chat/send', sendPlaygroundMessage);
+router.get('/chat/sync', syncPlaygroundMessages);
+
+// Profile
+router.post('/profile/bio', updateBio);
+router.get('/profile/search', getPublicProfile);
 
 // Safety
 router.post('/report', reportUser);

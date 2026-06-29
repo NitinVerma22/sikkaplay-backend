@@ -17,6 +17,7 @@ model User {
   name            String?
   city            String?
   username        String?       @unique
+  bio             String?
   referralCode    String        @unique
   referredBy      String?
   balance         Int           @default(0)
@@ -428,6 +429,16 @@ model PlaygroundBan {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model PlaygroundMessage {
+  id          String   @id @default(uuid())
+  channelName String
+  senderId    String
+  text        String
+  createdAt   DateTime @default(now())
+
+  @@index([channelName])
 }
 
 

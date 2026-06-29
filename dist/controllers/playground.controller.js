@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = void 0;
+exports.getPublicProfile = exports.updateBio = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -902,3 +902,156 @@ const reportUser = async (req, res) => {
     }
 };
 exports.reportUser = reportUser;
+// 16. Send Playground Message (Temporary Polling Buffer)
+const sendPlaygroundMessage = async (req, res) => {
+    try {
+        const senderId = req.user?.userId;
+        const { channelName, text } = req.body;
+        if (!senderId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!channelName || !text) {
+            res.status(400).json({ error: 'Missing parameters' });
+            return;
+        }
+        const msg = await db_1.prisma.playgroundMessage.create({
+            data: {
+                channelName,
+                senderId,
+                text
+            }
+        });
+        res.status(200).json({ success: true, message: msg });
+    }
+    catch (error) {
+        console.error('Error sending message:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.sendPlaygroundMessage = sendPlaygroundMessage;
+// 17. Sync Playground Messages (Mailbox pull-then-delete approach)
+const syncPlaygroundMessages = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { channelName } = req.query;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!channelName || typeof channelName !== 'string') {
+            res.status(400).json({ error: 'channelName parameter is required' });
+            return;
+        }
+        // Find all messages in the channel that were NOT sent by the current user
+        const messages = await db_1.prisma.playgroundMessage.findMany({
+            where: {
+                channelName,
+                senderId: { not: userId }
+            },
+            orderBy: { createdAt: 'asc' }
+        });
+        // Delete them immediately so they are cleared from DB storage
+        if (messages.length > 0) {
+            const ids = messages.map(m => m.id);
+            await db_1.prisma.playgroundMessage.deleteMany({
+                where: { id: { in: ids } }
+            });
+        }
+        res.status(200).json({ success: true, messages });
+    }
+    catch (error) {
+        console.error('Error syncing messages:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.syncPlaygroundMessages = syncPlaygroundMessages;
+// 18. Update personal Bio description
+const updateBio = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { bio } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        await db_1.prisma.user.update({
+            where: { id: userId },
+            data: { bio: bio ? bio.trim() : null }
+        });
+        res.status(200).json({ success: true, message: 'Bio updated successfully' });
+    }
+    catch (error) {
+        console.error('Error updating bio:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.updateBio = updateBio;
+// 19. Get Public Profile details by username
+const getPublicProfile = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { username } = req.query;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!username || typeof username !== 'string') {
+            res.status(400).json({ error: 'Username parameter is required' });
+            return;
+        }
+        const targetUser = await db_1.prisma.user.findUnique({
+            where: { username: username.trim().toLowerCase() }
+        });
+        if (!targetUser) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        // Check friendship status between current user and target user
+        const friendship = await db_1.prisma.friendship.findFirst({
+            where: {
+                OR: [
+                    { userOneId: userId, userTwoId: targetUser.id },
+                    { userOneId: targetUser.id, userTwoId: userId }
+                ]
+            }
+        });
+        let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS'
+        let friendshipId = null;
+        if (friendship) {
+            friendshipId = friendship.id;
+            if (friendship.status === 'ACCEPTED') {
+                friendshipState = 'FRIENDS';
+            }
+            else if (friendship.status === 'PENDING') {
+                if (friendship.actionUserId === userId) {
+                    friendshipState = 'PENDING_SENT';
+                }
+                else {
+                    friendshipState = 'PENDING_RECEIVED';
+                }
+            }
+        }
+        // Calculate level based on total earned coins
+        const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
+        res.status(200).json({
+            success: true,
+            user: {
+                id: targetUser.id,
+                name: targetUser.name || 'SikkaPlay Player',
+                username: targetUser.username,
+                gender: targetUser.gender || 'male',
+                level,
+                totalEarned: targetUser.totalEarned,
+                bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
+                friendshipState,
+                friendshipId
+            }
+        });
+    }
+    catch (error) {
+        console.error('Error fetching public profile:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getPublicProfile = getPublicProfile;
