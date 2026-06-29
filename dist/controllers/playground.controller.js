@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
+exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -923,9 +923,14 @@ const sendPlaygroundMessage = async (req, res) => {
             res.status(400).json({ error: 'Missing parameters' });
             return;
         }
+        let finalChannelName = channelName;
+        if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
+            const ids = [senderId, recipientId].sort();
+            finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+        }
         const msg = await db_1.prisma.playgroundMessage.create({
             data: {
-                channelName,
+                channelName: finalChannelName,
                 senderId,
                 text
             }
@@ -933,7 +938,7 @@ const sendPlaygroundMessage = async (req, res) => {
         // Check if recipient is active in the same channel. If not, send push notification
         if (recipientId && typeof recipientId === 'string') {
             const activeChannel = exports.userActiveChannelCache.get(recipientId);
-            if (activeChannel !== channelName) {
+            if (activeChannel !== finalChannelName) {
                 // Recipient is not viewing this channel - send push!
                 const sender = await db_1.prisma.user.findUnique({ where: { id: senderId } });
                 const senderName = sender?.name || sender?.username || 'SikkaPlay User';
@@ -964,6 +969,11 @@ const syncPlaygroundMessages = async (req, res) => {
             res.status(400).json({ error: 'channelName parameter is required' });
             return;
         }
+        let finalChannelName = channelName;
+        if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
+            const ids = [userId, recipientId].sort();
+            finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+        }
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         // Global cleanup of messages older than 24 hours
         await db_1.prisma.playgroundMessage.deleteMany({
@@ -977,7 +987,7 @@ const syncPlaygroundMessages = async (req, res) => {
             // Fetch full history from the last 24 hours
             messages = await db_1.prisma.playgroundMessage.findMany({
                 where: {
-                    channelName,
+                    channelName: finalChannelName,
                     createdAt: { gte: twentyFourHoursAgo }
                 },
                 orderBy: { createdAt: 'asc' }
@@ -1003,7 +1013,7 @@ const syncPlaygroundMessages = async (req, res) => {
             // Normal sync: fetch only unread incoming messages
             messages = await db_1.prisma.playgroundMessage.findMany({
                 where: {
-                    channelName,
+                    channelName: finalChannelName,
                     senderId: { not: userId },
                     isSeen: false
                 },
@@ -1019,7 +1029,7 @@ const syncPlaygroundMessages = async (req, res) => {
             // Fetch outgoing messages from the last 24 hours to return their seen status
             outgoing = await db_1.prisma.playgroundMessage.findMany({
                 where: {
-                    channelName,
+                    channelName: finalChannelName,
                     senderId: userId,
                     createdAt: { gte: twentyFourHoursAgo }
                 }
@@ -1047,13 +1057,18 @@ exports.syncPlaygroundMessages = syncPlaygroundMessages;
 const updateActiveChannel = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { channelName } = req.body;
+        const { channelName, recipientId } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
         if (channelName) {
-            exports.userActiveChannelCache.set(userId, channelName);
+            let finalChannelName = channelName;
+            if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
+                const ids = [userId, recipientId].sort();
+                finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+            }
+            exports.userActiveChannelCache.set(userId, finalChannelName);
         }
         else {
             exports.userActiveChannelCache.del(userId);
@@ -1075,9 +1090,14 @@ const updateBio = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
+        const cleanBio = bio ? bio.trim() : '';
+        if (cleanBio.length > 100) {
+            res.status(400).json({ error: 'Bio cannot exceed 100 characters' });
+            return;
+        }
         await db_1.prisma.user.update({
             where: { id: userId },
-            data: { bio: bio ? bio.trim() : null }
+            data: { bio: cleanBio || null }
         });
         res.status(200).json({ success: true, message: 'Bio updated successfully' });
     }
@@ -1171,3 +1191,46 @@ const getPublicProfile = async (req, res) => {
     }
 };
 exports.getPublicProfile = getPublicProfile;
+// 15b. Unfriend (Delete friendship and wipe private chat history)
+const unfriendUser = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { targetUserId } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!targetUserId || typeof targetUserId !== 'string') {
+            res.status(400).json({ error: 'targetUserId parameter is required' });
+            return;
+        }
+        // Find and delete the friendship record
+        const deletedFriendship = await db_1.prisma.friendship.deleteMany({
+            where: {
+                OR: [
+                    { userOneId: userId, userTwoId: targetUserId },
+                    { userOneId: targetUserId, userTwoId: userId }
+                ]
+            }
+        });
+        if (deletedFriendship.count === 0) {
+            res.status(404).json({ error: 'Friendship not found' });
+            return;
+        }
+        // Delete chat messages between these two users (private chat history wipe)
+        // First construct the unified channel name for private chat
+        const ids = [userId, targetUserId].sort();
+        const unifiedChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+        await db_1.prisma.playgroundMessage.deleteMany({
+            where: {
+                channelName: unifiedChannelName
+            }
+        });
+        res.status(200).json({ success: true, message: 'Unfriended successfully' });
+    }
+    catch (error) {
+        console.error('Error unfriending user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.unfriendUser = unfriendUser;

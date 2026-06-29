@@ -13,6 +13,7 @@ import {
   searchFriends,
   sendFriendRequest,
   acceptFriendRequest,
+  unfriendUser,
   sendVirtualGift,
   sellVirtualGift,
   reportUser,
@@ -48,6 +49,7 @@ router.get('/friends', getFriendsList);
 router.get('/friends/search', searchFriends);
 router.post('/friends/request', sendFriendRequest);
 router.post('/friends/accept', acceptFriendRequest);
+router.post('/friends/unfriend', unfriendUser);
 
 // Gifts
 router.post('/gifts/send', sendVirtualGift);

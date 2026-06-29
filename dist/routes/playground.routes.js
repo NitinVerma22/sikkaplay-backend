@@ -22,6 +22,7 @@ router.get('/friends', playground_controller_1.getFriendsList);
 router.get('/friends/search', playground_controller_1.searchFriends);
 router.post('/friends/request', playground_controller_1.sendFriendRequest);
 router.post('/friends/accept', playground_controller_1.acceptFriendRequest);
+router.post('/friends/unfriend', playground_controller_1.unfriendUser);
 // Gifts
 router.post('/gifts/send', playground_controller_1.sendVirtualGift);
 router.post('/gifts/sell', playground_controller_1.sellVirtualGift);
