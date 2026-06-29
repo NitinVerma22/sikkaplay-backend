@@ -1378,3 +1378,36 @@ export const unfriendUser = async (req: AuthRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+// 16b. Clear chat history for a private channel without unfriending
+export const clearChatHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { recipientId } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!recipientId || typeof recipientId !== 'string') {
+      res.status(400).json({ error: 'recipientId parameter is required' });
+      return;
+    }
+
+    // Construct sorted channel name
+    const ids = [userId, recipientId].sort();
+    const unifiedChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+
+    await prisma.playgroundMessage.deleteMany({
+      where: {
+        channelName: unifiedChannelName
+      }
+    });
+
+    res.status(200).json({ success: true, message: 'Chat history cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing chat history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

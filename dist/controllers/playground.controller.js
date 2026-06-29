@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
+exports.clearChatHistory = exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -1234,3 +1234,32 @@ const unfriendUser = async (req, res) => {
     }
 };
 exports.unfriendUser = unfriendUser;
+// 16b. Clear chat history for a private channel without unfriending
+const clearChatHistory = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { recipientId } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!recipientId || typeof recipientId !== 'string') {
+            res.status(400).json({ error: 'recipientId parameter is required' });
+            return;
+        }
+        // Construct sorted channel name
+        const ids = [userId, recipientId].sort();
+        const unifiedChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+        await db_1.prisma.playgroundMessage.deleteMany({
+            where: {
+                channelName: unifiedChannelName
+            }
+        });
+        res.status(200).json({ success: true, message: 'Chat history cleared successfully' });
+    }
+    catch (error) {
+        console.error('Error clearing chat history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.clearChatHistory = clearChatHistory;
