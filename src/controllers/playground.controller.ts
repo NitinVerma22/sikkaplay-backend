@@ -600,6 +600,22 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
       });
 
       if (friendUser) {
+        const ids = [userId, friendUser.id].sort();
+        const channelName = `private-chat-${ids[0]}-${ids[1]}`;
+
+        const lastMessage = await prisma.playgroundMessage.findFirst({
+          where: { channelName },
+          orderBy: { timestamp: 'desc' }
+        });
+
+        const unreadCount = await prisma.playgroundMessage.count({
+          where: {
+            channelName,
+            senderId: friendUser.id,
+            isSeen: false
+          }
+        });
+
         const item = {
           friendshipId: f.id,
           id: friendUser.id,
@@ -607,7 +623,10 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
           gender: friendUser.gender,
           username: friendUser.username,
           createdAt: f.createdAt,
-          isOnline: onlineUsersCache.has(friendUser.id)
+          isOnline: onlineUsersCache.has(friendUser.id),
+          lastMessageText: lastMessage ? lastMessage.text : null,
+          lastMessageTime: lastMessage ? lastMessage.timestamp : null,
+          unreadCount
         };
 
         if (f.status === 'ACCEPTED') {
