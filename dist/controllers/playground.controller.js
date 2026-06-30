@@ -540,7 +540,7 @@ const getFriendsList = async (req, res) => {
                 const channelName = `private-chat-${ids[0]}-${ids[1]}`;
                 const lastMessage = await db_1.prisma.playgroundMessage.findFirst({
                     where: { channelName },
-                    orderBy: { timestamp: 'desc' }
+                    orderBy: { createdAt: 'desc' }
                 });
                 const unreadCount = await db_1.prisma.playgroundMessage.count({
                     where: {
@@ -558,7 +558,7 @@ const getFriendsList = async (req, res) => {
                     createdAt: f.createdAt,
                     isOnline: auth_middleware_1.onlineUsersCache.has(friendUser.id),
                     lastMessageText: lastMessage ? lastMessage.text : null,
-                    lastMessageTime: lastMessage ? lastMessage.timestamp : null,
+                    lastMessageTime: lastMessage ? lastMessage.createdAt : null,
                     unreadCount
                 };
                 if (f.status === 'ACCEPTED') {

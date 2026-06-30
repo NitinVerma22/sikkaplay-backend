@@ -22,7 +22,8 @@ import {
   updateBio,
   getPublicProfile,
   updateActiveChannel,
-  clearChatHistory
+  clearChatHistory,
+  setTypingStatus
 } from '../controllers/playground.controller';
 
 const router = Router();
@@ -61,6 +62,7 @@ router.post('/chat/send', sendPlaygroundMessage);
 router.get('/chat/sync', syncPlaygroundMessages);
 router.post('/chat/active', updateActiveChannel);
 router.post('/chat/clear', clearChatHistory);
+router.post('/chat/typing', setTypingStatus);
 
 // Profile
 router.post('/profile/bio', updateBio);

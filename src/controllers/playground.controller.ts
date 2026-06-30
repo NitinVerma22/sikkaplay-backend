@@ -8,6 +8,8 @@ import { onlineUsersCache } from '../middleware/auth.middleware';
 import { sendPushNotification } from '../services/push.service';
 
 export const userActiveChannelCache = new NodeCache({ stdTTL: 15 });
+export const typingUsersCache = new NodeCache({ stdTTL: 6 });
+
 // Seeding helper to populate the shop and gifts if they are empty
 const ensureSeedData = async () => {
   try {
@@ -1085,6 +1087,22 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
       finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
     }
 
+    if (text.startsWith('__REACT__:')) {
+      const parts = text.split(':');
+      if (parts.length >= 3) {
+        const msgId = parts[1];
+        const emoji = parts[2];
+        try {
+          await prisma.playgroundMessage.update({
+            where: { id: msgId },
+            data: { reaction: emoji }
+          });
+        } catch (err) {
+          console.error('Failed to update reaction in DB:', err);
+        }
+      }
+    }
+
     const msg = await prisma.playgroundMessage.create({
       data: {
         channelName: finalChannelName,
@@ -1217,10 +1235,13 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       });
     }
 
-    // Determine if recipient is online
+    // Determine if recipient is online and typing
     let partnerOnline = false;
+    let partnerIsTyping = false;
     if (recipientId && typeof recipientId === 'string') {
       partnerOnline = onlineUsersCache.has(recipientId);
+      const typingKey = `${finalChannelName}:${recipientId}`;
+      partnerIsTyping = typingUsersCache.has(typingKey);
     }
 
     const totalDbCount = await prisma.playgroundMessage.count({
@@ -1232,6 +1253,7 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       messages,
       outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
       partnerOnline,
+      partnerIsTyping,
       totalDbCount
     });
   } catch (error) {
@@ -1468,6 +1490,36 @@ export const clearChatHistory = async (req: AuthRequest, res: Response): Promise
     res.status(200).json({ success: true, message: 'Chat history cleared successfully' });
   } catch (error) {
     console.error('Error clearing chat history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 23. Update typing status
+export const setTypingStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { channelName, isTyping } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!channelName) {
+      res.status(400).json({ error: 'channelName is required' });
+      return;
+    }
+
+    const cacheKey = `${channelName}:${userId}`;
+    if (isTyping === true) {
+      typingUsersCache.set(cacheKey, true);
+    } else {
+      typingUsersCache.del(cacheKey);
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error in setTypingStatus:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
