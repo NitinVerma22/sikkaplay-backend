@@ -605,7 +605,7 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
 
         const lastMessage = await prisma.playgroundMessage.findFirst({
           where: { channelName },
-          orderBy: { timestamp: 'desc' }
+          orderBy: { createdAt: 'desc' }
         });
 
         const unreadCount = await prisma.playgroundMessage.count({
@@ -625,7 +625,7 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
           createdAt: f.createdAt,
           isOnline: onlineUsersCache.has(friendUser.id),
           lastMessageText: lastMessage ? lastMessage.text : null,
-          lastMessageTime: lastMessage ? lastMessage.timestamp : null,
+          lastMessageTime: lastMessage ? lastMessage.createdAt : null,
           unreadCount
         };
 
