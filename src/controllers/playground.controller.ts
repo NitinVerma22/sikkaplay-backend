@@ -719,6 +719,21 @@ export const sendFriendRequest = async (req: AuthRequest, res: Response): Promis
       }
     });
 
+    // Send push notification to target user
+    const sender = await prisma.user.findUnique({ where: { id: userId } });
+    const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+    const recipientUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (recipientUser?.fcmToken) {
+      await sendPushNotification(
+        recipientUser.fcmToken,
+        'New Friend Request',
+        `${senderName} sent you a friend request!`,
+        'friend_request',
+        null,
+        userId
+      );
+    }
+
     res.status(200).json({
       success: true,
       friendship,
@@ -762,6 +777,22 @@ export const acceptFriendRequest = async (req: AuthRequest, res: Response): Prom
         status: 'ACCEPTED'
       }
     });
+
+    // Send push notification to target user (the one who sent the request)
+    const targetUserId = updated.userOneId === userId ? updated.userTwoId : updated.userOneId;
+    const acceptor = await prisma.user.findUnique({ where: { id: userId } });
+    const acceptorName = acceptor?.name || acceptor?.username || 'SikkaPlay User';
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (targetUser?.fcmToken) {
+      await sendPushNotification(
+        targetUser.fcmToken,
+        'Friend Request Accepted',
+        `${acceptorName} accepted your friend request!`,
+        'friend_accept',
+        null,
+        userId
+      );
+    }
 
     res.status(200).json({
       success: true,
