@@ -1092,7 +1092,9 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
               isSignaling ? `Tap to join the call` : (text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text),
               isSignaling ? 'playground_call' : 'playground_chat',
               null,
-              senderId // Pass senderId (the caller) so recipient client knows who called
+              recipientId,
+              false,
+              senderId
             );
           }
         }

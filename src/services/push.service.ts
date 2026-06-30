@@ -9,7 +9,8 @@ export const sendPushNotification = async (
   type: string = 'alert', 
   bannerUrl: string | null = null,
   userId?: string,
-  skipDb: boolean = false
+  skipDb: boolean = false,
+  senderId?: string
 ) => {
   if (!fcmToken) return;
 
@@ -40,6 +41,13 @@ export const sendPushNotification = async (
     const message: any = {
       token: fcmToken,
       notification: { title, body },
+      data: {
+        title,
+        body,
+        type,
+        ...(bannerUrl ? { bannerUrl } : {}),
+        ...(senderId ? { senderId } : {})
+      },
       android: {
         priority: 'high',
         notification: {

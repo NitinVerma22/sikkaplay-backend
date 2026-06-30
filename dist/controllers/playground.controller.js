@@ -645,6 +645,13 @@ const sendFriendRequest = async (req, res) => {
                 actionUserId: userId
             }
         });
+        // Send push notification to target user
+        const sender = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+        const recipientUser = await db_1.prisma.user.findUnique({ where: { id: targetUserId } });
+        if (recipientUser?.fcmToken) {
+            await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, 'New Friend Request', `${senderName} sent you a friend request!`, 'friend_request', null, userId);
+        }
         res.status(200).json({
             success: true,
             friendship,
@@ -684,6 +691,14 @@ const acceptFriendRequest = async (req, res) => {
                 status: 'ACCEPTED'
             }
         });
+        // Send push notification to target user (the one who sent the request)
+        const targetUserId = updated.userOneId === userId ? updated.userTwoId : updated.userOneId;
+        const acceptor = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        const acceptorName = acceptor?.name || acceptor?.username || 'SikkaPlay User';
+        const targetUser = await db_1.prisma.user.findUnique({ where: { id: targetUserId } });
+        if (targetUser?.fcmToken) {
+            await (0, push_service_1.sendPushNotification)(targetUser.fcmToken, 'Friend Request Accepted', `${acceptorName} accepted your friend request!`, 'friend_accept', null, userId);
+        }
         res.status(200).json({
             success: true,
             friendship: updated,
@@ -946,8 +961,7 @@ const sendPlaygroundMessage = async (req, res) => {
                 if (recipientUser?.fcmToken) {
                     const isSignaling = text.startsWith('__');
                     if (!isSignaling || text === '__CALL_REQUEST__') {
-                        await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, isSignaling ? `Call request from ${senderName}` : `Message from ${senderName}`, isSignaling ? `Tap to join the call` : (text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text), isSignaling ? 'playground_call' : 'playground_chat', null, senderId // Pass senderId (the caller) so recipient client knows who called
-                        );
+                        await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, isSignaling ? `Call request from ${senderName}` : `Message from ${senderName}`, isSignaling ? `Tap to join the call` : (text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text), isSignaling ? 'playground_call' : 'playground_chat', null, recipientId, false, senderId);
                     }
                 }
             }
