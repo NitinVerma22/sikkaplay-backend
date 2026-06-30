@@ -943,8 +943,12 @@ const sendPlaygroundMessage = async (req, res) => {
                 const sender = await db_1.prisma.user.findUnique({ where: { id: senderId } });
                 const senderName = sender?.name || sender?.username || 'SikkaPlay User';
                 const recipientUser = await db_1.prisma.user.findUnique({ where: { id: recipientId } });
-                if (recipientUser?.fcmToken && !text.startsWith('__')) {
-                    await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, `Message from ${senderName}`, text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text, 'playground_chat', null, recipientId);
+                if (recipientUser?.fcmToken) {
+                    const isSignaling = text.startsWith('__');
+                    if (!isSignaling || text === '__CALL_REQUEST__') {
+                        await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, isSignaling ? `Call request from ${senderName}` : `Message from ${senderName}`, isSignaling ? `Tap to join the call` : (text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text), isSignaling ? 'playground_call' : 'playground_chat', null, senderId // Pass senderId (the caller) so recipient client knows who called
+                        );
+                    }
                 }
             }
         }
