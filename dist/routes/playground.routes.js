@@ -31,6 +31,7 @@ router.post('/chat/send', playground_controller_1.sendPlaygroundMessage);
 router.get('/chat/sync', playground_controller_1.syncPlaygroundMessages);
 router.post('/chat/active', playground_controller_1.updateActiveChannel);
 router.post('/chat/clear', playground_controller_1.clearChatHistory);
+router.post('/chat/typing', playground_controller_1.setTypingStatus);
 // Profile
 router.post('/profile/bio', playground_controller_1.updateBio);
 router.get('/profile/search', playground_controller_1.getPublicProfile);

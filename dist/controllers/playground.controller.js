@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearChatHistory = exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.userActiveChannelCache = void 0;
+exports.setTypingStatus = exports.clearChatHistory = exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.typingUsersCache = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -11,6 +11,7 @@ const node_cache_1 = __importDefault(require("node-cache"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const push_service_1 = require("../services/push.service");
 exports.userActiveChannelCache = new node_cache_1.default({ stdTTL: 15 });
+exports.typingUsersCache = new node_cache_1.default({ stdTTL: 6 });
 // Seeding helper to populate the shop and gifts if they are empty
 const ensureSeedData = async () => {
     try {
@@ -959,6 +960,22 @@ const sendPlaygroundMessage = async (req, res) => {
             const ids = [senderId, recipientId].sort();
             finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
         }
+        if (text.startsWith('__REACT__:')) {
+            const parts = text.split(':');
+            if (parts.length >= 3) {
+                const msgId = parts[1];
+                const emoji = parts[2];
+                try {
+                    await db_1.prisma.playgroundMessage.update({
+                        where: { id: msgId },
+                        data: { reaction: emoji }
+                    });
+                }
+                catch (err) {
+                    console.error('Failed to update reaction in DB:', err);
+                }
+            }
+        }
         const msg = await db_1.prisma.playgroundMessage.create({
             data: {
                 channelName: finalChannelName,
@@ -1069,10 +1086,13 @@ const syncPlaygroundMessages = async (req, res) => {
                 }
             });
         }
-        // Determine if recipient is online
+        // Determine if recipient is online and typing
         let partnerOnline = false;
+        let partnerIsTyping = false;
         if (recipientId && typeof recipientId === 'string') {
             partnerOnline = auth_middleware_1.onlineUsersCache.has(recipientId);
+            const typingKey = `${finalChannelName}:${recipientId}`;
+            partnerIsTyping = exports.typingUsersCache.has(typingKey);
         }
         const totalDbCount = await db_1.prisma.playgroundMessage.count({
             where: { channelName: finalChannelName }
@@ -1082,6 +1102,7 @@ const syncPlaygroundMessages = async (req, res) => {
             messages,
             outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
             partnerOnline,
+            partnerIsTyping,
             totalDbCount
         });
     }
@@ -1301,3 +1322,31 @@ const clearChatHistory = async (req, res) => {
     }
 };
 exports.clearChatHistory = clearChatHistory;
+// 23. Update typing status
+const setTypingStatus = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { channelName, isTyping } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!channelName) {
+            res.status(400).json({ error: 'channelName is required' });
+            return;
+        }
+        const cacheKey = `${channelName}:${userId}`;
+        if (isTyping === true) {
+            exports.typingUsersCache.set(cacheKey, true);
+        }
+        else {
+            exports.typingUsersCache.del(cacheKey);
+        }
+        res.status(200).json({ success: true });
+    }
+    catch (error) {
+        console.error('Error in setTypingStatus:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.setTypingStatus = setTypingStatus;
