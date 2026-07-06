@@ -12,20 +12,31 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const push_service_1 = require("../services/push.service");
 exports.userActiveChannelCache = new node_cache_1.default({ stdTTL: 15 });
 exports.typingUsersCache = new node_cache_1.default({ stdTTL: 6 });
-// Seeding helper to populate the shop and gifts if they are empty
 const ensureSeedData = async () => {
     try {
-        const giftCount = await db_1.prisma.gift.count();
-        if (giftCount === 0) {
-            console.log('Seeding Playground Gift items...');
-            await db_1.prisma.gift.createMany({
-                data: [
-                    { name: 'Rose', coinsPrice: 200, imageUrl: 'https://cdn-icons-png.flaticon.com/128/726/726131.png' },
-                    { name: 'Chocolate', coinsPrice: 500, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2422/2422204.png' },
-                    { name: 'Ring', coinsPrice: 2000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2650/2650228.png' },
-                ]
-            });
-        }
+        console.log('Seeding Playground Gift items...');
+        await db_1.prisma.gift.deleteMany({});
+        await db_1.prisma.gift.createMany({
+            data: [
+                { name: 'Coffee', coinsPrice: 50, imageUrl: 'https://cdn-icons-png.flaticon.com/128/924/924514.png' },
+                { name: 'Heart', coinsPrice: 50, imageUrl: 'https://cdn-icons-png.flaticon.com/128/833/833472.png' },
+                { name: 'Ice Cream', coinsPrice: 100, imageUrl: 'https://cdn-icons-png.flaticon.com/128/933/933155.png' },
+                { name: 'Bouquet', coinsPrice: 100, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2088/2088926.png' },
+                { name: 'Rose', coinsPrice: 200, imageUrl: 'https://cdn-icons-png.flaticon.com/128/726/726131.png' },
+                { name: 'Watch', coinsPrice: 200, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2921/2921946.png' },
+                { name: 'Chocolate', coinsPrice: 500, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2422/2422204.png' },
+                { name: 'Female Shoes', coinsPrice: 500, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2237/2237061.png' },
+                { name: 'Boys Shoes', coinsPrice: 500, imageUrl: 'https://cdn-icons-png.flaticon.com/128/3321/3321319.png' },
+                { name: 'Crown', coinsPrice: 1000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/694/694984.png' },
+                { name: 'Female Bag', coinsPrice: 1000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/3183/3183022.png' },
+                { name: 'Ring', coinsPrice: 2000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2650/2650228.png' },
+                { name: 'Dress', coinsPrice: 2000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/3342/3342132.png' },
+                { name: 'Coat Pant', coinsPrice: 2000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/3050/3050410.png' },
+                { name: 'Jewelry', coinsPrice: 2000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2381/2381007.png' },
+                { name: 'Female Jackpot', coinsPrice: 5000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/4129/4129432.png' },
+                { name: 'Boys Kit', coinsPrice: 5000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2821/2821817.png' },
+            ]
+        });
     }
     catch (err) {
         console.error('Error seeding playground items:', err);

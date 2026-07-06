@@ -1,0 +1,1 @@
+const { prisma } = require('./dist/config/db'); async function main() { await prisma.giftTransaction.deleteMany(); await prisma.userGiftInventory.deleteMany(); await prisma.gift.deleteMany(); console.log('Deleted gifts!'); } main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
