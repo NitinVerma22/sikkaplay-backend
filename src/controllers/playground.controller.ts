@@ -390,7 +390,7 @@ export const claimCrate = async (req: AuthRequest, res: Response): Promise<void>
 export const joinMatchmaking = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { filter } = req.body; // 'random' | 'male' | 'female'
+    const { filter, gender } = req.body; // 'random' | 'male' | 'female'
 
     if (!userId || !filter) {
       res.status(400).json({ error: 'Filter is required' });
@@ -410,6 +410,14 @@ export const joinMatchmaking = async (req: AuthRequest, res: Response): Promise<
         error: `Matchmaking suspended. Your playground privileges are suspended until ${ban.expiresAt.toLocaleString()} due to reports.`
       });
       return;
+    }
+
+    // If gender is provided, update it before fetching
+    if (gender) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { gender }
+      });
     }
 
     const user = await prisma.user.findUnique({
@@ -473,10 +481,22 @@ export const joinMatchmaking = async (req: AuthRequest, res: Response): Promise<
       const peer = matchmakingQueue[i];
 
       // Matchmaking condition logic:
-      // 1. Peer filter matches User gender OR peer filter is random
-      // 2. User filter matches Peer gender OR user filter is random
-      const peerMatchesUser = peer.filter === 'random' || peer.filter === userGender;
-      const userMatchesPeer = filter === 'random' || filter === peer.gender;
+      // - If both are random, they match.
+      // - If both are specific filters, they must cross-match exactly (e.g. Female looking for Male matches Male looking for Female).
+      // - A random filter CANNOT match with a specific filter.
+      let peerMatchesUser = false;
+      let userMatchesPeer = false;
+
+      if (filter === 'random' && peer.filter === 'random') {
+        peerMatchesUser = true;
+        userMatchesPeer = true;
+      } else if (filter !== 'random' && peer.filter !== 'random') {
+        peerMatchesUser = peer.filter === userGender;
+        userMatchesPeer = filter === peer.gender;
+      } else {
+        peerMatchesUser = false;
+        userMatchesPeer = false;
+      }
 
       if (peerMatchesUser && userMatchesPeer && peer.userId !== userId) {
         matchedPartner = peer;
