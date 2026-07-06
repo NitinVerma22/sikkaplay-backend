@@ -36,6 +36,7 @@ const ensureSeedData = async () => {
         { name: 'Boys Kit', coinsPrice: 5000, imageUrl: 'https://cdn-icons-png.flaticon.com/128/2821/2821817.png' },
       ]
     });
+    }
   } catch (err) {
     console.error('Error seeding playground items:', err);
   }
