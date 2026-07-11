@@ -1399,7 +1399,6 @@ const fetchUsersWithStatsHelper = async (codes: string[]) => {
   const playtimes = await prisma.dailyUsage.groupBy({
     by: ['userId'],
     _sum: {
-      reelsMinutes: true,
       gamesMinutes: true,
     },
     where: {
@@ -1409,7 +1408,7 @@ const fetchUsersWithStatsHelper = async (codes: string[]) => {
 
   const playtimeMap = new Map<string, number>();
   for (const pt of playtimes) {
-    const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+    const total = pt._sum.gamesMinutes ?? 0;
     playtimeMap.set(pt.userId, total);
   }
 

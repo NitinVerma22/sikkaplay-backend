@@ -18,7 +18,6 @@ const fetchUsersWithStats = async (codes: string[]) => {
   const playtimes = await prisma.dailyUsage.groupBy({
     by: ['userId'],
     _sum: {
-      reelsMinutes: true,
       gamesMinutes: true,
     },
     where: {

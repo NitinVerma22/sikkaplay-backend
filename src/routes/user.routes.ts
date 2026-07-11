@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio, updateAvatar } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio, updateAvatar, deleteAccount } from '../controllers/user.controller';
 import { getLeaderboard } from '../controllers/leaderboard.controller';
 import {
   claimDailyStreak,
@@ -84,5 +84,8 @@ router.post('/visit-links/claim', vpnGuard, earnLimiter, claimVisitLinkReward);
 
 // Ad Impression Logging
 router.post('/ad-impression', recordAdImpression);
+
+// DELETE /api/user/me
+router.delete('/me', deleteAccount);
 
 export default router;

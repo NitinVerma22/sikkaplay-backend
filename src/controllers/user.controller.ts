@@ -291,3 +291,25 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const deleteAccount = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    // In a real production app, you might want to "soft delete" or anonymize.
+    // For compliance, deleting user record here. 
+    // Prisma cascading deletes will handle related records if configured.
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+    
+    res.status(200).json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

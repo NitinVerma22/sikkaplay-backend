@@ -219,7 +219,7 @@ const evaluateDailyMilestones = async () => {
     }
   });
   
-  const activeUsages = allUsages.filter(u => (u.reelsMinutes + u.gamesMinutes) >= 40);
+  const activeUsages = allUsages.filter(u => u.gamesMinutes >= 40);
 
   for (const usage of activeUsages) {
     if (!usage.user.referredBy) continue;
@@ -285,16 +285,16 @@ const evaluateDailyMilestones = async () => {
         // Calculate total playtime
         const totalPlaytime = await prisma.dailyUsage.aggregate({
           where: { userId: usage.user.id },
-          _sum: { reelsMinutes: true, gamesMinutes: true }
+          _sum: { gamesMinutes: true }
         });
 
-        const totalMins = (totalPlaytime._sum.reelsMinutes || 0) + (totalPlaytime._sum.gamesMinutes || 0);
+        const totalMins = totalPlaytime._sum.gamesMinutes || 0;
         
         // Count active days
         const allUserDays = await prisma.dailyUsage.findMany({
           where: { userId: usage.user.id } 
         });
-        const activeDays = allUserDays.filter(d => (d.reelsMinutes + d.gamesMinutes) >= 10).length;
+        const activeDays = allUserDays.filter(d => d.gamesMinutes >= 10).length;
 
         // Jackpot criteria: 2700 minutes (45 hours) AND at least 20 active days out of 30
         if (totalMins >= 2700 && activeDays >= 20) {
