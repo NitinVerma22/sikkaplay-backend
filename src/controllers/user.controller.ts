@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { storage } from '../config/firebase';
+import { randomUUID } from 'crypto';
 
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -272,13 +273,18 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     const timestamp = Date.now();
     const filePath = `profile_pictures/${userId}_${timestamp}.jpg`;
     const file = storage.bucket().file(filePath);
+    const token = randomUUID();
 
     await file.save(buffer, {
-      metadata: { contentType: 'image/jpeg' },
-      public: true,
+      metadata: { 
+        contentType: 'image/jpeg',
+        metadata: {
+          firebaseStorageDownloadTokens: token
+        }
+      }
     });
 
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.bucket().name}/o/${encodeURIComponent(filePath)}?alt=media`;
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.bucket().name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
