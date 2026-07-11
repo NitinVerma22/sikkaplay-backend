@@ -15,6 +15,7 @@ model User {
   firebaseUid     String        @unique
   passwordHash    String?
   name            String?
+  avatarUrl       String?
   city            String?
   username        String?       @unique
   bio             String?
@@ -95,7 +96,6 @@ model DailyUsage {
   id          String   @id @default(uuid())
   userId      String
   dateStr     String   // YYYY-MM-DD format for easy querying
-  reelsMinutes Int      @default(0)
   gamesMinutes Int      @default(0)
   user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
@@ -124,7 +124,7 @@ model Notification {
   type      String   // e.g., 'referral', 'reward', 'withdrawal', 'alert'
   isRead    Boolean  @default(false)
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
   bannerUrl String?  // Optional banner image URL
   createdAt DateTime @default(now())
 
@@ -164,7 +164,6 @@ model Admin {
 model AppConfig {
   id                  String   @id @default(uuid())
   gullakMaxSize       Int      @default(100) // Max coins Gullak can hold
-  reelsCoinsPerMin    Int      @default(5)   // Coins earned per minute watching reels
   dailyStreakCoins    Int      @default(50)  // Base coins for daily streak
   referralBonus       Int      @default(500) // Coins rewarded for successful referral
   commissionRate      Float    @default(0.10) // 10% commission on MLM network withdrawals
@@ -202,7 +201,6 @@ model AppConfig {
   rewardedCapPerDay   Int      @default(15)
   dailyCodeAdRequired Boolean  @default(true)
   surveysAdRequired   Boolean  @default(true)
-  reelsAdInterval     Int      @default(5) // Interstitial ad frequency (every X reels)
 
   vpnDetectionEnabled Boolean  @default(false)
   vpnApiKey           String   @default("")

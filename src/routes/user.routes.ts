@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio, updateAvatar } from '../controllers/user.controller';
 import { getLeaderboard } from '../controllers/leaderboard.controller';
 import {
   claimDailyStreak,
@@ -43,6 +43,9 @@ router.put('/upi', updateUpi);
 
 // PUT /api/user/bio
 router.put('/bio', updateBio);
+
+// PUT /api/user/avatar
+router.put('/avatar', updateAvatar);
 
 // POST /api/user/earn/... — vpnGuard only on earn routes
 router.post('/earn/daily-streak', vpnGuard, earnLimiter, claimDailyStreak);

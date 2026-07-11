@@ -28,7 +28,7 @@ const fetchUsersWithStats = async (codes: string[]) => {
 
   const playtimeMap = new Map<string, number>();
   for (const pt of playtimes) {
-    const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+    const total = pt._sum.gamesMinutes ?? 0;
     playtimeMap.set(pt.userId, total);
   }
 
@@ -64,11 +64,10 @@ export const getMyNetwork = async (req: AuthRequest, res: Response): Promise<voi
     const playtimeAggregate = await prisma.dailyUsage.aggregate({
       where: { userId },
       _sum: {
-        reelsMinutes: true,
         gamesMinutes: true,
-      }
+      },
     });
-    const personalPlaytime = (playtimeAggregate._sum.reelsMinutes ?? 0) + (playtimeAggregate._sum.gamesMinutes ?? 0);
+    const personalPlaytime = playtimeAggregate._sum.gamesMinutes ?? 0;
 
     // Level 1: Users referred directly by this user
     const level1 = await fetchUsersWithStats([user.referralCode]);

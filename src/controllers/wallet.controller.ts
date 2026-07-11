@@ -124,7 +124,7 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
     });
     
     const hasAbnormalPlaytime = recentUsages.some(
-      (u) => (u.reelsMinutes + u.gamesMinutes) > 1080
+      (u) => u.gamesMinutes > 1080
     );
     
     if (hasAbnormalPlaytime) {
@@ -246,7 +246,7 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
 
       // A. Play time check
       const usages = await prisma.dailyUsage.findMany({ where: { userId } });
-      const personalPlaytime = usages.reduce((acc, u) => acc + u.reelsMinutes + u.gamesMinutes, 0);
+      const personalPlaytime = usages.reduce((acc, u) => acc + u.gamesMinutes, 0);
       if (personalPlaytime < minPlaytime) {
         res.status(400).json({
           error: `You need at least ${(minPlaytime / 60).toFixed(1)} hours of playtime to withdraw referral earnings. You currently have ${(personalPlaytime / 60).toFixed(1)} hours.`

@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { storage } from '../config/firebase';
 
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -227,4 +228,66 @@ export const updateBio = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
+export const updateAvatar = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { imageBase64 } = req.body;
 
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!imageBase64) {
+      res.status(400).json({ error: 'imageBase64 parameter is required' });
+      return;
+    }
+
+    // Decode base64
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Delete old avatar from storage if exists
+    if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com')) {
+      try {
+        // Extract file path from url
+        const decodedUrl = decodeURIComponent(user.avatarUrl);
+        const matches = decodedUrl.match(/\/b\/[^\/]+\/o\/([^?]+)/);
+        if (matches && matches[1]) {
+          const oldFilePath = matches[1];
+          await storage.bucket().file(oldFilePath).delete();
+        }
+      } catch (e) {
+        console.error('Error deleting old avatar:', e);
+      }
+    }
+
+    // Upload new avatar
+    const timestamp = Date.now();
+    const filePath = `profile_pictures/${userId}_${timestamp}.jpg`;
+    const file = storage.bucket().file(filePath);
+
+    await file.save(buffer, {
+      metadata: { contentType: 'image/jpeg' },
+      public: true,
+    });
+
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.bucket().name}/o/${encodeURIComponent(filePath)}?alt=media`;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: publicUrl }
+    });
+
+    res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
+  } catch (error) {
+    console.error('Error updating avatar:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

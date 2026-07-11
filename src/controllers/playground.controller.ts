@@ -109,15 +109,31 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
       });
     }
 
+    // Fetch friends count
+    const friendsCount = await prisma.friendship.count({
+      where: {
+        OR: [
+          { userOneId: userId },
+          { userTwoId: userId }
+        ],
+        status: 'ACCEPTED'
+      }
+    });
+
     res.status(200).json({
       success: true,
       balance: user.balance + user.referralBalance,
+      totalEarned: user.totalEarned,
       playgroundMinutes: user.playgroundMinutes,
       gender: user.gender,
       name: user.name || 'SikkaPlay Player',
       username: user.username,
       giftInventory: user.giftInventory,
-      crateProgress
+      crateProgress,
+      friendsCount,
+      streak: 18, // Mocked for now
+      globalRank: 25, // Mocked for now
+      dailyLogin: 7, // Mocked for now
     });
   } catch (error) {
     console.error('Error fetching playground lobby:', error);
@@ -709,6 +725,7 @@ export const searchFriends = async (req: AuthRequest, res: Response): Promise<vo
         id: { not: userId },
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
+          { username: { contains: query, mode: 'insensitive' } },
           isPhoneNumber ? { phoneNumber: encrypt(query.trim()) } : undefined
         ].filter(Boolean) as any
       },
@@ -721,7 +738,8 @@ export const searchFriends = async (req: AuthRequest, res: Response): Promise<vo
         id: u.id,
         name: u.name || 'SikkaPlay Player',
         gender: u.gender,
-        username: u.username
+        username: u.username,
+        avatarUrl: u.avatarUrl
       }))
     });
   } catch (error) {

@@ -134,12 +134,9 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       where: { userId, createdAt: { gte: startOfToday } }
     });
 
-    const watchEarnClaimedMilestones: number[] = [];
     const playEarnClaimedMilestones: number[] = [];
     
     todaysTransactions.forEach(t => {
-      const matchWatch = t.description.match(/Watched.*?(\d+)\s*mins/i);
-      if (matchWatch) watchEarnClaimedMilestones.push(parseInt(matchWatch[1]));
 
       const matchPlay = t.description.match(/Played.*?(\d+)\s*mins/i);
       if (matchPlay) playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
@@ -200,9 +197,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       streakCount: currentStreak,
       hasClaimedToday,
       recentRewards,
-      reelsMinutesWatched: usageToday?.reelsMinutes || 0,
       gamesMinutesPlayed: usageToday?.gamesMinutes || 0,
-      watchEarnClaimedMilestones,
       playEarnClaimedMilestones,
       completedSocialTasks,
       socialTasks,

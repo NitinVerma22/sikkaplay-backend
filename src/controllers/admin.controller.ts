@@ -1584,6 +1584,24 @@ export const clearUserDevice = async (req: AdminAuthRequest, res: Response): Pro
   }
 };
 
+export const bulkClearAllDeviceData = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const result = await prisma.user.updateMany({
+      data: { deviceId: null }
+    });
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'BULK_CLEAR_ALL_DEVICE_DATA', { clearedCount: result.count }, ip);
+
+    res.status(200).json({ success: true, message: `Device data cleared successfully for ${result.count} users.`, clearedCount: result.count });
+  } catch (error: any) {
+    console.error('Bulk Clear Device Data Error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
 
 
 

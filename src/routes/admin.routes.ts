@@ -12,6 +12,7 @@ import {
   getWithdrawals,
   updateWithdrawalStatus,
   bulkUpdateWithdrawalStatus,
+  bulkClearAllDeviceData,
   getSupportTickets,
   replySupportTicket,
   toggleUserFreeze,
@@ -87,6 +88,7 @@ router.put('/users/:id/change-password', changeUserPassword);
 router.delete('/users/:id', requireRole(['superadmin']), deleteUser);
 router.post('/users/bulk-delete', requireRole(['superadmin']), bulkDeleteUsers);
 router.post('/users/:id/clear-device', requireRole(['superadmin']), clearUserDevice);
+router.post('/users/bulk-clear-device-data', requireRole(['superadmin']), bulkClearAllDeviceData);
 
 // Push Notification Broadcast
 router.post('/broadcast-push', broadcastPushNotification);

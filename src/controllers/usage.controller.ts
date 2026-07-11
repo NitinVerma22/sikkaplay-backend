@@ -23,8 +23,8 @@ export const logUsage = async (req: AuthRequest, res: Response): Promise<void> =
     }
 
     const todayStr = getISTDateString();
-    const updateData = type === 'games' ? { gamesMinutes: { increment: minutes } } : { reelsMinutes: { increment: minutes } };
-    const createData = type === 'games' ? { gamesMinutes: minutes } : { reelsMinutes: minutes };
+    const updateData = { gamesMinutes: { increment: minutes } };
+    const createData = { gamesMinutes: minutes };
 
     // Upsert the daily usage record
     const usage = await prisma.dailyUsage.upsert({
@@ -42,7 +42,7 @@ export const logUsage = async (req: AuthRequest, res: Response): Promise<void> =
       }
     });
 
-    res.status(200).json({ success: true, todayMinutes: type === 'games' ? usage.gamesMinutes : usage.reelsMinutes });
+    res.status(200).json({ success: true, todayMinutes: usage.gamesMinutes });
   } catch (error) {
     console.error('Error logging usage:', error);
     res.status(500).json({ error: 'Internal server error' });
