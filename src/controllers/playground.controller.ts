@@ -99,12 +99,24 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
       }
     });
 
+    let dailyUsage = await prisma.dailyUsage.findUnique({
+      where: { userId_dateStr: { userId, dateStr: todayStr } }
+    });
+    const gamesSeconds = (dailyUsage?.gamesMinutes || 0) * 60;
+
     if (!crateProgress) {
       crateProgress = await prisma.crateProgress.create({
         data: {
           userId,
           dateStr: todayStr,
-          activeSeconds: 0
+          activeSeconds: gamesSeconds
+        }
+      });
+    } else {
+      crateProgress = await prisma.crateProgress.update({
+        where: { id: crateProgress.id },
+        data: {
+          activeSeconds: gamesSeconds
         }
       });
     }
@@ -120,6 +132,12 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
       }
     });
 
+    // Calculate Global Rank
+    const rankCount = await prisma.user.count({
+      where: { totalEarned: { gt: user.totalEarned } }
+    });
+    const globalRank = rankCount + 1;
+
     res.status(200).json({
       success: true,
       balance: user.balance + user.referralBalance,
@@ -132,7 +150,7 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
       crateProgress,
       friendsCount,
       streak: 18, // Mocked for now
-      globalRank: 25, // Mocked for now
+      globalRank: globalRank,
       dailyLogin: 7, // Mocked for now
     });
   } catch (error) {
