@@ -6,6 +6,7 @@ import { encrypt } from '../utils/crypto.utils';
 import NodeCache from 'node-cache';
 import { onlineUsersCache } from '../middleware/auth.middleware';
 import { sendPushNotification } from '../services/push.service';
+import { io } from '../index';
 
 export const userActiveChannelCache = new NodeCache({ stdTTL: 15 });
 export const typingUsersCache = new NodeCache({ stdTTL: 6 });
@@ -1180,6 +1181,9 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
       }
     });
 
+    // Emit the message in real-time to the socket room
+    io.to(finalChannelName).emit('new_message', msg);
+
     // Check if recipient is active in the same channel. If not, send push notification
     if (recipientId && typeof recipientId === 'string') {
       const activeChannel = userActiveChannelCache.get(recipientId);
@@ -1567,7 +1571,7 @@ export const clearChatHistory = async (req: AuthRequest, res: Response): Promise
 export const setTypingStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { channelName, isTyping } = req.body;
+    const { channelName, isTyping, recipientId } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -1579,7 +1583,18 @@ export const setTypingStatus = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const cacheKey = `${channelName}:${userId}`;
+    let finalChannelName = channelName;
+    let finalRecipientId = recipientId;
+    if (!finalRecipientId && channelName.startsWith('friend-chat-')) {
+      finalRecipientId = channelName.substring('friend-chat-'.length);
+    }
+
+    if (finalRecipientId && typeof finalRecipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
+      const ids = [userId, finalRecipientId].sort();
+      finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+    }
+
+    const cacheKey = `${finalChannelName}:${userId}`;
     if (isTyping === true) {
       typingUsersCache.set(cacheKey, true);
     } else {

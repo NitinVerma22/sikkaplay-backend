@@ -14,6 +14,10 @@ import callbackRoutes from './routes/callback.routes';
 import gameRoutes from './routes/game.routes';
 import playgroundRoutes from './routes/playground.routes';
 import { startCronJobs } from './services/cron.service';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -95,7 +99,44 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+// Socket.io and Redis Adapter Setup
+const httpServer = createServer(app);
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const pubClient = new Redis(redisUrl);
+const subClient = pubClient.duplicate();
+
+export const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true
+  }
+});
+io.adapter(createAdapter(pubClient, subClient));
+
+// Socket Authentication Middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error('Authentication error: Missing token'));
+  }
+  // TODO: Verify Firebase JWT token here
+  next();
+});
+
+io.on('connection', (socket) => {
+  console.log(`[Socket] User connected: ${socket.id}`);
+  
+  socket.on('join_room', (channelName) => {
+    socket.join(channelName);
+    console.log(`[Socket] ${socket.id} joined room ${channelName}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket] User disconnected: ${socket.id}`);
+  });
+});
+
 // Start the server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

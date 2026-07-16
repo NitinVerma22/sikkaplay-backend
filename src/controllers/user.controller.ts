@@ -244,15 +244,25 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Decode base64
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
+
+    // Check if the payload is just a preset asset path (Live Custom Avatar)
+    if (imageBase64.startsWith('assets/')) {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { avatarUrl: imageBase64 }
+      });
+      res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
+      return;
+    }
+
+    // Decode base64
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
 
     // Delete old avatar from storage if exists
     if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com')) {
