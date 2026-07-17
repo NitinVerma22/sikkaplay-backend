@@ -1344,6 +1344,7 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
 
     res.status(200).json({
       success: true,
+      currentUserId: userId,
       messages,
       outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
       partnerOnline,

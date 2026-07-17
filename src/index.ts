@@ -153,6 +153,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Tic-Tac-Toe Game Direct Socket Signaling
+  socket.on('game_signal', (data) => {
+    // data should contain { channelName, signal, senderId }
+    if (data && data.channelName) {
+      socket.to(data.channelName).emit('game_signal', data);
+    }
+  });
+
+  socket.on('game_move', (data) => {
+    // data should contain { channelName, index, senderId }
+    if (data && data.channelName) {
+      socket.to(data.channelName).emit('game_move', data);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Socket] User disconnected: ${socket.id}`);
   });
