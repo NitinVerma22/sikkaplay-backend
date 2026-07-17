@@ -438,7 +438,7 @@ model PlaygroundMessage {
   reaction    String?
   createdAt   DateTime @default(now())
 
-  @@index([channelName])
+  @@index([channelName, isSeen])
 }
 
 

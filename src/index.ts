@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import path from 'path';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -48,8 +49,9 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // API Request/Response Logger
 app.use((req, res, next) => {
@@ -129,6 +131,22 @@ io.on('connection', (socket) => {
   socket.on('join_room', (channelName) => {
     socket.join(channelName);
     console.log(`[Socket] ${socket.id} joined room ${channelName}`);
+  });
+
+  socket.on('mark_seen', async (data) => {
+    const { messageIds, channelName } = data;
+    if (messageIds && Array.isArray(messageIds) && messageIds.length > 0 && channelName) {
+      try {
+        await prisma.playgroundMessage.updateMany({
+          where: { id: { in: messageIds } },
+          data: { isSeen: true }
+        });
+        // Emit to the room (except sender) that messages are seen
+        socket.to(channelName).emit('message_seen', { messageIds });
+      } catch (err) {
+        console.error('Error in mark_seen socket event:', err);
+      }
+    }
   });
 
   socket.on('disconnect', () => {

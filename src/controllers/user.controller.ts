@@ -264,37 +264,39 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // Delete old avatar from storage if exists
-    if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com')) {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Delete old avatar from storage if exists locally
+    if (user.avatarUrl && user.avatarUrl.includes('/uploads/avatars/')) {
       try {
-        // Extract file path from url
-        const decodedUrl = decodeURIComponent(user.avatarUrl);
-        const matches = decodedUrl.match(/\/b\/[^\/]+\/o\/([^?]+)/);
-        if (matches && matches[1]) {
-          const oldFilePath = matches[1];
-          await storage.bucket().file(oldFilePath).delete();
+        const oldFilename = user.avatarUrl.split('/').pop();
+        if (oldFilename) {
+          const oldFilePath = path.join(__dirname, '../../public/uploads/avatars', oldFilename);
+          if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath);
+          }
         }
       } catch (e) {
         console.error('Error deleting old avatar:', e);
       }
     }
 
-    // Upload new avatar
+    // Upload new avatar locally
     const timestamp = Date.now();
-    const filePath = `profile_pictures/${userId}_${timestamp}.jpg`;
-    const file = storage.bucket().file(filePath);
-    const token = randomUUID();
+    const filename = `${userId}_${timestamp}.jpg`;
+    
+    // Ensure directory exists
+    const dir = path.join(__dirname, '../../public/uploads/avatars');
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, buffer);
 
-    await file.save(buffer, {
-      metadata: { 
-        contentType: 'image/jpeg',
-        metadata: {
-          firebaseStorageDownloadTokens: token
-        }
-      }
-    });
-
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.bucket().name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const publicUrl = `${baseUrl}/uploads/avatars/${filename}`;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -302,9 +304,9 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     });
 
     res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating avatar:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
 

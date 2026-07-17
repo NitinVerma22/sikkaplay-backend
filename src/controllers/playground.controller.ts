@@ -139,21 +139,23 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
     });
     const globalRank = rankCount + 1;
 
-    res.status(200).json({
-      success: true,
-      balance: user.balance + user.referralBalance,
-      totalEarned: user.totalEarned,
-      playgroundMinutes: user.playgroundMinutes,
-      gender: user.gender,
-      name: user.name || 'SikkaPlay Player',
-      username: user.username,
-      giftInventory: user.giftInventory,
-      crateProgress,
-      friendsCount,
-      streak: 18, // Mocked for now
-      globalRank: globalRank,
-      dailyLogin: 7, // Mocked for now
-    });
+      const userStreak = await calculateUserStreak(userId, prisma);
+
+      res.status(200).json({
+        success: true,
+        balance: user.balance + user.referralBalance,
+        totalEarned: user.totalEarned,
+        playgroundMinutes: user.playgroundMinutes,
+        gender: user.gender,
+        name: user.name || 'SikkaPlay Player',
+        username: user.username,
+        giftInventory: user.giftInventory,
+        crateProgress,
+        friendsCount,
+        streak: userStreak,
+        globalRank: globalRank,
+        dailyLogin: 7, // Mocked for now
+      });
   } catch (error) {
     console.error('Error fetching playground lobby:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -1405,13 +1407,24 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
     }
 
     if (!username || typeof username !== 'string') {
-      res.status(400).json({ error: 'Username parameter is required' });
+      res.status(400).json({ error: 'Username or ID parameter is required' });
       return;
     }
 
-    const targetUser = await prisma.user.findUnique({
-      where: { username: username.trim().toLowerCase() }
-    });
+    const queryStr = username.trim();
+    let targetUser;
+
+    if (queryStr.length === 36 && queryStr.includes('-')) {
+      targetUser = await prisma.user.findUnique({
+        where: { id: queryStr },
+        include: { giftInventory: { include: { gift: true } } }
+      });
+    } else {
+      targetUser = await prisma.user.findUnique({
+        where: { username: queryStr.toLowerCase() },
+        include: { giftInventory: { include: { gift: true } } }
+      });
+    }
 
     if (!targetUser) {
       res.status(404).json({ error: 'User not found' });
@@ -1444,8 +1457,19 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
       }
     }
 
+    // Calculate global rank
+    const rankCount = await prisma.user.count({
+      where: { totalEarned: { gt: targetUser.totalEarned } }
+    });
+    const globalRank = rankCount + 1;
+    
+    // Calculate streak dynamically
+    const userStreak = await calculateUserStreak(targetUser.id, prisma);
+
     // Calculate level based on total earned coins
     const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
+    const currentLevelXp = targetUser.totalEarned % 1000;
+    const nextLevelXp = 1000;
 
     // Fetch friend count (ACCEPTED status)
     const friendCount = await prisma.friendship.count({
@@ -1458,10 +1482,25 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
       }
     });
 
-    // Fetch total gifts received (count of all-time GiftTransactions received)
+    // Fetch total gifts received
     const totalGiftsReceived = await prisma.giftTransaction.count({
       where: { receiverId: targetUser.id }
     });
+
+    // Fetch received gifts and group by giftId
+    const receivedGiftsRaw = await prisma.giftTransaction.groupBy({
+      by: ['giftId'],
+      where: { receiverId: targetUser.id },
+      _count: { giftId: true }
+    });
+    
+    const giftIds = receivedGiftsRaw.map(r => r.giftId);
+    const giftsDetails = await prisma.gift.findMany({ where: { id: { in: giftIds } } });
+    
+    const aggregatedGifts = receivedGiftsRaw.map(r => {
+      const gift = giftsDetails.find(g => g.id === r.giftId);
+      return { gift, count: r._count.giftId };
+    }).filter(g => g.gift);
 
     res.status(200).json({
       success: true,
@@ -1471,12 +1510,17 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
         username: targetUser.username,
         gender: targetUser.gender || 'male',
         level,
+        currentLevelXp,
+        nextLevelXp,
         totalEarned: targetUser.totalEarned,
         bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
         friendshipState,
         friendshipId,
         friendCount,
-        totalGiftsReceived
+        totalGiftsReceived,
+        globalRank,
+        streak: userStreak,
+        gifts: aggregatedGifts
       }
     });
   } catch (error) {
