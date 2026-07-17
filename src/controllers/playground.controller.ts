@@ -1192,7 +1192,18 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
     });
 
     // Emit the message in real-time to the socket room
+    io.to(finalChannelName).emit('typing_status', { senderId, isTyping: false });
+    if (finalChannelName !== channelName && recipientId) {
+      io.to(`friend-chat-${recipientId}`).emit('typing_status', { senderId, isTyping: false });
+      io.to(`friend-chat-${senderId}`).emit('typing_status', { senderId, isTyping: false });
+    }
+    
     io.to(finalChannelName).emit('new_message', msg);
+    
+    if (finalChannelName !== channelName && recipientId) {
+      io.to(`friend-chat-${recipientId}`).emit('new_message', msg);
+      io.to(`friend-chat-${senderId}`).emit('new_message', msg);
+    }
 
     // Check if recipient is active in the same channel. If not, send push notification
     if (recipientId && typeof recipientId === 'string') {
@@ -1652,6 +1663,12 @@ export const setTypingStatus = async (req: AuthRequest, res: Response): Promise<
       typingUsersCache.set(cacheKey, true);
     } else {
       typingUsersCache.del(cacheKey);
+    }
+
+    io.to(finalChannelName).emit('typing_status', { senderId: userId, isTyping });
+    if (finalChannelName !== channelName && finalRecipientId) {
+      io.to(`friend-chat-${finalRecipientId}`).emit('typing_status', { senderId: userId, isTyping });
+      io.to(`friend-chat-${userId}`).emit('typing_status', { senderId: userId, isTyping });
     }
 
     res.status(200).json({ success: true });

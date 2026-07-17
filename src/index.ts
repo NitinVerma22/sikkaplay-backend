@@ -143,6 +143,10 @@ io.on('connection', (socket) => {
         });
         // Emit to the room (except sender) that messages are seen
         socket.to(channelName).emit('message_seen', { messageIds });
+        const firstMessage = await prisma.playgroundMessage.findUnique({ where: { id: messageIds[0] } });
+        if (firstMessage && firstMessage.senderId) {
+          socket.to(`friend-chat-${firstMessage.senderId}`).emit('message_seen', { messageIds });
+        }
       } catch (err) {
         console.error('Error in mark_seen socket event:', err);
       }
