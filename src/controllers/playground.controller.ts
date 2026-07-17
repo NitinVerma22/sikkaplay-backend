@@ -566,7 +566,8 @@ export const joinMatchmaking = async (req: AuthRequest, res: Response): Promise<
         partnerId: matchedPartner.userId,
         partnerName: partnerUser?.name || 'SikkaPlay Player',
         partnerUsername: partnerUser?.username || null,
-        partnerGender: matchedPartner.gender
+        partnerGender: matchedPartner.gender,
+        partnerAvatar: partnerUser?.avatarUrl || null
       });
 
       // Save match state for partner
@@ -576,7 +577,8 @@ export const joinMatchmaking = async (req: AuthRequest, res: Response): Promise<
         partnerId: userId,
         partnerName: user.name || 'SikkaPlay Player',
         partnerUsername: user.username || null,
-        partnerGender: userGender
+        partnerGender: userGender,
+        partnerAvatar: user.avatarUrl || null
       });
 
       // Store call session history
@@ -1514,6 +1516,7 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
         name: targetUser.name || 'SikkaPlay Player',
         username: targetUser.username,
         gender: targetUser.gender || 'male',
+        avatarUrl: targetUser.avatarUrl,
         level,
         currentLevelXp,
         nextLevelXp,
