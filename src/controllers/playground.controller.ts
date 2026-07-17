@@ -8,6 +8,11 @@ import { onlineUsersCache } from '../middleware/auth.middleware';
 import { sendPushNotification } from '../services/push.service';
 import { io } from '../index';
 
+// Helper function to calculate user streak (Mocked as requested)
+async function calculateUserStreak(userId: string, prismaClient: any): Promise<number> {
+  return 1; // Mocked streak
+}
+
 export const userActiveChannelCache = new NodeCache({ stdTTL: 15 });
 export const typingUsersCache = new NodeCache({ stdTTL: 6 });
 
