@@ -66,6 +66,7 @@ const matchResults = new Map<string, {
   partnerName: string;
   partnerUsername: string | null;
   partnerGender: string;
+  partnerAvatar?: string | null;
 }>();
 
 // 1. Lobby Status Dashboard
