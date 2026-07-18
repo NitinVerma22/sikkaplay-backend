@@ -261,14 +261,15 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Ensure it's a valid data URI
-    if (!imageBase64.startsWith('data:image')) {
+    let finalBase64 = imageBase64;
+    if (!finalBase64.startsWith('data:image')) {
        // if it's raw base64, prepend the prefix
-       imageBase64 = `data:image/jpeg;base64,${imageBase64.replace(/^data:image\/\w+;base64,/, '')}`;
+       finalBase64 = `data:image/jpeg;base64,${finalBase64.replace(/^data:image\/\w+;base64,/, '')}`;
     }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: imageBase64 }
+      data: { avatarUrl: finalBase64 }
     });
 
     res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
