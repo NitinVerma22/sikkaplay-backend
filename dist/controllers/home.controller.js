@@ -116,12 +116,8 @@ const getHomeState = async (req, res) => {
         const todaysTransactions = await db_1.prisma.transaction.findMany({
             where: { userId, createdAt: { gte: startOfToday } }
         });
-        const watchEarnClaimedMilestones = [];
         const playEarnClaimedMilestones = [];
         todaysTransactions.forEach(t => {
-            const matchWatch = t.description.match(/Watched.*?(\d+)\s*mins/i);
-            if (matchWatch)
-                watchEarnClaimedMilestones.push(parseInt(matchWatch[1]));
             const matchPlay = t.description.match(/Played.*?(\d+)\s*mins/i);
             if (matchPlay)
                 playEarnClaimedMilestones.push(parseInt(matchPlay[1]));
@@ -175,9 +171,7 @@ const getHomeState = async (req, res) => {
             streakCount: currentStreak,
             hasClaimedToday,
             recentRewards,
-            reelsMinutesWatched: usageToday?.reelsMinutes || 0,
             gamesMinutesPlayed: usageToday?.gamesMinutes || 0,
-            watchEarnClaimedMilestones,
             playEarnClaimedMilestones,
             completedSocialTasks,
             socialTasks,

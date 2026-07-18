@@ -15,7 +15,7 @@ const generateReferralCode = () => {
 };
 const registerDirect = async (req, res) => {
     try {
-        const { phoneNumber, name, city, referredBy, password, deviceId } = req.body;
+        const { phoneNumber, name, city, gender, referredBy, password, deviceId } = req.body;
         const config = await (0, config_service_1.getCachedAppConfig)();
         const allowMultiAccounts = config?.allowMultiAccounts ?? false;
         const refRewardAmount = config?.referralBonus || 500;
@@ -76,6 +76,7 @@ const registerDirect = async (req, res) => {
                     passwordHash,
                     name: name || null,
                     city: city || null,
+                    gender: gender || null,
                     referralCode: refCode,
                     referredBy: referredBy || null,
                     balance: signupBonus,

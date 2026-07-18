@@ -16,7 +16,6 @@ const fetchUsersWithStats = async (codes) => {
     const playtimes = await db_1.prisma.dailyUsage.groupBy({
         by: ['userId'],
         _sum: {
-            reelsMinutes: true,
             gamesMinutes: true,
         },
         where: {
@@ -25,7 +24,7 @@ const fetchUsersWithStats = async (codes) => {
     });
     const playtimeMap = new Map();
     for (const pt of playtimes) {
-        const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+        const total = pt._sum.gamesMinutes ?? 0;
         playtimeMap.set(pt.userId, total);
     }
     return users.map(u => ({
@@ -56,11 +55,10 @@ const getMyNetwork = async (req, res) => {
         const playtimeAggregate = await db_1.prisma.dailyUsage.aggregate({
             where: { userId },
             _sum: {
-                reelsMinutes: true,
                 gamesMinutes: true,
-            }
+            },
         });
-        const personalPlaytime = (playtimeAggregate._sum.reelsMinutes ?? 0) + (playtimeAggregate._sum.gamesMinutes ?? 0);
+        const personalPlaytime = playtimeAggregate._sum.gamesMinutes ?? 0;
         // Level 1: Users referred directly by this user
         const level1 = await fetchUsersWithStats([user.referralCode]);
         const level1Codes = level1.map(u => u.referralCode);

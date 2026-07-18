@@ -20,8 +20,8 @@ const logUsage = async (req, res) => {
             return;
         }
         const todayStr = (0, date_utils_1.getISTDateString)();
-        const updateData = type === 'games' ? { gamesMinutes: { increment: minutes } } : { reelsMinutes: { increment: minutes } };
-        const createData = type === 'games' ? { gamesMinutes: minutes } : { reelsMinutes: minutes };
+        const updateData = { gamesMinutes: { increment: minutes } };
+        const createData = { gamesMinutes: minutes };
         // Upsert the daily usage record
         const usage = await db_1.prisma.dailyUsage.upsert({
             where: {
@@ -37,7 +37,7 @@ const logUsage = async (req, res) => {
                 ...createData,
             }
         });
-        res.status(200).json({ success: true, todayMinutes: type === 'games' ? usage.gamesMinutes : usage.reelsMinutes });
+        res.status(200).json({ success: true, todayMinutes: usage.gamesMinutes });
     }
     catch (error) {
         console.error('Error logging usage:', error);

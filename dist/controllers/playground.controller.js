@@ -10,6 +10,11 @@ const crypto_utils_1 = require("../utils/crypto.utils");
 const node_cache_1 = __importDefault(require("node-cache"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const push_service_1 = require("../services/push.service");
+const index_1 = require("../index");
+// Helper function to calculate user streak (Mocked as requested)
+async function calculateUserStreak(userId, prismaClient) {
+    return 1; // Mocked streak
+}
 exports.userActiveChannelCache = new node_cache_1.default({ stdTTL: 15 });
 exports.typingUsersCache = new node_cache_1.default({ stdTTL: 6 });
 const ensureSeedData = async () => {
@@ -79,24 +84,57 @@ const getPlaygroundLobby = async (req, res) => {
                 }
             }
         });
+        let dailyUsage = await db_1.prisma.dailyUsage.findUnique({
+            where: { userId_dateStr: { userId, dateStr: todayStr } }
+        });
+        const gamesSeconds = (dailyUsage?.gamesMinutes || 0) * 60;
         if (!crateProgress) {
             crateProgress = await db_1.prisma.crateProgress.create({
                 data: {
                     userId,
                     dateStr: todayStr,
-                    activeSeconds: 0
+                    activeSeconds: gamesSeconds
                 }
             });
         }
+        else {
+            crateProgress = await db_1.prisma.crateProgress.update({
+                where: { id: crateProgress.id },
+                data: {
+                    activeSeconds: gamesSeconds
+                }
+            });
+        }
+        // Fetch friends count
+        const friendsCount = await db_1.prisma.friendship.count({
+            where: {
+                OR: [
+                    { userOneId: userId },
+                    { userTwoId: userId }
+                ],
+                status: 'ACCEPTED'
+            }
+        });
+        // Calculate Global Rank
+        const rankCount = await db_1.prisma.user.count({
+            where: { totalEarned: { gt: user.totalEarned } }
+        });
+        const globalRank = rankCount + 1;
+        const userStreak = await calculateUserStreak(userId, db_1.prisma);
         res.status(200).json({
             success: true,
             balance: user.balance + user.referralBalance,
+            totalEarned: user.totalEarned,
             playgroundMinutes: user.playgroundMinutes,
             gender: user.gender,
             name: user.name || 'SikkaPlay Player',
             username: user.username,
             giftInventory: user.giftInventory,
-            crateProgress
+            crateProgress,
+            friendsCount,
+            streak: userStreak,
+            globalRank: globalRank,
+            dailyLogin: 7, // Mocked for now
         });
     }
     catch (error) {
@@ -465,7 +503,8 @@ const joinMatchmaking = async (req, res) => {
                 partnerId: matchedPartner.userId,
                 partnerName: partnerUser?.name || 'SikkaPlay Player',
                 partnerUsername: partnerUser?.username || null,
-                partnerGender: matchedPartner.gender
+                partnerGender: matchedPartner.gender,
+                partnerAvatar: partnerUser?.avatarUrl || null
             });
             // Save match state for partner
             matchResults.set(matchedPartner.userId, {
@@ -474,7 +513,8 @@ const joinMatchmaking = async (req, res) => {
                 partnerId: userId,
                 partnerName: user.name || 'SikkaPlay Player',
                 partnerUsername: user.username || null,
-                partnerGender: userGender
+                partnerGender: userGender,
+                partnerAvatar: user.avatarUrl || null
             });
             // Store call session history
             await db_1.prisma.playgroundSession.create({
@@ -638,6 +678,7 @@ const searchFriends = async (req, res) => {
                 id: { not: userId },
                 OR: [
                     { name: { contains: query, mode: 'insensitive' } },
+                    { username: { contains: query, mode: 'insensitive' } },
                     isPhoneNumber ? { phoneNumber: (0, crypto_utils_1.encrypt)(query.trim()) } : undefined
                 ].filter(Boolean)
             },
@@ -649,7 +690,8 @@ const searchFriends = async (req, res) => {
                 id: u.id,
                 name: u.name || 'SikkaPlay Player',
                 gender: u.gender,
-                username: u.username
+                username: u.username,
+                avatarUrl: u.avatarUrl
             }))
         });
     }
@@ -1016,6 +1058,17 @@ const sendPlaygroundMessage = async (req, res) => {
                 text
             }
         });
+        // Emit the message in real-time to the socket room
+        index_1.io.to(finalChannelName).emit('typing_status', { senderId, isTyping: false });
+        if (finalChannelName !== channelName && recipientId) {
+            index_1.io.to(`friend-chat-${recipientId}`).emit('typing_status', { senderId, isTyping: false });
+            index_1.io.to(`friend-chat-${senderId}`).emit('typing_status', { senderId, isTyping: false });
+        }
+        index_1.io.to(finalChannelName).emit('new_message', msg);
+        if (finalChannelName !== channelName && recipientId) {
+            index_1.io.to(`friend-chat-${recipientId}`).emit('new_message', msg);
+            index_1.io.to(`friend-chat-${senderId}`).emit('new_message', msg);
+        }
         // Check if recipient is active in the same channel. If not, send push notification
         if (recipientId && typeof recipientId === 'string') {
             const activeChannel = exports.userActiveChannelCache.get(recipientId);
@@ -1132,6 +1185,7 @@ const syncPlaygroundMessages = async (req, res) => {
         });
         res.status(200).json({
             success: true,
+            currentUserId: userId,
             messages,
             outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
             partnerOnline,
@@ -1209,12 +1263,23 @@ const getPublicProfile = async (req, res) => {
             return;
         }
         if (!username || typeof username !== 'string') {
-            res.status(400).json({ error: 'Username parameter is required' });
+            res.status(400).json({ error: 'Username or ID parameter is required' });
             return;
         }
-        const targetUser = await db_1.prisma.user.findUnique({
-            where: { username: username.trim().toLowerCase() }
-        });
+        const queryStr = username.trim();
+        let targetUser;
+        if (queryStr.length === 36 && queryStr.includes('-')) {
+            targetUser = await db_1.prisma.user.findUnique({
+                where: { id: queryStr },
+                include: { giftInventory: { include: { gift: true } } }
+            });
+        }
+        else {
+            targetUser = await db_1.prisma.user.findUnique({
+                where: { username: queryStr.toLowerCase() },
+                include: { giftInventory: { include: { gift: true } } }
+            });
+        }
         if (!targetUser) {
             res.status(404).json({ error: 'User not found' });
             return;
@@ -1244,8 +1309,17 @@ const getPublicProfile = async (req, res) => {
                 }
             }
         }
+        // Calculate global rank
+        const rankCount = await db_1.prisma.user.count({
+            where: { totalEarned: { gt: targetUser.totalEarned } }
+        });
+        const globalRank = rankCount + 1;
+        // Calculate streak dynamically
+        const userStreak = await calculateUserStreak(targetUser.id, db_1.prisma);
         // Calculate level based on total earned coins
         const level = Math.floor((targetUser.totalEarned) / 1000) + 1;
+        const currentLevelXp = targetUser.totalEarned % 1000;
+        const nextLevelXp = 1000;
         // Fetch friend count (ACCEPTED status)
         const friendCount = await db_1.prisma.friendship.count({
             where: {
@@ -1256,10 +1330,22 @@ const getPublicProfile = async (req, res) => {
                 ]
             }
         });
-        // Fetch total gifts received (count of all-time GiftTransactions received)
+        // Fetch total gifts received
         const totalGiftsReceived = await db_1.prisma.giftTransaction.count({
             where: { receiverId: targetUser.id }
         });
+        // Fetch received gifts and group by giftId
+        const receivedGiftsRaw = await db_1.prisma.giftTransaction.groupBy({
+            by: ['giftId'],
+            where: { receiverId: targetUser.id },
+            _count: { giftId: true }
+        });
+        const giftIds = receivedGiftsRaw.map(r => r.giftId);
+        const giftsDetails = await db_1.prisma.gift.findMany({ where: { id: { in: giftIds } } });
+        const aggregatedGifts = receivedGiftsRaw.map(r => {
+            const gift = giftsDetails.find(g => g.id === r.giftId);
+            return { gift, count: r._count.giftId };
+        }).filter(g => g.gift);
         res.status(200).json({
             success: true,
             user: {
@@ -1267,13 +1353,19 @@ const getPublicProfile = async (req, res) => {
                 name: targetUser.name || 'SikkaPlay Player',
                 username: targetUser.username,
                 gender: targetUser.gender || 'male',
+                avatarUrl: targetUser.avatarUrl,
                 level,
+                currentLevelXp,
+                nextLevelXp,
                 totalEarned: targetUser.totalEarned,
                 bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
                 friendshipState,
                 friendshipId,
                 friendCount,
-                totalGiftsReceived
+                totalGiftsReceived,
+                globalRank,
+                streak: userStreak,
+                gifts: aggregatedGifts
             }
         });
     }
@@ -1359,7 +1451,7 @@ exports.clearChatHistory = clearChatHistory;
 const setTypingStatus = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { channelName, isTyping } = req.body;
+        const { channelName, isTyping, recipientId } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -1368,12 +1460,26 @@ const setTypingStatus = async (req, res) => {
             res.status(400).json({ error: 'channelName is required' });
             return;
         }
-        const cacheKey = `${channelName}:${userId}`;
+        let finalChannelName = channelName;
+        let finalRecipientId = recipientId;
+        if (!finalRecipientId && channelName.startsWith('friend-chat-')) {
+            finalRecipientId = channelName.substring('friend-chat-'.length);
+        }
+        if (finalRecipientId && typeof finalRecipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
+            const ids = [userId, finalRecipientId].sort();
+            finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+        }
+        const cacheKey = `${finalChannelName}:${userId}`;
         if (isTyping === true) {
             exports.typingUsersCache.set(cacheKey, true);
         }
         else {
             exports.typingUsersCache.del(cacheKey);
+        }
+        index_1.io.to(finalChannelName).emit('typing_status', { senderId: userId, isTyping });
+        if (finalChannelName !== channelName && finalRecipientId) {
+            index_1.io.to(`friend-chat-${finalRecipientId}`).emit('typing_status', { senderId: userId, isTyping });
+            index_1.io.to(`friend-chat-${userId}`).emit('typing_status', { senderId: userId, isTyping });
         }
         res.status(200).json({ success: true });
     }

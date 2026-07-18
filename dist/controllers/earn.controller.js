@@ -322,7 +322,7 @@ const claimMilestone = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        if (!type || !['watch', 'play', 'daily_code_task', 'visit_all_task'].includes(type)) {
+        if (!type || !['play', 'daily_code_task', 'visit_all_task'].includes(type)) {
             res.status(400).json({ error: 'Invalid type specified' });
             return;
         }
@@ -336,25 +336,7 @@ const claimMilestone = async (req, res) => {
         let dbTxType = 'earning';
         const todayStr = (0, date_utils_1.getISTDateString)();
         const startOfToday = (0, date_utils_1.getStartOfTodayIST)();
-        if (type === 'watch') {
-            if (typeof minutes !== 'number') {
-                res.status(400).json({ error: 'Minutes is required for watch milestones' });
-                return;
-            }
-            if (minutes === config.watchM1Mins)
-                coinsReward = config.watchM1Coins;
-            else if (minutes === config.watchM2Mins)
-                coinsReward = config.watchM2Coins;
-            else if (minutes === config.watchM3Mins)
-                coinsReward = config.watchM3Coins;
-            else {
-                res.status(400).json({ error: 'Invalid watch milestone minutes' });
-                return;
-            }
-            description = `Watched Reels for ${minutes} mins`;
-            dbTxType = 'watch_earn';
-        }
-        else if (type === 'play') {
+        if (type === 'play') {
             if (typeof minutes !== 'number') {
                 res.status(400).json({ error: 'Minutes is required for play milestones' });
                 return;
@@ -407,14 +389,14 @@ const claimMilestone = async (req, res) => {
                 return;
             }
         }
-        // For duration-based watch/play milestones, verify the actual logged minutes today
-        if (type === 'watch' || type === 'play') {
+        // For duration-based play milestones, verify the actual logged minutes today
+        if (type === 'play') {
             const usage = await db_1.prisma.dailyUsage.findUnique({
                 where: {
                     userId_dateStr: { userId, dateStr: todayStr }
                 }
             });
-            const actualMinutes = type === 'watch' ? (usage?.reelsMinutes || 0) : (usage?.gamesMinutes || 0);
+            const actualMinutes = usage?.gamesMinutes || 0;
             const requiredMinutes = minutes;
             if (actualMinutes < requiredMinutes) {
                 res.status(400).json({

@@ -106,7 +106,7 @@ const requestWithdrawal = async (req, res) => {
             orderBy: { dateStr: 'desc' },
             take: 7
         });
-        const hasAbnormalPlaytime = recentUsages.some((u) => (u.reelsMinutes + u.gamesMinutes) > 1080);
+        const hasAbnormalPlaytime = recentUsages.some((u) => u.gamesMinutes > 1080);
         if (hasAbnormalPlaytime) {
             console.warn(`[FRAUD ENGINE] Auto-blocking user ${userId} due to abnormal playtime (>18h/day).`);
             await db_1.prisma.user.update({
@@ -192,7 +192,7 @@ const requestWithdrawal = async (req, res) => {
             const minReferrals = config?.refWithdrawMinReferrals ?? 2;
             // A. Play time check
             const usages = await db_1.prisma.dailyUsage.findMany({ where: { userId } });
-            const personalPlaytime = usages.reduce((acc, u) => acc + u.reelsMinutes + u.gamesMinutes, 0);
+            const personalPlaytime = usages.reduce((acc, u) => acc + u.gamesMinutes, 0);
             if (personalPlaytime < minPlaytime) {
                 res.status(400).json({
                     error: `You need at least ${(minPlaytime / 60).toFixed(1)} hours of playtime to withdraw referral earnings. You currently have ${(personalPlaytime / 60).toFixed(1)} hours.`

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -1223,7 +1223,6 @@ const fetchUsersWithStatsHelper = async (codes) => {
     const playtimes = await db_1.prisma.dailyUsage.groupBy({
         by: ['userId'],
         _sum: {
-            reelsMinutes: true,
             gamesMinutes: true,
         },
         where: {
@@ -1232,7 +1231,7 @@ const fetchUsersWithStatsHelper = async (codes) => {
     });
     const playtimeMap = new Map();
     for (const pt of playtimes) {
-        const total = (pt._sum.reelsMinutes ?? 0) + (pt._sum.gamesMinutes ?? 0);
+        const total = pt._sum.gamesMinutes ?? 0;
         playtimeMap.set(pt.userId, total);
     }
     return users.map(u => ({
@@ -1387,3 +1386,20 @@ const clearUserDevice = async (req, res) => {
     }
 };
 exports.clearUserDevice = clearUserDevice;
+const bulkClearAllDeviceData = async (req, res) => {
+    try {
+        const result = await db_1.prisma.user.updateMany({
+            data: { deviceId: null }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'BULK_CLEAR_ALL_DEVICE_DATA', { clearedCount: result.count }, ip);
+        res.status(200).json({ success: true, message: `Device data cleared successfully for ${result.count} users.`, clearedCount: result.count });
+    }
+    catch (error) {
+        console.error('Bulk Clear Device Data Error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.bulkClearAllDeviceData = bulkClearAllDeviceData;

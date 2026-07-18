@@ -31,7 +31,6 @@ async function main() {
         await db_1.prisma.appConfig.create({
             data: {
                 gullakMaxSize: 100,
-                reelsCoinsPerMin: 5,
                 dailyStreakCoins: 50,
                 referralBonus: 500,
                 commissionRate: 0.10,
@@ -61,7 +60,6 @@ async function main() {
                 rewardedCapPerDay: 15,
                 dailyCodeAdRequired: true,
                 surveysAdRequired: true,
-                reelsAdInterval: 5,
                 vpnDetectionEnabled: false,
                 vpnApiKey: "",
                 maintenanceMode: false,
@@ -95,7 +93,6 @@ async function main() {
                 rewardedCapPerDay: 15,
                 dailyCodeAdRequired: true,
                 surveysAdRequired: true,
-                reelsAdInterval: 5,
                 vpnDetectionEnabled: false,
                 vpnApiKey: "",
                 maintenanceMode: false,

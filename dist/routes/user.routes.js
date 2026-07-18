@@ -30,6 +30,8 @@ router.get('/transactions', user_controller_1.getTransactions);
 router.put('/upi', user_controller_1.updateUpi);
 // PUT /api/user/bio
 router.put('/bio', user_controller_1.updateBio);
+// PUT /api/user/avatar
+router.put('/avatar', user_controller_1.updateAvatar);
 // POST /api/user/earn/... — vpnGuard only on earn routes
 router.post('/earn/daily-streak', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimDailyStreak);
 router.post('/earn/daily-streak/resume', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.resumeDailyStreak);
@@ -58,4 +60,6 @@ router.get('/visit-links', visitLink_controller_1.getVisitLinks);
 router.post('/visit-links/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, visitLink_controller_1.claimVisitLinkReward);
 // Ad Impression Logging
 router.post('/ad-impression', user_controller_1.recordAdImpression);
+// DELETE /api/user/me
+router.delete('/me', user_controller_1.deleteAccount);
 exports.default = router;

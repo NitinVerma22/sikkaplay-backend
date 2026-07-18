@@ -38,6 +38,7 @@ router.put('/users/:id/change-password', admin_controller_1.changeUserPassword);
 router.delete('/users/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.deleteUser);
 router.post('/users/bulk-delete', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkDeleteUsers);
 router.post('/users/:id/clear-device', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.clearUserDevice);
+router.post('/users/bulk-clear-device-data', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkClearAllDeviceData);
 // Push Notification Broadcast
 router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 // Withdrawal Management

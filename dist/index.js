@@ -3,7 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.io = void 0;
 require("dotenv/config");
+const path_1 = __importDefault(require("path"));
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
@@ -19,6 +21,10 @@ const callback_routes_1 = __importDefault(require("./routes/callback.routes"));
 const game_routes_1 = __importDefault(require("./routes/game.routes"));
 const playground_routes_1 = __importDefault(require("./routes/playground.routes"));
 const cron_service_1 = require("./services/cron.service");
+const http_1 = require("http");
+const socket_io_1 = require("socket.io");
+const redis_adapter_1 = require("@socket.io/redis-adapter");
+const ioredis_1 = __importDefault(require("ioredis"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 (0, cron_service_1.startCronJobs)();
@@ -44,7 +50,9 @@ app.use((0, cors_1.default)({
     },
     credentials: true
 }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
+app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../public/uploads')));
 // API Request/Response Logger
 app.use((req, res, next) => {
     console.log(`[API REQUEST] ${req.method} ${req.url}`);
@@ -90,7 +98,71 @@ app.use((err, req, res, next) => {
         ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
     });
 });
+// Socket.io and Redis Adapter Setup
+const httpServer = (0, http_1.createServer)(app);
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const pubClient = new ioredis_1.default(redisUrl);
+const subClient = pubClient.duplicate();
+exports.io = new socket_io_1.Server(httpServer, {
+    cors: {
+        origin: allowedOrigins,
+        credentials: true
+    }
+});
+exports.io.adapter((0, redis_adapter_1.createAdapter)(pubClient, subClient));
+// Socket Authentication Middleware
+exports.io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+        return next(new Error('Authentication error: Missing token'));
+    }
+    // TODO: Verify Firebase JWT token here
+    next();
+});
+exports.io.on('connection', (socket) => {
+    console.log(`[Socket] User connected: ${socket.id}`);
+    socket.on('join_room', (channelName) => {
+        socket.join(channelName);
+        console.log(`[Socket] ${socket.id} joined room ${channelName}`);
+    });
+    socket.on('mark_seen', async (data) => {
+        const { messageIds, channelName } = data;
+        if (messageIds && Array.isArray(messageIds) && messageIds.length > 0 && channelName) {
+            try {
+                await db_1.prisma.playgroundMessage.updateMany({
+                    where: { id: { in: messageIds } },
+                    data: { isSeen: true }
+                });
+                // Emit to the room (except sender) that messages are seen
+                socket.to(channelName).emit('message_seen', { messageIds });
+                const firstMessage = await db_1.prisma.playgroundMessage.findUnique({ where: { id: messageIds[0] } });
+                if (firstMessage && firstMessage.senderId) {
+                    socket.to(`friend-chat-${firstMessage.senderId}`).emit('message_seen', { messageIds });
+                }
+            }
+            catch (err) {
+                console.error('Error in mark_seen socket event:', err);
+            }
+        }
+    });
+    // Tic-Tac-Toe Game Direct Socket Signaling
+    socket.on('game_signal', (data) => {
+        // data should contain { channelName, signal, senderId }
+        if (data && data.channelName) {
+            socket.to(data.channelName).emit('game_signal', data);
+        }
+    });
+    socket.on('game_move', (data) => {
+        // data should contain { channelName, index, senderId }
+        if (data && data.channelName) {
+            socket.to(data.channelName).emit('game_move', data);
+        }
+    });
+    socket.on('disconnect', () => {
+        console.log(`[Socket] User disconnected: ${socket.id}`);
+    });
+});
 // Start the server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });

@@ -36,12 +36,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.auth = void 0;
+exports.storage = exports.auth = void 0;
 const admin = __importStar(require("firebase-admin"));
 const path_1 = __importDefault(require("path"));
 // Using the provided service account key from the src directory (since tsc doesn't copy json)
 const serviceAccountPath = path_1.default.resolve(process.cwd(), 'src/config/firebase-service-account.json');
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccountPath),
+    storageBucket: 'sikkaplay.appspot.com',
 });
 exports.auth = admin.auth();
+exports.storage = admin.storage();

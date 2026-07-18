@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.deleteAccount = exports.updateAvatar = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const getProfile = async (req, res) => {
     try {
@@ -202,3 +202,67 @@ const updateBio = async (req, res) => {
     }
 };
 exports.updateBio = updateBio;
+const updateAvatar = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { imageBase64 } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!imageBase64) {
+            res.status(400).json({ error: 'imageBase64 parameter is required' });
+            return;
+        }
+        const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        // Check if the payload is just a preset asset path (Live Custom Avatar)
+        if (imageBase64.startsWith('assets/')) {
+            const updatedUser = await db_1.prisma.user.update({
+                where: { id: userId },
+                data: { avatarUrl: imageBase64 }
+            });
+            res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
+            return;
+        }
+        // Ensure it's a valid data URI
+        if (!imageBase64.startsWith('data:image')) {
+            // if it's raw base64, prepend the prefix
+            imageBase64 = `data:image/jpeg;base64,${imageBase64.replace(/^data:image\/\w+;base64,/, '')}`;
+        }
+        const updatedUser = await db_1.prisma.user.update({
+            where: { id: userId },
+            data: { avatarUrl: imageBase64 }
+        });
+        res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
+    }
+    catch (error) {
+        console.error('Error updating avatar:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.updateAvatar = updateAvatar;
+const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        // In a real production app, you might want to "soft delete" or anonymize.
+        // For compliance, deleting user record here. 
+        // Prisma cascading deletes will handle related records if configured.
+        await db_1.prisma.user.delete({
+            where: { id: userId }
+        });
+        res.status(200).json({ success: true, message: 'Account deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting account:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.deleteAccount = deleteAccount;

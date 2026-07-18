@@ -260,47 +260,15 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Decode base64
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    const fs = require('fs');
-    const path = require('path');
-    
-    // Delete old avatar from storage if exists locally
-    if (user.avatarUrl && user.avatarUrl.includes('/uploads/avatars/')) {
-      try {
-        const oldFilename = user.avatarUrl.split('/').pop();
-        if (oldFilename) {
-          const oldFilePath = path.join(__dirname, '../../public/uploads/avatars', oldFilename);
-          if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-          }
-        }
-      } catch (e) {
-        console.error('Error deleting old avatar:', e);
-      }
+    // Ensure it's a valid data URI
+    if (!imageBase64.startsWith('data:image')) {
+       // if it's raw base64, prepend the prefix
+       imageBase64 = `data:image/jpeg;base64,${imageBase64.replace(/^data:image\/\w+;base64,/, '')}`;
     }
-
-    // Upload new avatar locally
-    const timestamp = Date.now();
-    const filename = `${userId}_${timestamp}.jpg`;
-    
-    // Ensure directory exists
-    const dir = path.join(__dirname, '../../public/uploads/avatars');
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    const filePath = path.join(dir, filename);
-    fs.writeFileSync(filePath, buffer);
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const publicUrl = `${baseUrl}/uploads/avatars/${filename}`;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: publicUrl }
+      data: { avatarUrl: imageBase64 }
     });
 
     res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });

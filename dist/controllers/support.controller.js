@@ -14,11 +14,11 @@ const getFaqs = async (req, res) => {
             const defaultFaqs = [
                 {
                     question: "What is SikkaPlay?",
-                    answer: "SikkaPlay is a premium reward-based gaming platform where you can play games, complete simple daily tasks, scroll through Reels, and refer friends to earn Sikka coins. These coins can be withdrawn directly via UPI."
+                    answer: "SikkaPlay is a premium reward-based gaming platform where you can play games, complete simple daily tasks, and refer friends to earn Sikka coins. These coins can be withdrawn directly via UPI."
                 },
                 {
                     question: "How do I earn Sikka coins?",
-                    answer: "There are multiple ways to earn Sikka coins:\n1. Watch Reels: Earn coins continuously for scrolling Reels.\n2. Play Games: Play Emoji Memory, Math Rush, Treasure Grid, or Lucky Spin Wheel.\n3. Daily Code: Claim daily promo codes for bonus Sikka.\n4. Tasks & Surveys: Visit sponsored websites or complete partner surveys.\n5. Social Tasks: Join our official Telegram and WhatsApp channels."
+                    answer: "There are multiple ways to earn Sikka coins:\n1. Play Games: Play Emoji Memory, Math Rush, Treasure Grid, or Lucky Spin Wheel.\n2. Daily Code: Claim daily promo codes for bonus Sikka.\n3. Tasks & Surveys: Visit sponsored websites or complete partner surveys.\n4. Social Tasks: Join our official Telegram and WhatsApp channels."
                 },
                 {
                     question: "How can I withdraw my coins and what is the minimum limit?",
