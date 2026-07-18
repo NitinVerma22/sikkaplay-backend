@@ -101,8 +101,14 @@ app.use((err, req, res, next) => {
 // Socket.io and Redis Adapter Setup
 const httpServer = (0, http_1.createServer)(app);
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const pubClient = new ioredis_1.default(redisUrl);
+const pubClient = new ioredis_1.default(redisUrl, { maxRetriesPerRequest: null });
 const subClient = pubClient.duplicate();
+pubClient.on('error', (err) => {
+    console.error('[Redis PubClient] Error:', err.message);
+});
+subClient.on('error', (err) => {
+    console.error('[Redis SubClient] Error:', err.message);
+});
 exports.io = new socket_io_1.Server(httpServer, {
     cors: {
         origin: allowedOrigins,
