@@ -250,8 +250,8 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Check if the payload is just a preset asset path (Live Custom Avatar)
-    if (imageBase64.startsWith('assets/')) {
+    // Check if the payload is just a preset asset path (Live Custom Avatar) or already http URL
+    if (imageBase64.startsWith('assets/') || imageBase64.startsWith('http')) {
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: { avatarUrl: imageBase64 }
@@ -260,16 +260,34 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Ensure it's a valid data URI
     let finalBase64 = imageBase64;
-    if (!finalBase64.startsWith('data:image')) {
-       // if it's raw base64, prepend the prefix
-       finalBase64 = `data:image/jpeg;base64,${finalBase64.replace(/^data:image\/\w+;base64,/, '')}`;
+    if (finalBase64.startsWith('data:image')) {
+       finalBase64 = finalBase64.replace(/^data:image\/\w+;base64,/, '');
     }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(finalBase64, 'base64');
+    
+    // Upload to Firebase Storage
+    const bucket = storage.bucket();
+    const token = randomUUID();
+    const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+    const file = bucket.file(fileName);
+    
+    await file.save(buffer, {
+      metadata: {
+        contentType: 'image/jpeg',
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+        }
+      },
+    });
+    
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: finalBase64 }
+      data: { avatarUrl: publicUrl }
     });
 
     res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
