@@ -155,6 +155,7 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
         gender: user.gender,
         name: user.name || 'SikkaPlay Player',
         username: user.username,
+        avatarUrl: user.avatarUrl,
         giftInventory: user.giftInventory,
         crateProgress,
         friendsCount,
