@@ -6,7 +6,7 @@ const serviceAccountPath = path.resolve(process.cwd(), 'src/config/firebase-serv
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccountPath),
-  storageBucket: 'sikkaplay.appspot.com',
+  storageBucket: 'sikkaplay.firebasestorage.app',
 });
 
 export const auth = admin.auth();
