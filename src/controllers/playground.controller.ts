@@ -703,6 +703,7 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
           name: friendUser.name || 'Friend',
           gender: friendUser.gender,
           username: friendUser.username,
+          avatarUrl: friendUser.avatarUrl,
           createdAt: f.createdAt,
           isOnline: onlineUsersCache.has(friendUser.id),
           lastMessageText: lastMessage ? lastMessage.text : null,
