@@ -271,23 +271,22 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     // Convert base64 to buffer
     const buffer = Buffer.from(finalBase64, 'base64');
     
-    // Save to local disk
-    const timestamp = Date.now();
-    const fileName = `${userId}_${timestamp}.jpg`;
-    const uploadDir = path.join(__dirname, '../../public/uploads/avatars');
+    // Upload to Firebase Storage
+    const bucket = storage.bucket();
+    const token = randomUUID();
+    const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+    const file = bucket.file(fileName);
     
-    // Ensure directory exists
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    await file.save(buffer, {
+      metadata: {
+        contentType: 'image/jpeg',
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+        }
+      },
+    });
     
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, buffer);
-    
-    // Construct public URL
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const host = req.headers.host;
-    const publicUrl = `${protocol}://${host}/uploads/avatars/${fileName}`;
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
