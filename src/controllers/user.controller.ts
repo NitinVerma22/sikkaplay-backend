@@ -288,6 +288,24 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     
     const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
+    // Delete old avatar if it's a Firebase Storage URL and not the same
+    if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
+      try {
+        const urlObj = new URL(user.avatarUrl);
+        const pathname = decodeURIComponent(urlObj.pathname);
+        const match = pathname.match(/\/o\/(.+)$/);
+        if (match && match[1]) {
+          // match[1] could have query params like ?alt=media, so we strip them
+          const oldFileName = match[1].split('?')[0];
+          const oldFile = bucket.file(oldFileName);
+          await oldFile.delete();
+          console.log(`Deleted old avatar: ${oldFileName}`);
+        }
+      } catch (err) {
+        console.error('Error deleting old avatar:', err);
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { avatarUrl: publicUrl }
