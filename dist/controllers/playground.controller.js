@@ -129,6 +129,7 @@ const getPlaygroundLobby = async (req, res) => {
             gender: user.gender,
             name: user.name || 'SikkaPlay Player',
             username: user.username,
+            avatarUrl: user.avatarUrl,
             giftInventory: user.giftInventory,
             crateProgress,
             friendsCount,
@@ -629,6 +630,7 @@ const getFriendsList = async (req, res) => {
                     name: friendUser.name || 'Friend',
                     gender: friendUser.gender,
                     username: friendUser.username,
+                    avatarUrl: friendUser.avatarUrl,
                     createdAt: f.createdAt,
                     isOnline: auth_middleware_1.onlineUsersCache.has(friendUser.id),
                     lastMessageText: lastMessage ? lastMessage.text : null,
@@ -1074,9 +1076,9 @@ const sendPlaygroundMessage = async (req, res) => {
             const activeChannel = exports.userActiveChannelCache.get(recipientId);
             if (activeChannel !== finalChannelName) {
                 // Recipient is not viewing this channel - send push!
-                const sender = await db_1.prisma.user.findUnique({ where: { id: senderId } });
+                const sender = await db_1.prisma.user.findUnique({ where: { id: senderId }, select: { name: true, username: true } });
                 const senderName = sender?.name || sender?.username || 'SikkaPlay User';
-                const recipientUser = await db_1.prisma.user.findUnique({ where: { id: recipientId } });
+                const recipientUser = await db_1.prisma.user.findUnique({ where: { id: recipientId }, select: { fcmToken: true, id: true } });
                 if (recipientUser?.fcmToken) {
                     const isSignaling = text.startsWith('__');
                     if (!isSignaling) {
@@ -1121,14 +1123,16 @@ const syncPlaygroundMessages = async (req, res) => {
         let messages = [];
         let outgoing = [];
         if (history === 'true') {
-            // Fetch full history from the last 24 hours
+            // Fetch full history from the last 24 hours (with global pagination limit)
             messages = await db_1.prisma.playgroundMessage.findMany({
                 where: {
                     channelName: finalChannelName,
                     createdAt: { gte: twentyFourHoursAgo }
                 },
-                orderBy: { createdAt: 'asc' }
+                orderBy: { createdAt: 'desc' },
+                take: 50
             });
+            messages = messages.reverse(); // Ensure chronological order for UI
             // Mark any unread incoming messages in history as seen
             const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);
             if (unreadIncoming.length > 0) {

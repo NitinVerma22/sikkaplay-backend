@@ -247,7 +247,7 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -326,11 +326,22 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
     
-    // In a real production app, you might want to "soft delete" or anonymize.
-    // For compliance, deleting user record here. 
-    // Prisma cascading deletes will handle related records if configured.
-    await prisma.user.delete({
-      where: { id: userId }
+    // Soft delete to avoid foreign key constraint errors with Prisma relations
+    // This frees up unique constraints (phone, firebaseUid, username, referralCode)
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        phoneNumber: `del_${userId.substring(0, 8)}_${Date.now()}`,
+        firebaseUid: `del_${userId.substring(0, 8)}_${Date.now()}`,
+        username: `del_${userId.substring(0, 8)}_${Date.now()}`,
+        referralCode: `del_${userId.substring(0, 8)}_${Date.now()}`,
+        name: 'Deleted User',
+        avatarUrl: null,
+        bio: null,
+        fcmToken: null,
+        deviceId: null,
+        isBlocked: true,
+      }
     });
     
     res.status(200).json({ success: true, message: 'Account deleted successfully' });

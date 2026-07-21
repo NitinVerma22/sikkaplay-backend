@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAccount = exports.updateAvatar = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
+const firebase_1 = require("../config/firebase");
+const crypto_1 = require("crypto");
 const getProfile = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -214,13 +216,13 @@ const updateAvatar = async (req, res) => {
             res.status(400).json({ error: 'imageBase64 parameter is required' });
             return;
         }
-        const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        const user = await db_1.prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
         if (!user) {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        // Check if the payload is just a preset asset path (Live Custom Avatar)
-        if (imageBase64.startsWith('assets/')) {
+        // Check if the payload is just a preset asset path (Live Custom Avatar) or already http URL
+        if (imageBase64.startsWith('assets/') || imageBase64.startsWith('http')) {
             const updatedUser = await db_1.prisma.user.update({
                 where: { id: userId },
                 data: { avatarUrl: imageBase64 }
@@ -228,15 +230,47 @@ const updateAvatar = async (req, res) => {
             res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
             return;
         }
-        // Ensure it's a valid data URI
         let finalBase64 = imageBase64;
-        if (!finalBase64.startsWith('data:image')) {
-            // if it's raw base64, prepend the prefix
-            finalBase64 = `data:image/jpeg;base64,${finalBase64.replace(/^data:image\/\w+;base64,/, '')}`;
+        if (finalBase64.startsWith('data:image')) {
+            finalBase64 = finalBase64.replace(/^data:image\/\w+;base64,/, '');
+        }
+        // Convert base64 to buffer
+        const buffer = Buffer.from(finalBase64, 'base64');
+        // Upload to Firebase Storage
+        const bucket = firebase_1.storage.bucket();
+        const token = (0, crypto_1.randomUUID)();
+        const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+        const file = bucket.file(fileName);
+        await file.save(buffer, {
+            metadata: {
+                contentType: 'image/jpeg',
+                metadata: {
+                    firebaseStorageDownloadTokens: token,
+                }
+            },
+        });
+        const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+        // Delete old avatar if it's a Firebase Storage URL and not the same
+        if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
+            try {
+                const urlObj = new URL(user.avatarUrl);
+                const pathname = decodeURIComponent(urlObj.pathname);
+                const match = pathname.match(/\/o\/(.+)$/);
+                if (match && match[1]) {
+                    // match[1] could have query params like ?alt=media, so we strip them
+                    const oldFileName = match[1].split('?')[0];
+                    const oldFile = bucket.file(oldFileName);
+                    await oldFile.delete();
+                    console.log(`Deleted old avatar: ${oldFileName}`);
+                }
+            }
+            catch (err) {
+                console.error('Error deleting old avatar:', err);
+            }
         }
         const updatedUser = await db_1.prisma.user.update({
             where: { id: userId },
-            data: { avatarUrl: finalBase64 }
+            data: { avatarUrl: publicUrl }
         });
         res.status(200).json({ success: true, avatarUrl: updatedUser.avatarUrl });
     }
@@ -253,11 +287,22 @@ const deleteAccount = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        // In a real production app, you might want to "soft delete" or anonymize.
-        // For compliance, deleting user record here. 
-        // Prisma cascading deletes will handle related records if configured.
-        await db_1.prisma.user.delete({
-            where: { id: userId }
+        // Soft delete to avoid foreign key constraint errors with Prisma relations
+        // This frees up unique constraints (phone, firebaseUid, username, referralCode)
+        await db_1.prisma.user.update({
+            where: { id: userId },
+            data: {
+                phoneNumber: `del_${userId.substring(0, 8)}_${Date.now()}`,
+                firebaseUid: `del_${userId.substring(0, 8)}_${Date.now()}`,
+                username: `del_${userId.substring(0, 8)}_${Date.now()}`,
+                referralCode: `del_${userId.substring(0, 8)}_${Date.now()}`,
+                name: 'Deleted User',
+                avatarUrl: null,
+                bio: null,
+                fcmToken: null,
+                deviceId: null,
+                isBlocked: true,
+            }
         });
         res.status(200).json({ success: true, message: 'Account deleted successfully' });
     }

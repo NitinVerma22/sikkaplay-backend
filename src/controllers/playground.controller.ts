@@ -1212,10 +1212,10 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
       const activeChannel = userActiveChannelCache.get(recipientId);
       if (activeChannel !== finalChannelName) {
         // Recipient is not viewing this channel - send push!
-        const sender = await prisma.user.findUnique({ where: { id: senderId } });
+        const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { name: true, username: true } });
         const senderName = sender?.name || sender?.username || 'SikkaPlay User';
 
-        const recipientUser = await prisma.user.findUnique({ where: { id: recipientId } });
+        const recipientUser = await prisma.user.findUnique({ where: { id: recipientId }, select: { fcmToken: true, id: true } });
         if (recipientUser?.fcmToken) {
           const isSignaling = text.startsWith('__');
           if (!isSignaling) {
@@ -1276,14 +1276,16 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
     let outgoing = [];
 
     if (history === 'true') {
-      // Fetch full history from the last 24 hours
+      // Fetch full history from the last 24 hours (with global pagination limit)
       messages = await prisma.playgroundMessage.findMany({
         where: {
           channelName: finalChannelName,
           createdAt: { gte: twentyFourHoursAgo }
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: { createdAt: 'desc' },
+        take: 50
       });
+      messages = messages.reverse(); // Ensure chronological order for UI
 
       // Mark any unread incoming messages in history as seen
       const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);

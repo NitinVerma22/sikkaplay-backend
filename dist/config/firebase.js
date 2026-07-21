@@ -43,7 +43,7 @@ const path_1 = __importDefault(require("path"));
 const serviceAccountPath = path_1.default.resolve(process.cwd(), 'src/config/firebase-service-account.json');
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccountPath),
-    storageBucket: 'sikkaplay.appspot.com',
+    storageBucket: 'sikkaplay.firebasestorage.app',
 });
 exports.auth = admin.auth();
 exports.storage = admin.storage();

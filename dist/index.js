@@ -50,7 +50,7 @@ app.use((0, cors_1.default)({
     },
     credentials: true
 }));
-app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.json({ limit: '5mb' }));
 app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../public/uploads')));
 // API Request/Response Logger
@@ -166,9 +166,22 @@ exports.io.on('connection', (socket) => {
     });
     socket.on('disconnect', () => {
         console.log(`[Socket] User disconnected: ${socket.id}`);
+        // Prevent memory leaks by removing listeners
+        socket.removeAllListeners();
+        // Clear user from online cache if they were authenticated
+        // User cache is not maintained in this file
     });
 });
 // Start the server
 httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+});
+// Prevent Node.js from silently crashing due to unhandled promises
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+    // We log it but do NOT exit the process, keeping WebSockets alive
+});
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught Exception thrown:', err);
+    process.exit(1); // Must exit on uncaught exception to avoid undefined state
 });

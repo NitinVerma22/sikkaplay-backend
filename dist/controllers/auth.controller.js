@@ -270,8 +270,8 @@ const googleLogin = async (req, res) => {
 exports.googleLogin = googleLogin;
 const completeGoogleSignup = async (req, res) => {
     try {
-        const { firebaseUid, phoneNumber, name, city, referredBy, deviceId } = req.body;
-        if (!firebaseUid || !phoneNumber) {
+        const { firebaseUid, name, city, gender, referredBy, deviceId } = req.body;
+        if (!firebaseUid) {
             res.status(400).json({ error: 'Missing required fields' });
             return;
         }
@@ -287,11 +287,8 @@ const completeGoogleSignup = async (req, res) => {
                 return;
             }
         }
-        // Format phone number
-        let formattedPhone = phoneNumber;
-        if (!formattedPhone.startsWith('+')) {
-            formattedPhone = '+91' + formattedPhone;
-        }
+        // Auto-generate a dummy phone number for Google users
+        const formattedPhone = `G-${firebaseUid.substring(0, 10)}`;
         // Check if phone number is already taken
         const existingPhone = await db_1.prisma.user.findUnique({
             where: { phoneNumber: formattedPhone }
