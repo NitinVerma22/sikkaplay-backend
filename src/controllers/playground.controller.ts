@@ -1178,23 +1178,6 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
       }
     }
 
-    let isBlockedByMe = false;
-    let isBlockedByPartner = false;
-    if (recipientId) {
-      const blocks = await prisma.blockedUser.findMany({
-        where: {
-          OR: [
-            { blockerId: userId, blockedId: recipientId },
-            { blockerId: recipientId, blockedId: userId }
-          ]
-        }
-      });
-      for (const b of blocks) {
-        if (b.blockerId === userId) isBlockedByMe = true;
-        if (b.blockerId === recipientId) isBlockedByPartner = true;
-      }
-    }
-
     let finalChannelName = channelName;
     if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
       const ids = [senderId, recipientId].sort();
@@ -1287,6 +1270,23 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
     if (!channelName || typeof channelName !== 'string') {
       res.status(400).json({ error: 'channelName parameter is required' });
       return;
+    }
+
+    let isBlockedByMe = false;
+    let isBlockedByPartner = false;
+    if (recipientId && typeof recipientId === 'string') {
+      const blocks = await prisma.blockedUser.findMany({
+        where: {
+          OR: [
+            { blockerId: userId, blockedId: recipientId },
+            { blockerId: recipientId, blockedId: userId }
+          ]
+        }
+      });
+      for (const b of blocks) {
+        if (b.blockerId === userId) isBlockedByMe = true;
+        if (b.blockerId === recipientId) isBlockedByPartner = true;
+      }
     }
 
     let finalChannelName = channelName;
