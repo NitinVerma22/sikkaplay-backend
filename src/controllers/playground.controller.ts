@@ -1620,15 +1620,7 @@ export const blockUser = async (req: AuthRequest, res: Response): Promise<void> 
       create: { blockerId: userId, blockedId: targetUserId }
     });
 
-    // Delete friendship if exists
-    await prisma.friendship.deleteMany({
-      where: {
-        OR: [
-          { userOneId: userId, userTwoId: targetUserId },
-          { userOneId: targetUserId, userTwoId: userId }
-        ]
-      }
-    });
+    // Do NOT delete friendship so that the chat remains in the list.
 
     // Force close active chat on socket
     io.to(`friend-chat-${userId}`).emit('user_blocked', { blockerId: userId, blockedId: targetUserId });
