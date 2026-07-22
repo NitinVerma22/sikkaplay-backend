@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
-import { storage } from '../config/firebase';
+import { storage, auth } from '../config/firebase';
 import { randomUUID } from 'crypto';
 
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -347,6 +347,53 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
     res.status(200).json({ success: true, message: 'Account deleted successfully' });
   } catch (error) {
     console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const syncPhone = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Fetch firebase user record using Firebase Admin
+    const firebaseRecord = await auth.getUser(user.firebaseUid);
+    if (!firebaseRecord.phoneNumber) {
+      res.status(400).json({ error: 'No phone number linked to this Firebase account.' });
+      return;
+    }
+
+    // Ensure the phone number starts with + for standardization
+    let formattedPhone = firebaseRecord.phoneNumber;
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+91' + formattedPhone;
+    }
+
+    // Check if phone is already taken by someone else
+    const existing = await prisma.user.findUnique({ where: { phoneNumber: formattedPhone } });
+    if (existing && existing.id !== userId) {
+      res.status(400).json({ error: 'Phone number already registered to another account.' });
+      return;
+    }
+
+    // Update the phone number in our database
+    await prisma.user.update({
+      where: { id: userId },
+      data: { phoneNumber: formattedPhone }
+    });
+
+    res.status(200).json({ success: true, phoneNumber: formattedPhone, message: 'Phone number synced successfully.' });
+  } catch (error) {
+    console.error('Error syncing phone number:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

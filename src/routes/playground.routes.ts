@@ -23,7 +23,10 @@ import {
   getPublicProfile,
   updateActiveChannel,
   clearChatHistory,
-  setTypingStatus
+  setTypingStatus,
+  blockUser,
+  unblockUser,
+  getBlockedUsers
 } from '../controllers/playground.controller';
 import rateLimit from 'express-rate-limit';
 
@@ -82,7 +85,10 @@ router.post('/chat/typing', setTypingStatus);
 router.post('/profile/bio', updateBio);
 router.get('/profile/search', getPublicProfile);
 
-// Safety
+// Safety & Privacy
 router.post('/report', reportUser);
+router.post('/block', blockUser);
+router.post('/unblock', unblockUser);
+router.get('/blocked', getBlockedUsers);
 
 export default router;

@@ -16,9 +16,10 @@ import gameRoutes from './routes/game.routes';
 import playgroundRoutes from './routes/playground.routes';
 import { startCronJobs } from './services/cron.service';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { MatchmakingService } from './services/matchmaking.service';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -118,10 +119,18 @@ subClient.on('error', (err) => {
 export const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
-    credentials: true
-  }
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
+    credentials: true,
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
+
 io.adapter(createAdapter(pubClient, subClient));
+
+const matchmakingService = new MatchmakingService(io);
+matchmakingService.startWorker();
 
 // Socket Authentication Middleware
 io.use((socket, next) => {
@@ -176,12 +185,61 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  // Matchmaking Events
+  socket.on('matchmaking_search_start', async (data) => {
+    try {
+      const { userId, gender, preference } = data;
+      // Socket authentication happens via middleware, but ensure userId is present
+      if (userId) {
+        // Handle premium deduct here? Wait, deducting coins from wallet should probably be handled via an API first,
+        // or we do it here. Let's do it in the service since the user approved.
+        await matchmakingService.joinSearch(userId, socket.id, gender, preference);
+      }
+    } catch (e: any) {
+      socket.emit('matchmaking_error', { message: e.message });
+    }
+  });
+
+  socket.on('matchmaking_search_cancel', async (data) => {
+    try {
+      const { userId } = data;
+      if (userId) await matchmakingService.cancelSearch(userId);
+    } catch (e: any) {
+      console.error('Cancel search error:', e.message);
+    }
+  });
+
+  socket.on('matchmaking_heartbeat', async (data) => {
+    try {
+      const { userId } = data;
+      if (userId) await matchmakingService.updateHeartbeat(userId);
+    } catch (e) {}
+  });
+
+  socket.on('matchmaking_leave_chat', async (data) => {
+    try {
+      const { userId } = data;
+      if (userId) await matchmakingService.leaveChat(userId);
+    } catch (e) {}
+  });
+
+  socket.on('disconnect', async () => {
     console.log(`[Socket] User disconnected: ${socket.id}`);
+    
+    // We don't have the user ID easily accessible here unless it was saved in socket.data
+    // So if socket.data.userId exists, we can handle it
+    if (socket.data && socket.data.userId) {
+      const userId = socket.data.userId;
+      // Instead of immediate leave, we can wait for heartbeat to expire (30 seconds)
+      // This allows them to reconnect if it was a quick network drop.
+      // We don't call leaveChat here immediately. The heartbeat checker will handle it.
+      
+      // But if they are just searching, we can remove them immediately?
+      // Heartbeat handles that too.
+    }
+    
     // Prevent memory leaks by removing listeners
     socket.removeAllListeners();
-    // Clear user from online cache if they were authenticated
-    // User cache is not maintained in this file
   });
 });
 
