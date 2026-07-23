@@ -188,7 +188,16 @@ io.on('connection', (socket) => {
   // Matchmaking Events
   socket.on('matchmaking_search_start', async (data) => {
     try {
-      const { userId, gender, preference } = data;
+      let { userId, gender, preference } = data;
+      
+      // Fix case sensitivity
+      gender = (gender || 'male').toLowerCase();
+      preference = (preference || 'random').toLowerCase();
+      
+      // Ensure valid values
+      if (!['male', 'female', 'random'].includes(gender)) gender = 'random';
+      if (!['male', 'female', 'random'].includes(preference)) preference = 'random';
+
       // Socket authentication happens via middleware, but ensure userId is present
       if (userId) {
         // Handle premium deduct here? Wait, deducting coins from wallet should probably be handled via an API first,
