@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAccount = exports.updateAvatar = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.syncPhone = exports.deleteAccount = exports.updateAvatar = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const firebase_1 = require("../config/firebase");
 const crypto_1 = require("crypto");
@@ -312,3 +312,45 @@ const deleteAccount = async (req, res) => {
     }
 };
 exports.deleteAccount = deleteAccount;
+const syncPhone = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        // Fetch firebase user record using Firebase Admin
+        const firebaseRecord = await firebase_1.auth.getUser(user.firebaseUid);
+        if (!firebaseRecord.phoneNumber) {
+            res.status(400).json({ error: 'No phone number linked to this Firebase account.' });
+            return;
+        }
+        // Ensure the phone number starts with + for standardization
+        let formattedPhone = firebaseRecord.phoneNumber;
+        if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+91' + formattedPhone;
+        }
+        // Check if phone is already taken by someone else
+        const existing = await db_1.prisma.user.findUnique({ where: { phoneNumber: formattedPhone } });
+        if (existing && existing.id !== userId) {
+            res.status(400).json({ error: 'Phone number already registered to another account.' });
+            return;
+        }
+        // Update the phone number in our database
+        await db_1.prisma.user.update({
+            where: { id: userId },
+            data: { phoneNumber: formattedPhone }
+        });
+        res.status(200).json({ success: true, phoneNumber: formattedPhone, message: 'Phone number synced successfully.' });
+    }
+    catch (error) {
+        console.error('Error syncing phone number:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.syncPhone = syncPhone;

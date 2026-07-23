@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setTypingStatus = exports.clearChatHistory = exports.unfriendUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.typingUsersCache = exports.userActiveChannelCache = void 0;
+exports.setTypingStatus = exports.clearChatHistory = exports.unfriendUser = exports.getBlockedUsers = exports.unblockUser = exports.blockUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.typingUsersCache = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -1032,6 +1032,20 @@ const sendPlaygroundMessage = async (req, res) => {
             res.status(400).json({ error: 'Missing parameters' });
             return;
         }
+        if (recipientId) {
+            const isBlocked = await db_1.prisma.blockedUser.findFirst({
+                where: {
+                    OR: [
+                        { blockerId: senderId, blockedId: recipientId },
+                        { blockerId: recipientId, blockedId: senderId }
+                    ]
+                }
+            });
+            if (isBlocked) {
+                res.status(403).json({ error: 'Messaging not allowed due to block', blocked: true });
+                return;
+            }
+        }
         let finalChannelName = channelName;
         if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
             const ids = [senderId, recipientId].sort();
@@ -1108,6 +1122,24 @@ const syncPlaygroundMessages = async (req, res) => {
             res.status(400).json({ error: 'channelName parameter is required' });
             return;
         }
+        let isBlockedByMe = false;
+        let isBlockedByPartner = false;
+        if (recipientId && typeof recipientId === 'string') {
+            const blocks = await db_1.prisma.blockedUser.findMany({
+                where: {
+                    OR: [
+                        { blockerId: userId, blockedId: recipientId },
+                        { blockerId: recipientId, blockedId: userId }
+                    ]
+                }
+            });
+            for (const b of blocks) {
+                if (b.blockerId === userId)
+                    isBlockedByMe = true;
+                if (b.blockerId === recipientId)
+                    isBlockedByPartner = true;
+            }
+        }
         let finalChannelName = channelName;
         if (recipientId && typeof recipientId === 'string' && (channelName.startsWith('friend-chat-') || channelName.startsWith('private-chat-') || channelName.startsWith('friend-') || channelName.startsWith('private-'))) {
             const ids = [userId, recipientId].sort();
@@ -1122,12 +1154,19 @@ const syncPlaygroundMessages = async (req, res) => {
         });
         let messages = [];
         let outgoing = [];
+        const hiddenChat = await db_1.prisma.hiddenChat.findUnique({
+            where: { userId_channelName: { userId, channelName: finalChannelName } }
+        });
+        const hiddenAt = hiddenChat ? hiddenChat.hiddenAt : null;
         if (history === 'true') {
             // Fetch full history from the last 24 hours (with global pagination limit)
             messages = await db_1.prisma.playgroundMessage.findMany({
                 where: {
                     channelName: finalChannelName,
-                    createdAt: { gte: twentyFourHoursAgo }
+                    createdAt: {
+                        gte: twentyFourHoursAgo,
+                        ...(hiddenAt ? { gt: hiddenAt } : {})
+                    }
                 },
                 orderBy: { createdAt: 'desc' },
                 take: 50
@@ -1194,7 +1233,9 @@ const syncPlaygroundMessages = async (req, res) => {
             outgoingStatus: outgoing.map(o => ({ id: o.id, isSeen: o.isSeen })),
             partnerOnline,
             partnerIsTyping,
-            totalDbCount
+            totalDbCount,
+            isBlockedByMe,
+            isBlockedByPartner
         });
     }
     catch (error) {
@@ -1379,6 +1420,95 @@ const getPublicProfile = async (req, res) => {
     }
 };
 exports.getPublicProfile = getPublicProfile;
+// --- Block User APIs ---
+const blockUser = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { targetUserId } = req.body;
+        if (!userId || !targetUserId) {
+            res.status(400).json({ error: 'Missing parameters' });
+            return;
+        }
+        if (userId === targetUserId) {
+            res.status(400).json({ error: 'Cannot block yourself' });
+            return;
+        }
+        // Upsert block record
+        await db_1.prisma.blockedUser.upsert({
+            where: { blockerId_blockedId: { blockerId: userId, blockedId: targetUserId } },
+            update: {},
+            create: { blockerId: userId, blockedId: targetUserId }
+        });
+        // Delete friendship if exists
+        await db_1.prisma.friendship.deleteMany({
+            where: {
+                OR: [
+                    { userOneId: userId, userTwoId: targetUserId },
+                    { userOneId: targetUserId, userTwoId: userId }
+                ]
+            }
+        });
+        // Force close active chat on socket
+        index_1.io.to(`friend-chat-${userId}`).emit('user_blocked', { blockerId: userId, blockedId: targetUserId });
+        index_1.io.to(`friend-chat-${targetUserId}`).emit('user_blocked', { blockerId: userId, blockedId: targetUserId });
+        res.status(200).json({ success: true, message: 'User blocked successfully' });
+    }
+    catch (error) {
+        console.error('Error blocking user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.blockUser = blockUser;
+const unblockUser = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { targetUserId } = req.body;
+        if (!userId || !targetUserId) {
+            res.status(400).json({ error: 'Missing parameters' });
+            return;
+        }
+        await db_1.prisma.blockedUser.deleteMany({
+            where: { blockerId: userId, blockedId: targetUserId }
+        });
+        res.status(200).json({ success: true, message: 'User unblocked successfully' });
+    }
+    catch (error) {
+        console.error('Error unblocking user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.unblockUser = unblockUser;
+const getBlockedUsers = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        const blocked = await db_1.prisma.blockedUser.findMany({
+            where: { blockerId: userId },
+            include: {
+                blocked: {
+                    select: { id: true, name: true, username: true, avatarUrl: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        const mapped = blocked.map(b => ({
+            userId: b.blocked.id,
+            name: b.blocked.name,
+            username: b.blocked.username,
+            avatarUrl: b.blocked.avatarUrl,
+            blockedAt: b.createdAt
+        }));
+        res.status(200).json({ success: true, blockedUsers: mapped });
+    }
+    catch (error) {
+        console.error('Error fetching blocked users:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getBlockedUsers = getBlockedUsers;
 // 15b. Unfriend (Delete friendship and wipe private chat history)
 const unfriendUser = async (req, res) => {
     try {
@@ -1405,15 +1535,6 @@ const unfriendUser = async (req, res) => {
             res.status(404).json({ error: 'Friendship not found' });
             return;
         }
-        // Delete chat messages between these two users (private chat history wipe)
-        // First construct the unified channel name for private chat
-        const ids = [userId, targetUserId].sort();
-        const unifiedChannelName = `private-chat-${ids[0]}-${ids[1]}`;
-        await db_1.prisma.playgroundMessage.deleteMany({
-            where: {
-                channelName: unifiedChannelName
-            }
-        });
         res.status(200).json({ success: true, message: 'Unfriended successfully' });
     }
     catch (error) {
@@ -1438,11 +1559,20 @@ const clearChatHistory = async (req, res) => {
         // Construct sorted channel name
         const ids = [userId, recipientId].sort();
         const unifiedChannelName = `private-chat-${ids[0]}-${ids[1]}`;
-        await db_1.prisma.playgroundMessage.deleteMany({
-            where: {
-                channelName: unifiedChannelName
-            }
+        const existingHidden = await db_1.prisma.hiddenChat.findUnique({
+            where: { userId_channelName: { userId, channelName: unifiedChannelName } }
         });
+        if (existingHidden) {
+            await db_1.prisma.hiddenChat.update({
+                where: { id: existingHidden.id },
+                data: { hiddenAt: new Date() }
+            });
+        }
+        else {
+            await db_1.prisma.hiddenChat.create({
+                data: { userId, channelName: unifiedChannelName, hiddenAt: new Date() }
+            });
+        }
         res.status(200).json({ success: true, message: 'Chat history cleared successfully' });
     }
     catch (error) {

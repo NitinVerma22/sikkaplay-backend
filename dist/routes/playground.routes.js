@@ -50,6 +50,9 @@ router.post('/chat/typing', playground_controller_1.setTypingStatus);
 // Profile
 router.post('/profile/bio', playground_controller_1.updateBio);
 router.get('/profile/search', playground_controller_1.getPublicProfile);
-// Safety
+// Safety & Privacy
 router.post('/report', playground_controller_1.reportUser);
+router.post('/block', playground_controller_1.blockUser);
+router.post('/unblock', playground_controller_1.unblockUser);
+router.get('/blocked', playground_controller_1.getBlockedUsers);
 exports.default = router;

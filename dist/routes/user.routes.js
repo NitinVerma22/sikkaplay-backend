@@ -32,6 +32,8 @@ router.put('/upi', user_controller_1.updateUpi);
 router.put('/bio', user_controller_1.updateBio);
 // PUT /api/user/avatar
 router.put('/avatar', user_controller_1.updateAvatar);
+// POST /api/user/sync-phone
+router.post('/sync-phone', user_controller_1.syncPhone);
 // POST /api/user/earn/... — vpnGuard only on earn routes
 router.post('/earn/daily-streak', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimDailyStreak);
 router.post('/earn/daily-streak/resume', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.resumeDailyStreak);
