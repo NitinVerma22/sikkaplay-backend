@@ -102,13 +102,16 @@ app.use((err, req, res, next) => {
 // Socket.io and Redis Adapter Setup
 const httpServer = (0, http_1.createServer)(app);
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const pubClient = new ioredis_1.default(redisUrl, { maxRetriesPerRequest: null });
+const pubClient = new ioredis_1.default(redisUrl, {
+    maxRetriesPerRequest: 1,
+    retryStrategy: (times) => Math.min(times * 1000, 3000),
+});
 const subClient = pubClient.duplicate();
 pubClient.on('error', (err) => {
-    console.error('[Redis PubClient] Error:', err.message);
+    // Silent error log when offline
 });
 subClient.on('error', (err) => {
-    console.error('[Redis SubClient] Error:', err.message);
+    // Silent error log when offline
 });
 exports.io = new socket_io_1.Server(httpServer, {
     cors: {
@@ -120,7 +123,10 @@ exports.io = new socket_io_1.Server(httpServer, {
     pingTimeout: 60000,
     pingInterval: 25000,
 });
-exports.io.adapter((0, redis_adapter_1.createAdapter)(pubClient, subClient));
+pubClient.on('connect', () => {
+    console.log('[Redis] PubClient connected, enabling Redis adapter for Socket.io');
+    exports.io.adapter((0, redis_adapter_1.createAdapter)(pubClient, subClient));
+});
 const matchmakingService = new matchmaking_service_1.MatchmakingService(exports.io);
 matchmakingService.startWorker();
 // Socket Authentication Middleware

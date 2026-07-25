@@ -105,15 +105,18 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 // Socket.io and Redis Adapter Setup
 const httpServer = createServer(app);
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const pubClient = new Redis(redisUrl, { maxRetriesPerRequest: null });
+const pubClient = new Redis(redisUrl, {
+  maxRetriesPerRequest: 1,
+  retryStrategy: (times) => Math.min(times * 1000, 3000),
+});
 const subClient = pubClient.duplicate();
 
 pubClient.on('error', (err) => {
-  console.error('[Redis PubClient] Error:', err.message);
+  // Silent error log when offline
 });
 
 subClient.on('error', (err) => {
-  console.error('[Redis SubClient] Error:', err.message);
+  // Silent error log when offline
 });
 
 export const io = new Server(httpServer, {
@@ -127,7 +130,10 @@ export const io = new Server(httpServer, {
   pingInterval: 25000,
 });
 
-io.adapter(createAdapter(pubClient, subClient));
+pubClient.on('connect', () => {
+  console.log('[Redis] PubClient connected, enabling Redis adapter for Socket.io');
+  io.adapter(createAdapter(pubClient, subClient));
+});
 
 const matchmakingService = new MatchmakingService(io);
 matchmakingService.startWorker();
