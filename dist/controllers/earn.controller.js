@@ -48,7 +48,7 @@ const claimDailyStreak = async (req, res) => {
                 break;
             }
         }
-        const activeDay = (currentStreak % 28) + 1;
+        const activeDay = currentStreak + 1;
         // Calculate coins for the day
         const getCoinsForDay = (day) => {
             if (day === 7)
@@ -59,6 +59,8 @@ const claimDailyStreak = async (req, res) => {
                 return 1500;
             if (day === 28)
                 return 2000;
+            if (day > 28)
+                return 200;
             return day * 10;
         };
         const coinsReward = getCoinsForDay(activeDay);
@@ -72,13 +74,14 @@ const claimDailyStreak = async (req, res) => {
                     totalEarned: { increment: coinsReward },
                 }
             });
+            const description = activeDay > 28 ? 'Daily Bonus Reward (200 Coins)' : `Daily Streak Day ${activeDay} Reward`;
             const transaction = await tx.transaction.create({
                 data: {
                     userId,
                     amount: coinsReward,
                     type: 'daily_streak',
                     status: 'success',
-                    description: `Daily Streak Day ${activeDay} Reward`
+                    description
                 }
             });
             return { user: updatedUser, transaction };

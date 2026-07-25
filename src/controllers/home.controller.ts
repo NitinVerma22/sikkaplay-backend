@@ -78,8 +78,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       }
     }
 
-    // Loop the streak back to 0 if it reaches 28 or more
-    currentStreak = currentStreak % 28;
+    // Allow streak to continue past 28 without looping back to 0
 
     // New Daily Streak Resume Detection logic
     let skippedDays = 0;
@@ -116,7 +115,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
               break;
             }
           }
-          streakBeforeSkip = streakBeforeSkip % 28;
+          // No modulo reset needed for streak before skip
         }
       }
     }
