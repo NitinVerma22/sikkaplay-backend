@@ -67,6 +67,8 @@ const getHomeState = async (req, res) => {
                 break;
             }
         }
+        // Loop the streak back to 0 if it reaches 28 or more
+        currentStreak = currentStreak % 28;
         // New Daily Streak Resume Detection logic
         let skippedDays = 0;
         let streakBeforeSkip = 0;
@@ -99,6 +101,7 @@ const getHomeState = async (req, res) => {
                             break;
                         }
                     }
+                    streakBeforeSkip = streakBeforeSkip % 28;
                 }
             }
         }

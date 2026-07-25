@@ -49,9 +49,7 @@ const ensureSeedData = async () => {
         console.error('Error seeding playground items:', err);
     }
 };
-const matchmakingQueue = [];
-// Match Results Registry: maps userId -> match metadata
-const matchResults = new Map();
+// Legacy in-memory matchmaking removed in favor of WebSocket + Redis architecture
 // 1. Lobby Status Dashboard
 const getPlaygroundLobby = async (req, res) => {
     try {
@@ -383,207 +381,22 @@ const claimCrate = async (req, res) => {
     }
 };
 exports.claimCrate = claimCrate;
-// 7. Matchmaking Join API
+// 7. Matchmaking Join API (Legacy / Fallback)
 const joinMatchmaking = async (req, res) => {
-    try {
-        const userId = req.user?.userId;
-        const { filter, gender } = req.body; // 'random' | 'male' | 'female'
-        if (!userId || !filter) {
-            res.status(400).json({ error: 'Filter is required' });
-            return;
-        }
-        // Check if user is blocked or banned
-        const ban = await db_1.prisma.playgroundBan.findFirst({
-            where: {
-                userId,
-                expiresAt: { gte: new Date() }
-            }
-        });
-        if (ban) {
-            res.status(403).json({
-                error: `Matchmaking suspended. Your playground privileges are suspended until ${ban.expiresAt.toLocaleString()} due to reports.`
-            });
-            return;
-        }
-        // If gender is provided, update it before fetching
-        if (gender) {
-            await db_1.prisma.user.update({
-                where: { id: userId },
-                data: { gender }
-            });
-        }
-        const user = await db_1.prisma.user.findUnique({
-            where: { id: userId }
-        });
-        if (!user) {
-            res.status(404).json({ error: 'User not found' });
-            return;
-        }
-        // Validate if already in queue, remove if exists to refresh
-        const idx = matchmakingQueue.findIndex(q => q.userId === userId);
-        if (idx !== -1) {
-            matchmakingQueue.splice(idx, 1);
-        }
-        // Handle premium gender filters billing
-        const config = await db_1.prisma.appConfig.findFirst();
-        let filterCost = 0;
-        if (filter === 'male')
-            filterCost = config?.playgroundMaleFilterCost ?? 50;
-        else if (filter === 'female')
-            filterCost = config?.playgroundFemaleFilterCost ?? 50;
-        if (filterCost > 0) {
-            if (user.balance < filterCost) {
-                res.status(400).json({ error: `Insufficient Sikka Coins. Premium filter costs ${filterCost} coins.` });
-                return;
-            }
-            await db_1.prisma.$transaction(async (tx) => {
-                await tx.user.update({
-                    where: { id: userId },
-                    data: { balance: { decrement: filterCost } }
-                });
-                await tx.transaction.create({
-                    data: {
-                        userId,
-                        amount: -filterCost,
-                        type: 'playground',
-                        status: 'success',
-                        description: `Deducted premium matchmaking filter cost (${filter} filter)`
-                    }
-                });
-            });
-        }
-        const userGender = user.gender || 'male';
-        // Insert user into queue
-        const queuedUser = {
-            userId,
-            gender: userGender,
-            filter,
-            joinedAt: new Date()
-        };
-        // Try to find a match in the active queue
-        let matchedPartner = null;
-        for (let i = 0; i < matchmakingQueue.length; i++) {
-            const peer = matchmakingQueue[i];
-            // Matchmaking condition logic:
-            // - If both are random, they match.
-            // - If both are specific filters, they must cross-match exactly (e.g. Female looking for Male matches Male looking for Female).
-            // - A random filter CANNOT match with a specific filter.
-            let peerMatchesUser = false;
-            let userMatchesPeer = false;
-            if (filter === 'random' && peer.filter === 'random') {
-                peerMatchesUser = true;
-                userMatchesPeer = true;
-            }
-            else if (filter !== 'random' && peer.filter !== 'random') {
-                peerMatchesUser = peer.filter === userGender;
-                userMatchesPeer = filter === peer.gender;
-            }
-            else {
-                peerMatchesUser = false;
-                userMatchesPeer = false;
-            }
-            if (peerMatchesUser && userMatchesPeer && peer.userId !== userId) {
-                matchedPartner = peer;
-                matchmakingQueue.splice(i, 1); // remove peer from queue
-                break;
-            }
-        }
-        if (matchedPartner) {
-            // Create session
-            const channelName = `play-${userId.substring(0, 8)}-${matchedPartner.userId.substring(0, 8)}-${Date.now()}`;
-            // Setup default empty token for Agora AppID bypass mode (or signature if AppCert configured)
-            const agoraToken = channelName;
-            // Fetch partner user details
-            const partnerUser = await db_1.prisma.user.findUnique({
-                where: { id: matchedPartner.userId }
-            });
-            // Save match state for user
-            matchResults.set(userId, {
-                channelName,
-                agoraToken,
-                partnerId: matchedPartner.userId,
-                partnerName: partnerUser?.name || 'SikkaPlay Player',
-                partnerUsername: partnerUser?.username || null,
-                partnerGender: matchedPartner.gender,
-                partnerAvatar: partnerUser?.avatarUrl || null
-            });
-            // Save match state for partner
-            matchResults.set(matchedPartner.userId, {
-                channelName,
-                agoraToken,
-                partnerId: userId,
-                partnerName: user.name || 'SikkaPlay Player',
-                partnerUsername: user.username || null,
-                partnerGender: userGender,
-                partnerAvatar: user.avatarUrl || null
-            });
-            // Store call session history
-            await db_1.prisma.playgroundSession.create({
-                data: {
-                    channelName,
-                    userOneId: userId,
-                    userTwoId: matchedPartner.userId
-                }
-            });
-            res.status(200).json({
-                success: true,
-                status: 'matched',
-                channelName,
-                agoraToken,
-                agoraAppId: process.env.AGORA_APP_ID || 'test-app-id',
-                partner: matchResults.get(userId)
-            });
-        }
-        else {
-            // Add user to queue
-            matchmakingQueue.push(queuedUser);
-            res.status(200).json({
-                success: true,
-                status: 'searching',
-                message: 'Looking for matching partners...'
-            });
-        }
-    }
-    catch (error) {
-        console.error('Error starting matchmaking:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    res.status(200).json({
+        success: true,
+        status: 'searching',
+        message: 'Matchmaking is handled via real-time WebSocket events.'
+    });
 };
 exports.joinMatchmaking = joinMatchmaking;
-// 8. Matchmaking Status Check
+// 8. Matchmaking Status Check (Legacy / Fallback)
 const checkMatchmakingStatus = async (req, res) => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) {
-            res.status(401).json({ error: 'Unauthorized' });
-            return;
-        }
-        const matchInfo = matchResults.get(userId);
-        if (matchInfo) {
-            // Pop match result once fetched
-            matchResults.delete(userId);
-            res.status(200).json({
-                success: true,
-                status: 'matched',
-                channelName: matchInfo.channelName,
-                agoraToken: matchInfo.agoraToken,
-                agoraAppId: process.env.AGORA_APP_ID || 'test-app-id',
-                partner: matchInfo
-            });
-        }
-        else {
-            // Confirm still queued
-            const isQueued = matchmakingQueue.some(q => q.userId === userId);
-            res.status(200).json({
-                success: true,
-                status: isQueued ? 'searching' : 'idle'
-            });
-        }
-    }
-    catch (error) {
-        console.error('Error checking matchmaking status:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    res.status(200).json({
+        success: true,
+        status: 'idle',
+        message: 'Matchmaking is handled via real-time WebSocket events.'
+    });
 };
 exports.checkMatchmakingStatus = checkMatchmakingStatus;
 // 9. Fetch Friends list
@@ -998,11 +811,6 @@ const reportUser = async (req, res) => {
                     reason: `Auto-suspended: Accumulated ${reportCount} reports within rolling 24 hours.`
                 }
             });
-            // Block match queued state
-            const idx = matchmakingQueue.findIndex(q => q.userId === reportedUserId);
-            if (idx !== -1) {
-                matchmakingQueue.splice(idx, 1);
-            }
             autoBanned = true;
             console.log(`[SAFETY WARNING] User ${reportedUserId} auto-banned until ${banExpiresAt} due to ${reportCount} reports.`);
         }
@@ -1439,15 +1247,7 @@ const blockUser = async (req, res) => {
             update: {},
             create: { blockerId: userId, blockedId: targetUserId }
         });
-        // Delete friendship if exists
-        await db_1.prisma.friendship.deleteMany({
-            where: {
-                OR: [
-                    { userOneId: userId, userTwoId: targetUserId },
-                    { userOneId: targetUserId, userTwoId: userId }
-                ]
-            }
-        });
+        // Do NOT delete friendship so that the chat remains in the list.
         // Force close active chat on socket
         index_1.io.to(`friend-chat-${userId}`).emit('user_blocked', { blockerId: userId, blockedId: targetUserId });
         index_1.io.to(`friend-chat-${targetUserId}`).emit('user_blocked', { blockerId: userId, blockedId: targetUserId });

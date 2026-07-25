@@ -48,7 +48,7 @@ const claimDailyStreak = async (req, res) => {
                 break;
             }
         }
-        const activeDay = Math.min(28, currentStreak + 1);
+        const activeDay = (currentStreak % 28) + 1;
         // Calculate coins for the day
         const getCoinsForDay = (day) => {
             if (day === 7)

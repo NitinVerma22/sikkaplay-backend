@@ -70,6 +70,18 @@ export class MatchmakingService {
       throw new Error('Already searching or chatting.');
     }
 
+    // Check if user is blocked or banned
+    const ban = await prisma.playgroundBan.findFirst({
+      where: {
+        userId,
+        expiresAt: { gte: new Date() }
+      }
+    });
+
+    if (ban) {
+      throw new Error(`Matchmaking suspended until ${ban.expiresAt.toLocaleString()} due to reports.`);
+    }
+
     // Check coin balance for premium filters
     const config = await prisma.appConfig.findFirst();
     let filterCost = 0;
@@ -155,6 +167,19 @@ export class MatchmakingService {
     if (state) {
       state.lastHeartbeat = Date.now();
       await this.setUserState(userId, state);
+    }
+  }
+
+  public async handleDisconnect(userId: string) {
+    const state = await this.getUserState(userId);
+    if (!state) return;
+    console.log(`[Matchmaking] Handling disconnect for user ${userId}, status: ${state.status}`);
+    if (state.status === 'SEARCHING') {
+      await redisClient.lrem(QUEUES[state.gender], 0, userId);
+      await this.removeUserState(userId);
+    } else if (state.status === 'CHATTING') {
+      await this.leaveChat(userId);
+      await this.removeUserState(userId);
     }
   }
 
@@ -266,12 +291,30 @@ export class MatchmakingService {
       createdAt: Date.now()
     }));
 
+    // Fetch user profiles from database
+    const u1 = await prisma.user.findUnique({ where: { id: user1.userId } });
+    const u2 = await prisma.user.findUnique({ where: { id: user2.userId } });
+
     // Generate Agora tokens or data
     const channelName = roomId;
     
-    // Notify both
-    this.io.to(user1.socketId).emit('match_found', { partnerId: user2.userId, channelName, agoraToken: channelName });
-    this.io.to(user2.socketId).emit('match_found', { partnerId: user1.userId, channelName, agoraToken: channelName });
+    // Notify both with full profile details
+    this.io.to(user1.socketId).emit('match_found', {
+      partnerId: user2.userId,
+      channelName,
+      agoraToken: channelName,
+      partnerName: u2?.name || 'SikkaPlay Player',
+      partnerUsername: u2?.username || null,
+      partnerAvatar: u2?.avatarUrl || null,
+    });
+    this.io.to(user2.socketId).emit('match_found', {
+      partnerId: user1.userId,
+      channelName,
+      agoraToken: channelName,
+      partnerName: u1?.name || 'SikkaPlay Player',
+      partnerUsername: u1?.username || null,
+      partnerAvatar: u1?.avatarUrl || null,
+    });
   }
 
   public async leaveChat(userId: string) {

@@ -174,11 +174,18 @@ exports.io.on('connection', (socket) => {
     // Matchmaking Events
     socket.on('matchmaking_search_start', async (data) => {
         try {
-            const { userId, gender, preference } = data;
+            let { userId, gender, preference } = data;
+            // Fix case sensitivity
+            gender = (gender || 'male').toLowerCase();
+            preference = (preference || 'random').toLowerCase();
+            // Ensure valid values
+            if (!['male', 'female', 'random'].includes(gender))
+                gender = 'random';
+            if (!['male', 'female', 'random'].includes(preference))
+                preference = 'random';
             // Socket authentication happens via middleware, but ensure userId is present
             if (userId) {
-                // Handle premium deduct here? Wait, deducting coins from wallet should probably be handled via an API first,
-                // or we do it here. Let's do it in the service since the user approved.
+                socket.data.userId = userId;
                 await matchmakingService.joinSearch(userId, socket.id, gender, preference);
             }
         }
@@ -189,8 +196,10 @@ exports.io.on('connection', (socket) => {
     socket.on('matchmaking_search_cancel', async (data) => {
         try {
             const { userId } = data;
-            if (userId)
+            if (userId) {
+                socket.data.userId = userId;
                 await matchmakingService.cancelSearch(userId);
+            }
         }
         catch (e) {
             console.error('Cancel search error:', e.message);
@@ -199,30 +208,28 @@ exports.io.on('connection', (socket) => {
     socket.on('matchmaking_heartbeat', async (data) => {
         try {
             const { userId } = data;
-            if (userId)
+            if (userId) {
+                socket.data.userId = userId;
                 await matchmakingService.updateHeartbeat(userId);
+            }
         }
         catch (e) { }
     });
     socket.on('matchmaking_leave_chat', async (data) => {
         try {
             const { userId } = data;
-            if (userId)
+            if (userId) {
+                socket.data.userId = userId;
                 await matchmakingService.leaveChat(userId);
+            }
         }
         catch (e) { }
     });
     socket.on('disconnect', async () => {
         console.log(`[Socket] User disconnected: ${socket.id}`);
-        // We don't have the user ID easily accessible here unless it was saved in socket.data
-        // So if socket.data.userId exists, we can handle it
         if (socket.data && socket.data.userId) {
             const userId = socket.data.userId;
-            // Instead of immediate leave, we can wait for heartbeat to expire (30 seconds)
-            // This allows them to reconnect if it was a quick network drop.
-            // We don't call leaveChat here immediately. The heartbeat checker will handle it.
-            // But if they are just searching, we can remove them immediately?
-            // Heartbeat handles that too.
+            await matchmakingService.handleDisconnect(userId);
         }
         // Prevent memory leaks by removing listeners
         socket.removeAllListeners();
