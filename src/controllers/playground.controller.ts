@@ -76,6 +76,25 @@ export const getPlaygroundLobby = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    if (!user.username) {
+      const baseName = (user.name || 'player').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 10);
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const generated = `${baseName || 'user'}_${randomSuffix}`;
+      try {
+        const updated = await prisma.user.update({
+          where: { id: userId },
+          data: { username: generated }
+        });
+        user.username = updated.username;
+      } catch (e) {
+        user.username = `user_${userId.substring(0, 8)}`;
+        await prisma.user.update({
+          where: { id: userId },
+          data: { username: user.username }
+        }).catch(() => {});
+      }
+    }
+
     // Get today's playtime crate progress
     const todayStr = getISTDateString();
     let crateProgress = await prisma.crateProgress.findUnique({
@@ -1251,14 +1270,23 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
     const queryStr = username.trim();
     let targetUser;
 
+    let cleanQuery = queryStr.toLowerCase();
+    if (cleanQuery.startsWith('@')) cleanQuery = cleanQuery.substring(1);
+
     if (queryStr.length === 36 && queryStr.includes('-')) {
       targetUser = await prisma.user.findUnique({
         where: { id: queryStr },
         include: { giftInventory: { include: { gift: true } } }
       });
     } else {
-      targetUser = await prisma.user.findUnique({
-        where: { username: queryStr.toLowerCase() },
+      targetUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: cleanQuery },
+            { id: queryStr },
+            { name: { equals: queryStr, mode: 'insensitive' } }
+          ]
+        },
         include: { giftInventory: { include: { gift: true } } }
       });
     }

@@ -231,6 +231,37 @@ exports.io.on('connection', (socket) => {
         }
         catch (e) { }
     });
+    socket.on('chat_user_left', (data) => {
+        try {
+            const { roomId, userId, userName } = data;
+            if (roomId) {
+                socket.to(roomId).emit('partner_left_chat', {
+                    userId,
+                    message: `${userName || 'Partner'} left this chat`
+                });
+                socket.to(roomId).emit('partner_left', {
+                    userId,
+                    message: `${userName || 'Partner'} left this chat`
+                });
+            }
+        }
+        catch (e) { }
+    });
+    socket.on('disconnecting', () => {
+        try {
+            for (const room of socket.rooms) {
+                if (room !== socket.id) {
+                    socket.to(room).emit('partner_left_chat', {
+                        message: 'Partner left this chat'
+                    });
+                    socket.to(room).emit('partner_left', {
+                        message: 'Partner left this chat'
+                    });
+                }
+            }
+        }
+        catch (e) { }
+    });
     socket.on('disconnect', async () => {
         console.log(`[Socket] User disconnected: ${socket.id}`);
         if (socket.data && socket.data.userId) {

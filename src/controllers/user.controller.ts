@@ -229,6 +229,64 @@ export const updateBio = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
+export const updateProfileDetails = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { name, username, gender, city } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const dataToUpdate: any = {};
+    if (name !== undefined) dataToUpdate.name = name ? name.trim() : null;
+    if (city !== undefined) dataToUpdate.city = city ? city.trim() : null;
+    if (gender !== undefined) {
+      const cleanGender = gender ? gender.trim() : null;
+      dataToUpdate.gender = cleanGender ? (cleanGender.charAt(0).toUpperCase() + cleanGender.slice(1).toLowerCase()) : null;
+    }
+
+    if (username !== undefined && username !== null) {
+      let cleanUsername = username.toString().trim().toLowerCase();
+      if (cleanUsername.startsWith('@')) cleanUsername = cleanUsername.substring(1);
+      const regex = /^[a-zA-Z0-9_]{3,15}$/;
+      if (!regex.test(cleanUsername)) {
+        res.status(400).json({ error: 'Username must be 3-15 alphanumeric characters (underscores allowed).' });
+        return;
+      }
+      const existing = await prisma.user.findFirst({
+        where: {
+          username: cleanUsername,
+          NOT: { id: userId }
+        }
+      });
+      if (existing) {
+        res.status(400).json({ error: 'This username is already taken by another player.' });
+        return;
+      }
+      dataToUpdate.username = cleanUsername;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: dataToUpdate
+    });
+
+    res.status(200).json({
+      success: true,
+      name: updatedUser.name,
+      username: updatedUser.username,
+      gender: updatedUser.gender,
+      city: updatedUser.city,
+      message: 'Profile updated successfully!'
+    });
+  } catch (error: any) {
+    console.error('Error updating profile details:', error);
+    res.status(500).json({ error: error?.message || 'Internal server error' });
+  }
+};
+
 import fs from 'fs';
 import path from 'path';
 

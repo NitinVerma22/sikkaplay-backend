@@ -78,6 +78,8 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
 
     const signupBonus = referredBy ? 200 : 100;
 
+    const formattedGender = gender ? (gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase()) : null;
+
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
@@ -86,7 +88,7 @@ export const registerDirect = async (req: Request, res: Response): Promise<void>
           passwordHash,
           name: name || null,
           city: city || null,
-          gender: gender || null,
+          gender: formattedGender,
           referralCode: refCode,
           referredBy: referredBy || null,
           balance: signupBonus,
@@ -359,6 +361,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
     }
 
     const signupBonus = referredBy ? 200 : 100;
+    const formattedGender = gender ? (gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase()) : null;
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -367,6 +370,7 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
           phoneNumber: formattedPhone,
           name: name || null,
           city: city || null,
+          gender: formattedGender,
           referralCode: refCode,
           referredBy: referredBy || null,
           balance: signupBonus,

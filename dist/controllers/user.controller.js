@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncPhone = exports.deleteAccount = exports.updateAvatar = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
+exports.syncPhone = exports.deleteAccount = exports.updateAvatar = exports.updateProfileDetails = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const firebase_1 = require("../config/firebase");
 const crypto_1 = require("crypto");
@@ -204,6 +204,63 @@ const updateBio = async (req, res) => {
     }
 };
 exports.updateBio = updateBio;
+const updateProfileDetails = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const { name, username, gender, city } = req.body;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        const dataToUpdate = {};
+        if (name !== undefined)
+            dataToUpdate.name = name ? name.trim() : null;
+        if (city !== undefined)
+            dataToUpdate.city = city ? city.trim() : null;
+        if (gender !== undefined) {
+            const cleanGender = gender ? gender.trim() : null;
+            dataToUpdate.gender = cleanGender ? (cleanGender.charAt(0).toUpperCase() + cleanGender.slice(1).toLowerCase()) : null;
+        }
+        if (username !== undefined && username !== null) {
+            let cleanUsername = username.toString().trim().toLowerCase();
+            if (cleanUsername.startsWith('@'))
+                cleanUsername = cleanUsername.substring(1);
+            const regex = /^[a-zA-Z0-9_]{3,15}$/;
+            if (!regex.test(cleanUsername)) {
+                res.status(400).json({ error: 'Username must be 3-15 alphanumeric characters (underscores allowed).' });
+                return;
+            }
+            const existing = await db_1.prisma.user.findFirst({
+                where: {
+                    username: cleanUsername,
+                    NOT: { id: userId }
+                }
+            });
+            if (existing) {
+                res.status(400).json({ error: 'This username is already taken by another player.' });
+                return;
+            }
+            dataToUpdate.username = cleanUsername;
+        }
+        const updatedUser = await db_1.prisma.user.update({
+            where: { id: userId },
+            data: dataToUpdate
+        });
+        res.status(200).json({
+            success: true,
+            name: updatedUser.name,
+            username: updatedUser.username,
+            gender: updatedUser.gender,
+            city: updatedUser.city,
+            message: 'Profile updated successfully!'
+        });
+    }
+    catch (error) {
+        console.error('Error updating profile details:', error);
+        res.status(500).json({ error: error?.message || 'Internal server error' });
+    }
+};
+exports.updateProfileDetails = updateProfileDetails;
 const updateAvatar = async (req, res) => {
     try {
         const userId = req.user?.userId;

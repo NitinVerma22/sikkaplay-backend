@@ -338,7 +338,8 @@ export class MatchmakingService {
     // Notify partner
     const partnerState = await this.getUserState(partnerId);
     if (partnerState && partnerState.socketId) {
-      this.io.to(partnerState.socketId).emit('partner_left', { message: 'Your partner has left the chat.' });
+      this.io.to(partnerState.socketId).emit('partner_left', { message: 'Partner left this chat.' });
+      this.io.to(partnerState.socketId).emit('partner_left_chat', { message: 'Partner left this chat.' });
     }
   }
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio, updateAvatar, deleteAccount, syncPhone } from '../controllers/user.controller';
+import { getProfile, updateFcmToken, getTransactions, updateUpi, recordAdImpression, updateBio, updateAvatar, deleteAccount, syncPhone, updateProfileDetails } from '../controllers/user.controller';
 import { getLeaderboard } from '../controllers/leaderboard.controller';
 import {
   claimDailyStreak,
@@ -43,6 +43,9 @@ router.put('/upi', updateUpi);
 
 // PUT /api/user/bio
 router.put('/bio', updateBio);
+
+// PUT /api/user/update-details
+router.put('/update-details', updateProfileDetails);
 
 // PUT /api/user/avatar
 router.put('/avatar', updateAvatar);

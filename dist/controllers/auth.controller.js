@@ -68,6 +68,7 @@ const registerDirect = async (req, res) => {
         }
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         const signupBonus = referredBy ? 200 : 100;
+        const formattedGender = gender ? (gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase()) : null;
         const user = await db_1.prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
                 data: {
@@ -76,7 +77,7 @@ const registerDirect = async (req, res) => {
                     passwordHash,
                     name: name || null,
                     city: city || null,
-                    gender: gender || null,
+                    gender: formattedGender,
                     referralCode: refCode,
                     referredBy: referredBy || null,
                     balance: signupBonus,
@@ -317,6 +318,7 @@ const completeGoogleSignup = async (req, res) => {
             }
         }
         const signupBonus = referredBy ? 200 : 100;
+        const formattedGender = gender ? (gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase()) : null;
         const user = await db_1.prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
                 data: {
@@ -324,6 +326,7 @@ const completeGoogleSignup = async (req, res) => {
                     phoneNumber: formattedPhone,
                     name: name || null,
                     city: city || null,
+                    gender: formattedGender,
                     referralCode: refCode,
                     referredBy: referredBy || null,
                     balance: signupBonus,

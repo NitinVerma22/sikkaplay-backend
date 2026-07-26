@@ -72,6 +72,25 @@ const getPlaygroundLobby = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
+        if (!user.username) {
+            const baseName = (user.name || 'player').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').substring(0, 10);
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            const generated = `${baseName || 'user'}_${randomSuffix}`;
+            try {
+                const updated = await db_1.prisma.user.update({
+                    where: { id: userId },
+                    data: { username: generated }
+                });
+                user.username = updated.username;
+            }
+            catch (e) {
+                user.username = `user_${userId.substring(0, 8)}`;
+                await db_1.prisma.user.update({
+                    where: { id: userId },
+                    data: { username: user.username }
+                }).catch(() => { });
+            }
+        }
         // Get today's playtime crate progress
         const todayStr = (0, date_utils_1.getISTDateString)();
         let crateProgress = await db_1.prisma.crateProgress.findUnique({
@@ -1121,6 +1140,9 @@ const getPublicProfile = async (req, res) => {
         }
         const queryStr = username.trim();
         let targetUser;
+        let cleanQuery = queryStr.toLowerCase();
+        if (cleanQuery.startsWith('@'))
+            cleanQuery = cleanQuery.substring(1);
         if (queryStr.length === 36 && queryStr.includes('-')) {
             targetUser = await db_1.prisma.user.findUnique({
                 where: { id: queryStr },
@@ -1128,8 +1150,14 @@ const getPublicProfile = async (req, res) => {
             });
         }
         else {
-            targetUser = await db_1.prisma.user.findUnique({
-                where: { username: queryStr.toLowerCase() },
+            targetUser = await db_1.prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { username: cleanQuery },
+                        { id: queryStr },
+                        { name: { equals: queryStr, mode: 'insensitive' } }
+                    ]
+                },
                 include: { giftInventory: { include: { gift: true } } }
             });
         }

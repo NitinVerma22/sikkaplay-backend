@@ -30,6 +30,8 @@ router.get('/transactions', user_controller_1.getTransactions);
 router.put('/upi', user_controller_1.updateUpi);
 // PUT /api/user/bio
 router.put('/bio', user_controller_1.updateBio);
+// PUT /api/user/update-details
+router.put('/update-details', user_controller_1.updateProfileDetails);
 // PUT /api/user/avatar
 router.put('/avatar', user_controller_1.updateAvatar);
 // POST /api/user/sync-phone
