@@ -244,17 +244,44 @@ export const updateConfigs = async (req: AdminAuthRequest, res: Response): Promi
 // 4. User Management
 export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
+    const filter = (req.query.filter as string) || 'all';
     const search = (req.query.search as string) || '';
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
 
     const where: any = {};
+    
+    if (filter === 'deleted') {
+      where.name = 'Deleted User';
+    } else if (filter === 'active') {
+      where.isBlocked = false;
+      where.NOT = {
+        name: 'Deleted User'
+      };
+    } else if (filter === 'blocked') {
+      where.isBlocked = true;
+      where.NOT = {
+        name: 'Deleted User'
+      };
+    }
+
     if (search) {
-      where.OR = [
-        { phoneNumber: { contains: search, mode: 'insensitive' } },
-        { name: { contains: search, mode: 'insensitive' } },
-        { referralCode: { contains: search, mode: 'insensitive' } }
+      where.AND = [
+        ...(where.NOT ? [ { NOT: where.NOT } ] : []),
+        ...(where.name ? [ { name: where.name } ] : []),
+        ...(where.isBlocked !== undefined ? [ { isBlocked: where.isBlocked } ] : []),
+        {
+          OR: [
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { referralCode: { contains: search, mode: 'insensitive' } }
+          ]
+        }
       ];
+      // Clean up the top-level keys if we moved them to AND
+      delete where.NOT;
+      delete where.name;
+      delete where.isBlocked;
     }
 
     const users = await prisma.user.findMany({
