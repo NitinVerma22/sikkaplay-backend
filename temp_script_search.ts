@@ -1,18 +1,10 @@
 import { prisma } from './src/config/db';
 async function main() {
-  const users = await prisma.user.findMany({
-    where: { avatarUrl: { contains: 'wikimedia' } }
-  });
-  console.log('Users with wikimedia avatar:', users.map(u => ({ id: u.id, url: u.avatarUrl })));
+  const total = await prisma.user.count();
+  const deleted = await prisma.user.count({ where: { name: 'Deleted User' } });
+  const blocked = await prisma.user.count({ where: { isBlocked: true, NOT: { name: 'Deleted User' } } });
+  const active = await prisma.user.count({ where: { isBlocked: false, NOT: { name: 'Deleted User' } } });
 
-  const notifications = await prisma.notification.findMany({
-    where: { imageUrl: { contains: 'wikimedia' } }
-  });
-  console.log('Notifications with wikimedia image:', notifications.map(n => ({ id: n.id, url: n.imageUrl })));
-
-  const gifts = await prisma.gift.findMany({
-    where: { imageUrl: { contains: 'wikimedia' } }
-  });
-  console.log('Gifts with wikimedia image:', gifts.map(g => ({ id: g.id, url: g.imageUrl })));
+  console.log({ total, deleted, blocked, active });
 }
 main().catch(console.error).finally(() => prisma.$disconnect());
