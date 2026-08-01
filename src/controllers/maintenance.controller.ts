@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { prisma } from '../config/db';
 import { logAdminAction } from '../services/audit.service';
+import { auth } from '../config/firebase';
 
 const CLEANABLE_TABLES: Record<string, { modelName: string; dateField: string }> = {
   gameSession: { modelName: 'gameSession', dateField: 'createdAt' },
@@ -69,7 +70,11 @@ export const previewMaintenanceRecords = async (req: AdminAuthRequest, res: Resp
       const toStr = toDate.split('T')[0];
       where = { dateStr: { gte: fromStr, lte: toStr } };
     } else {
-      where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+      const start = new Date(fromDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(toDate);
+      end.setUTCHours(23, 59, 59, 999);
+      where = { [dateField]: { gte: start, lte: end } };
     }
 
     const count = await dbClient[modelName].count({ where });
@@ -103,7 +108,11 @@ export const exportMaintenanceRecords = async (req: AdminAuthRequest, res: Respo
       const toStr = toDate.split('T')[0];
       where = { dateStr: { gte: fromStr, lte: toStr } };
     } else {
-      where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+      const start = new Date(fromDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(toDate);
+      end.setUTCHours(23, 59, 59, 999);
+      where = { [dateField]: { gte: start, lte: end } };
     }
 
     // Limit retrieval size to prevent out-of-memory errors
@@ -157,7 +166,11 @@ export const cleanupMaintenanceRecords = async (req: AdminAuthRequest, res: Resp
       const toStr = toDate.split('T')[0];
       where = { dateStr: { gte: fromStr, lte: toStr } };
     } else {
-      where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+      const start = new Date(fromDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(toDate);
+      end.setUTCHours(23, 59, 59, 999);
+      where = { [dateField]: { gte: start, lte: end } };
     }
 
     const totalToDelete = await dbClient[modelName].count({ where });
@@ -214,5 +227,83 @@ export const cleanupMaintenanceRecords = async (req: AdminAuthRequest, res: Resp
   } catch (error) {
     console.error('Cleanup Maintenance Records Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+export const systemNuclearReset = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { confirmationText } = req.body;
+
+    if (!confirmationText || confirmationText !== 'RESET ALL DATA') {
+      res.status(400).json({ error: 'Safety confirmation text must match exactly "RESET ALL DATA"' });
+      return;
+    }
+
+    // 1. Delete all users from Firebase Authentication
+    let firebaseDeletedCount = 0;
+    try {
+      let nextPageToken;
+      do {
+        const listUsersResult = await auth.listUsers(1000, nextPageToken);
+        const uids = listUsersResult.users.map((user) => user.uid);
+        if (uids.length > 0) {
+          await auth.deleteUsers(uids);
+          firebaseDeletedCount += uids.length;
+        }
+        nextPageToken = listUsersResult.pageToken;
+      } while (nextPageToken);
+    } catch (fbError) {
+      console.error('Firebase Auth clearing error:', fbError);
+      // Log error but proceed to postgres delete
+    }
+
+    // 2. Delete all records from SikkaPlay database tables
+    // Clear dependent tables first to bypass foreign key constraint violations
+    await prisma.transaction.deleteMany({});
+    await prisma.gameSession.deleteMany({});
+    await prisma.dailyUsage.deleteMany({});
+    await prisma.referralReward.deleteMany({});
+    await prisma.notification.deleteMany({});
+    await prisma.supportTicket.deleteMany({});
+    await prisma.dailyCodeClaim.deleteMany({});
+    await prisma.socialTaskClaim.deleteMany({});
+    await prisma.visitEarnClaim.deleteMany({});
+    await prisma.adStats.deleteMany({});
+    await prisma.crateProgress.deleteMany({});
+    await prisma.friendship.deleteMany({});
+    await prisma.blockedUser.deleteMany({});
+    await prisma.hiddenChat.deleteMany({});
+    await prisma.playgroundSession.deleteMany({});
+    await prisma.userGiftInventory.deleteMany({});
+    await prisma.giftTransaction.deleteMany({});
+    await prisma.playgroundReport.deleteMany({});
+    await prisma.playgroundBan.deleteMany({});
+    await prisma.playgroundMessage.deleteMany({});
+    await prisma.adImpression.deleteMany({});
+
+    // 3. Now delete all users from postgres database (no foreign key constraints violated)
+    const userDeleteResult = await prisma.user.deleteMany({});
+    const postgresDeletedCount = userDeleteResult.count;
+
+    // 4. Log audit log action
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
+    await logAdminAction(
+      adminId,
+      adminName,
+      'NUCLEAR_RESET',
+      `Successfully executed full system reset. Firebase auth: ${firebaseDeletedCount} users deleted. Supabase/PG: ${postgresDeletedCount} users deleted (with cascaded tables).`,
+      ip
+    );
+
+    res.json({
+      success: true,
+      message: `System reset successful! Deleted ${firebaseDeletedCount} users from Firebase Auth and ${postgresDeletedCount} users from SikkaPlay database (with all history).`
+    });
+  } catch (error) {
+    console.error('System Nuclear Reset Error:', error);
+    res.status(500).json({ error: 'Internal Server Error during nuclear reset execution' });
   }
 };

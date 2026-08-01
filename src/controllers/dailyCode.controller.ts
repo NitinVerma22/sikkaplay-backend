@@ -305,3 +305,30 @@ export const getTodayDailyCodeInfo = async (req: AuthRequest, res: Response): Pr
   }
 };
 
+// deleteDailyCode: Deletes a daily code by ID
+export const deleteDailyCode = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+
+    const code = await prisma.dailyCode.findUnique({
+      where: { id }
+    });
+
+    if (!code) {
+      res.status(404).json({ error: 'Daily code not found' });
+      return;
+    }
+
+    await prisma.dailyCode.delete({
+      where: { id }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Daily code deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting daily code:', error);
+    res.status(500).json({ error: 'Internal server error while deleting daily code' });
+  }
+};

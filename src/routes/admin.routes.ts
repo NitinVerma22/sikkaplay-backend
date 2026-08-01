@@ -35,7 +35,7 @@ import {
   deleteAdminFaq
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
-import { createDailyCode, getDailyCodes } from '../controllers/dailyCode.controller';
+import { createDailyCode, getDailyCodes, deleteDailyCode } from '../controllers/dailyCode.controller';
 import { createVisitLink, getVisitLinks, deleteVisitLink } from '../controllers/visitLink.controller';
 import {
   getSocialTasksAdmin,
@@ -47,7 +47,8 @@ import {
   getCleanableTables,
   previewMaintenanceRecords,
   exportMaintenanceRecords,
-  cleanupMaintenanceRecords
+  cleanupMaintenanceRecords,
+  systemNuclearReset
 } from '../controllers/maintenance.controller';
 
 const router = Router();
@@ -111,6 +112,7 @@ router.delete('/faqs/:id', deleteAdminFaq);
 // Daily Code Management
 router.post('/daily-code', createDailyCode);
 router.get('/daily-code', getDailyCodes);
+router.delete('/daily-code/:id', deleteDailyCode);
 
 // Visit Links Management
 router.post('/visit-links', createVisitLink);
@@ -128,5 +130,6 @@ router.get('/maintenance/tables', requireRole(['superadmin']), getCleanableTable
 router.post('/maintenance/preview', requireRole(['superadmin']), previewMaintenanceRecords);
 router.post('/maintenance/export', requireRole(['superadmin']), exportMaintenanceRecords);
 router.post('/maintenance/cleanup', requireRole(['superadmin']), cleanupMaintenanceRecords);
+router.post('/maintenance/nuclear-reset', requireRole(['superadmin']), systemNuclearReset);
 
 export default router;

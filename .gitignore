@@ -5,3 +5,9 @@ node_modules
 /src/generated/prisma
 dist/
 public/uploads/
+
+# Exclude temporary scripts and environment files
+temp_script*.ts
+.env.*
+reset-gifts.ts
+seed-gifts.*
