@@ -445,15 +445,22 @@ const getFriendsList = async (req, res) => {
             if (friendUser) {
                 const ids = [userId, friendUser.id].sort();
                 const channelName = `private-chat-${ids[0]}-${ids[1]}`;
+                const hiddenChat = await db_1.prisma.hiddenChat.findUnique({
+                    where: { userId_channelName: { userId, channelName } }
+                });
                 const lastMessage = await db_1.prisma.playgroundMessage.findFirst({
-                    where: { channelName },
+                    where: {
+                        channelName,
+                        ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+                    },
                     orderBy: { createdAt: 'desc' }
                 });
                 const unreadCount = await db_1.prisma.playgroundMessage.count({
                     where: {
                         channelName,
                         senderId: friendUser.id,
-                        isSeen: false
+                        isSeen: false,
+                        ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
                     }
                 });
                 const item = {

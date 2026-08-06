@@ -43,10 +43,16 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
       }
     });
 
+    // Count referrals referred by this user's code
+    const referralCount = await prisma.user.count({
+      where: { referredBy: user.referralCode }
+    });
+
     res.status(200).json({
       user: {
         ...userProfile,
-        gullakClaimsToday
+        gullakClaimsToday,
+        referralCount
       }
     });
   } catch (error) {

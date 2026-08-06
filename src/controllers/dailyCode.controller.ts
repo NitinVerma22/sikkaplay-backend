@@ -332,3 +332,69 @@ export const deleteDailyCode = async (req: AdminAuthRequest, res: Response): Pro
     res.status(500).json({ error: 'Internal server error while deleting daily code' });
   }
 };
+
+// updateDailyCode: Updates a daily code by ID
+export const updateDailyCode = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const { code, coins, maxClaims } = req.body;
+
+    const dailyCode = await prisma.dailyCode.findUnique({
+      where: { id }
+    });
+
+    if (!dailyCode) {
+      res.status(404).json({ error: 'Daily code not found' });
+      return;
+    }
+
+    const dataToUpdate: any = {};
+
+    if (code !== undefined && typeof code === 'string') {
+      const normalizedCode = code.trim().toUpperCase();
+      if (normalizedCode !== dailyCode.code) {
+        // Verify if another code already exists with this name
+        const existingCode = await prisma.dailyCode.findUnique({
+          where: { code: normalizedCode }
+        });
+        if (existingCode) {
+          res.status(400).json({ error: 'This daily code name already exists' });
+          return;
+        }
+      }
+      dataToUpdate.code = normalizedCode;
+    }
+
+    if (coins !== undefined) {
+      const coinsReward = typeof coins === 'number' ? coins : parseInt(coins) || 0;
+      if (coinsReward <= 0) {
+        res.status(400).json({ error: 'Coins reward must be greater than 0' });
+        return;
+      }
+      dataToUpdate.coins = coinsReward;
+    }
+
+    if (maxClaims !== undefined) {
+      const maxClaimsVal = typeof maxClaims === 'number' ? maxClaims : parseInt(maxClaims) || 1;
+      if (maxClaimsVal <= 0) {
+        res.status(400).json({ error: 'Maximum claims limit must be greater than 0' });
+        return;
+      }
+      dataToUpdate.maxClaims = maxClaimsVal;
+    }
+
+    const updatedCode = await prisma.dailyCode.update({
+      where: { id },
+      data: dataToUpdate
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Daily code updated successfully',
+      dailyCode: updatedCode
+    });
+  } catch (error) {
+    console.error('Error updating daily code:', error);
+    res.status(500).json({ error: 'Internal server error while updating daily code' });
+  }
+};

@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupMaintenanceRecords = exports.exportMaintenanceRecords = exports.previewMaintenanceRecords = exports.getCleanableTables = void 0;
+exports.systemNuclearReset = exports.cleanupMaintenanceRecords = exports.exportMaintenanceRecords = exports.previewMaintenanceRecords = exports.getCleanableTables = void 0;
 const db_1 = require("../config/db");
 const audit_service_1 = require("../services/audit.service");
+const firebase_1 = require("../config/firebase");
 const CLEANABLE_TABLES = {
     gameSession: { modelName: 'gameSession', dateField: 'createdAt' },
     adImpression: { modelName: 'adImpression', dateField: 'createdAt' },
@@ -66,7 +67,11 @@ const previewMaintenanceRecords = async (req, res) => {
             where = { dateStr: { gte: fromStr, lte: toStr } };
         }
         else {
-            where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+            const start = new Date(fromDate);
+            start.setUTCHours(0, 0, 0, 0);
+            const end = new Date(toDate);
+            end.setUTCHours(23, 59, 59, 999);
+            where = { [dateField]: { gte: start, lte: end } };
         }
         const count = await dbClient[modelName].count({ where });
         res.json({ success: true, count });
@@ -98,7 +103,11 @@ const exportMaintenanceRecords = async (req, res) => {
             where = { dateStr: { gte: fromStr, lte: toStr } };
         }
         else {
-            where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+            const start = new Date(fromDate);
+            start.setUTCHours(0, 0, 0, 0);
+            const end = new Date(toDate);
+            end.setUTCHours(23, 59, 59, 999);
+            where = { [dateField]: { gte: start, lte: end } };
         }
         // Limit retrieval size to prevent out-of-memory errors
         const records = await dbClient[modelName].findMany({
@@ -146,7 +155,11 @@ const cleanupMaintenanceRecords = async (req, res) => {
             where = { dateStr: { gte: fromStr, lte: toStr } };
         }
         else {
-            where = { [dateField]: { gte: new Date(fromDate), lte: new Date(toDate) } };
+            const start = new Date(fromDate);
+            start.setUTCHours(0, 0, 0, 0);
+            const end = new Date(toDate);
+            end.setUTCHours(23, 59, 59, 999);
+            where = { [dateField]: { gte: start, lte: end } };
         }
         const totalToDelete = await dbClient[modelName].count({ where });
         if (totalToDelete === 0) {
@@ -191,3 +204,70 @@ const cleanupMaintenanceRecords = async (req, res) => {
     }
 };
 exports.cleanupMaintenanceRecords = cleanupMaintenanceRecords;
+const systemNuclearReset = async (req, res) => {
+    try {
+        const { confirmationText } = req.body;
+        if (!confirmationText || confirmationText !== 'RESET ALL DATA') {
+            res.status(400).json({ error: 'Safety confirmation text must match exactly "RESET ALL DATA"' });
+            return;
+        }
+        // 1. Delete all users from Firebase Authentication
+        let firebaseDeletedCount = 0;
+        try {
+            let nextPageToken;
+            do {
+                const listUsersResult = await firebase_1.auth.listUsers(1000, nextPageToken);
+                const uids = listUsersResult.users.map((user) => user.uid);
+                if (uids.length > 0) {
+                    await firebase_1.auth.deleteUsers(uids);
+                    firebaseDeletedCount += uids.length;
+                }
+                nextPageToken = listUsersResult.pageToken;
+            } while (nextPageToken);
+        }
+        catch (fbError) {
+            console.error('Firebase Auth clearing error:', fbError);
+            // Log error but proceed to postgres delete
+        }
+        // 2. Delete all records from SikkaPlay database tables
+        // Clear dependent tables first to bypass foreign key constraint violations
+        await db_1.prisma.transaction.deleteMany({});
+        await db_1.prisma.gameSession.deleteMany({});
+        await db_1.prisma.dailyUsage.deleteMany({});
+        await db_1.prisma.referralReward.deleteMany({});
+        await db_1.prisma.notification.deleteMany({});
+        await db_1.prisma.supportTicket.deleteMany({});
+        await db_1.prisma.dailyCodeClaim.deleteMany({});
+        await db_1.prisma.socialTaskClaim.deleteMany({});
+        await db_1.prisma.visitEarnClaim.deleteMany({});
+        await db_1.prisma.adStats.deleteMany({});
+        await db_1.prisma.crateProgress.deleteMany({});
+        await db_1.prisma.friendship.deleteMany({});
+        await db_1.prisma.blockedUser.deleteMany({});
+        await db_1.prisma.hiddenChat.deleteMany({});
+        await db_1.prisma.playgroundSession.deleteMany({});
+        await db_1.prisma.userGiftInventory.deleteMany({});
+        await db_1.prisma.giftTransaction.deleteMany({});
+        await db_1.prisma.playgroundReport.deleteMany({});
+        await db_1.prisma.playgroundBan.deleteMany({});
+        await db_1.prisma.playgroundMessage.deleteMany({});
+        await db_1.prisma.adImpression.deleteMany({});
+        // 3. Now delete all users from postgres database (no foreign key constraints violated)
+        const userDeleteResult = await db_1.prisma.user.deleteMany({});
+        const postgresDeletedCount = userDeleteResult.count;
+        // 4. Log audit log action
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'NUCLEAR_RESET', `Successfully executed full system reset. Firebase auth: ${firebaseDeletedCount} users deleted. Supabase/PG: ${postgresDeletedCount} users deleted (with cascaded tables).`, ip);
+        res.json({
+            success: true,
+            message: `System reset successful! Deleted ${firebaseDeletedCount} users from Firebase Auth and ${postgresDeletedCount} users from SikkaPlay database (with all history).`
+        });
+    }
+    catch (error) {
+        console.error('System Nuclear Reset Error:', error);
+        res.status(500).json({ error: 'Internal Server Error during nuclear reset execution' });
+    }
+};
+exports.systemNuclearReset = systemNuclearReset;

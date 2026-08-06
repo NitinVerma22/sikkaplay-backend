@@ -480,8 +480,15 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
         const ids = [userId, friendUser.id].sort();
         const channelName = `private-chat-${ids[0]}-${ids[1]}`;
 
+        const hiddenChat = await prisma.hiddenChat.findUnique({
+          where: { userId_channelName: { userId, channelName } }
+        });
+
         const lastMessage = await prisma.playgroundMessage.findFirst({
-          where: { channelName },
+          where: {
+            channelName,
+            ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+          },
           orderBy: { createdAt: 'desc' }
         });
 
@@ -489,7 +496,8 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
           where: {
             channelName,
             senderId: friendUser.id,
-            isSeen: false
+            isSeen: false,
+            ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
           }
         });
 

@@ -15,7 +15,7 @@ const generateReferralCode = () => {
 };
 const registerDirect = async (req, res) => {
     try {
-        const { phoneNumber, name, city, gender, referredBy, password, deviceId } = req.body;
+        const { phoneNumber, name, city, gender, referredBy, password, deviceId, username } = req.body;
         const config = await (0, config_service_1.getCachedAppConfig)();
         const allowMultiAccounts = config?.allowMultiAccounts ?? false;
         const refRewardAmount = config?.referralBonus || 500;
@@ -34,6 +34,26 @@ const registerDirect = async (req, res) => {
         }
         if (!password || password.length < 6) {
             res.status(400).json({ error: 'Password must be at least 6 characters' });
+            return;
+        }
+        if (!username) {
+            res.status(400).json({ error: 'Username is required' });
+            return;
+        }
+        let cleanUsername = username.toString().trim().toLowerCase();
+        if (cleanUsername.startsWith('@')) {
+            cleanUsername = cleanUsername.substring(1);
+        }
+        const usernameRegex = /^[a-zA-Z0-9_]{3,15}$/;
+        if (!usernameRegex.test(cleanUsername)) {
+            res.status(400).json({ error: 'Username must be 3-15 alphanumeric characters and can contain underscores.' });
+            return;
+        }
+        const existingUsername = await db_1.prisma.user.findUnique({
+            where: { username: cleanUsername }
+        });
+        if (existingUsername) {
+            res.status(400).json({ error: 'Username is already taken by another player.' });
             return;
         }
         let formattedPhone = phoneNumber;
@@ -76,6 +96,7 @@ const registerDirect = async (req, res) => {
                     phoneNumber: formattedPhone,
                     passwordHash,
                     name: name || null,
+                    username: cleanUsername,
                     city: city || null,
                     gender: formattedGender,
                     referralCode: refCode,
@@ -271,9 +292,29 @@ const googleLogin = async (req, res) => {
 exports.googleLogin = googleLogin;
 const completeGoogleSignup = async (req, res) => {
     try {
-        const { firebaseUid, name, city, gender, referredBy, deviceId } = req.body;
+        const { firebaseUid, name, city, gender, referredBy, deviceId, username } = req.body;
         if (!firebaseUid) {
             res.status(400).json({ error: 'Missing required fields' });
+            return;
+        }
+        if (!username) {
+            res.status(400).json({ error: 'Username is required' });
+            return;
+        }
+        let cleanUsername = username.toString().trim().toLowerCase();
+        if (cleanUsername.startsWith('@')) {
+            cleanUsername = cleanUsername.substring(1);
+        }
+        const usernameRegex = /^[a-zA-Z0-9_]{3,15}$/;
+        if (!usernameRegex.test(cleanUsername)) {
+            res.status(400).json({ error: 'Username must be 3-15 alphanumeric characters and can contain underscores.' });
+            return;
+        }
+        const existingUsername = await db_1.prisma.user.findUnique({
+            where: { username: cleanUsername }
+        });
+        if (existingUsername) {
+            res.status(400).json({ error: 'Username is already taken by another player.' });
             return;
         }
         const config = await (0, config_service_1.getCachedAppConfig)();
@@ -325,6 +366,7 @@ const completeGoogleSignup = async (req, res) => {
                     firebaseUid: firebaseUid,
                     phoneNumber: formattedPhone,
                     name: name || null,
+                    username: cleanUsername,
                     city: city || null,
                     gender: formattedGender,
                     referralCode: refCode,

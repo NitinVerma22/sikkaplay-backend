@@ -56,6 +56,8 @@ router.delete('/faqs/:id', admin_controller_1.deleteAdminFaq);
 // Daily Code Management
 router.post('/daily-code', dailyCode_controller_1.createDailyCode);
 router.get('/daily-code', dailyCode_controller_1.getDailyCodes);
+router.put('/daily-code/:id', dailyCode_controller_1.updateDailyCode);
+router.delete('/daily-code/:id', dailyCode_controller_1.deleteDailyCode);
 // Visit Links Management
 router.post('/visit-links', visitLink_controller_1.createVisitLink);
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
@@ -70,4 +72,5 @@ router.get('/maintenance/tables', (0, adminAuth_middleware_1.requireRole)(['supe
 router.post('/maintenance/preview', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.previewMaintenanceRecords);
 router.post('/maintenance/export', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.exportMaintenanceRecords);
 router.post('/maintenance/cleanup', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.cleanupMaintenanceRecords);
+router.post('/maintenance/nuclear-reset', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.systemNuclearReset);
 exports.default = router;

@@ -36,10 +36,15 @@ const getProfile = async (req, res) => {
                 endTime: { gte: startOfDay }
             }
         });
+        // Count referrals referred by this user's code
+        const referralCount = await db_1.prisma.user.count({
+            where: { referredBy: user.referralCode }
+        });
         res.status(200).json({
             user: {
                 ...userProfile,
-                gullakClaimsToday
+                gullakClaimsToday,
+                referralCount
             }
         });
     }
