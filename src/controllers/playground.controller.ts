@@ -8,9 +8,54 @@ import { onlineUsersCache } from '../middleware/auth.middleware';
 import { sendPushNotification } from '../services/push.service';
 import { io } from '../index';
 
-// Helper function to calculate user streak (Mocked as requested)
+// Helper function to calculate user streak
 async function calculateUserStreak(userId: string, prismaClient: any): Promise<number> {
-  return 1; // Mocked streak
+  try {
+    const today = new Date();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // Determine streak claim status for today
+    const streakToday = await prismaClient.transaction.findFirst({
+      where: {
+        userId,
+        type: 'daily_streak',
+        createdAt: { gte: startOfToday }
+      }
+    });
+    const hasClaimedToday = !!streakToday;
+
+    // Fetch all daily streak transactions to calculate accurate streak count
+    const allStreaks = await prismaClient.transaction.findMany({
+      where: { userId, type: 'daily_streak' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let currentStreak = 0;
+    let checkDate = new Date(today.getTime()); // Start from today copy
+    if (!hasClaimedToday) {
+      // If not claimed today, the streak is maintained if claimed yesterday
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    for (let i = 0; i < allStreaks.length; i++) {
+      const streakDateStr = getISTDateString(allStreaks[i].createdAt);
+      const targetDateStr = getISTDateString(checkDate);
+      
+      if (streakDateStr === targetDateStr) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else if (streakDateStr < targetDateStr) {
+        // Streak broken
+        break;
+      }
+    }
+
+    return currentStreak;
+  } catch (error) {
+    console.error("Error calculating user streak in playground:", error);
+    return 1; // Fallback
+  }
 }
 
 export const userActiveChannelCache = new NodeCache({ stdTTL: 15 });
