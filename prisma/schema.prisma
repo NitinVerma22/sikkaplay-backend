@@ -232,12 +232,13 @@ model AppConfig {
 }
 
 model DailyCode {
-  id        String   @id @default(uuid())
-  code      String   @unique
-  coins     Int      @default(0)
-  maxClaims Int      @default(1)
-  createdAt DateTime @default(now())
-  claims    DailyCodeClaim[]
+  id         String   @id @default(uuid())
+  code       String   @unique
+  coins      Int      @default(0)
+  maxClaims  Int      @default(1)
+  activeDate String?  // YYYY-MM-DD
+  createdAt  DateTime @default(now())
+  claims     DailyCodeClaim[]
 }
 
 model DailyCodeClaim {
