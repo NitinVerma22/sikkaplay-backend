@@ -14,6 +14,7 @@ router.post('/login', admin_controller_1.loginAdmin);
 router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
 router.get('/stats', admin_controller_1.getDashboardStats);
+router.get('/manager-stats', admin_controller_1.getManagerStats);
 router.get('/ad-stats', admin_controller_1.getAdAnalysisStats);
 router.post('/referrals/distribute', admin_controller_1.triggerReferralDistribution);
 router.get('/audit-logs', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.getAuditLogs);

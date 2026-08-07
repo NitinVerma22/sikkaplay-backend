@@ -32,7 +32,8 @@ import {
   getAdminFaqs,
   createAdminFaq,
   updateAdminFaq,
-  deleteAdminFaq
+  deleteAdminFaq,
+  getManagerStats
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
@@ -61,6 +62,7 @@ router.use(requireAdminJwt);
 
 // Stats & Dashboard Overview
 router.get('/stats', getDashboardStats);
+router.get('/manager-stats', getManagerStats);
 router.get('/ad-stats', getAdAnalysisStats);
 router.post('/referrals/distribute', triggerReferralDistribution);
 router.get('/audit-logs', requireRole(['superadmin']), getAuditLogs);

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -1433,3 +1433,76 @@ const bulkClearAllDeviceData = async (req, res) => {
     }
 };
 exports.bulkClearAllDeviceData = bulkClearAllDeviceData;
+// 46. Get Manager Stats (Total Users & Coins Earned per user with Date filter)
+const getManagerStats = async (req, res) => {
+    try {
+        const { date } = req.query;
+        // 1. Get total users count
+        const totalUsers = await db_1.prisma.user.count();
+        // 2. Get list of users with id, name, username, phoneNumber, totalEarned
+        const users = await db_1.prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                username: true,
+                phoneNumber: true,
+                totalEarned: true,
+                createdAt: true,
+            },
+            orderBy: { totalEarned: 'desc' }
+        });
+        let mappedUsers = [];
+        if (date && typeof date === 'string' && date.trim().length > 0) {
+            // If date is provided (format: YYYY-MM-DD), filter success earnings & bonuses for that day
+            const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date);
+            end.setHours(23, 59, 59, 999);
+            const userEarnings = await db_1.prisma.transaction.groupBy({
+                by: ['userId'],
+                where: {
+                    createdAt: { gte: start, lte: end },
+                    type: { in: ['earning', 'bonus'] },
+                    status: 'success'
+                },
+                _sum: {
+                    amount: true
+                }
+            });
+            // Map group sums for constant time lookup
+            const earningsMap = {};
+            for (const group of userEarnings) {
+                earningsMap[group.userId] = group._sum.amount || 0;
+            }
+            mappedUsers = users.map(user => ({
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                phoneNumber: user.phoneNumber,
+                coinsEarned: earningsMap[user.id] || 0,
+                createdAt: user.createdAt
+            }));
+        }
+        else {
+            // Otherwise, return all-time totalEarned
+            mappedUsers = users.map(user => ({
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                phoneNumber: user.phoneNumber,
+                coinsEarned: user.totalEarned,
+                createdAt: user.createdAt
+            }));
+        }
+        res.status(200).json({
+            success: true,
+            totalUsers,
+            users: mappedUsers
+        });
+    }
+    catch (error) {
+        console.error('Error fetching manager stats:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.getManagerStats = getManagerStats;

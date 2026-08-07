@@ -1631,6 +1631,85 @@ export const bulkClearAllDeviceData = async (req: AdminAuthRequest, res: Respons
   }
 };
 
+// 46. Get Manager Stats (Total Users & Coins Earned per user with Date filter)
+export const getManagerStats = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { date } = req.query;
+    
+    // 1. Get total users count
+    const totalUsers = await prisma.user.count();
+
+    // 2. Get list of users with id, name, username, phoneNumber, totalEarned
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        phoneNumber: true,
+        totalEarned: true,
+        createdAt: true,
+      },
+      orderBy: { totalEarned: 'desc' }
+    });
+
+    let mappedUsers = [];
+
+    if (date && typeof date === 'string' && date.trim().length > 0) {
+      // If date is provided (format: YYYY-MM-DD), filter success earnings & bonuses for that day
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+
+      const userEarnings = await prisma.transaction.groupBy({
+        by: ['userId'],
+        where: {
+          createdAt: { gte: start, lte: end },
+          type: { in: ['earning', 'bonus'] },
+          status: 'success'
+        },
+        _sum: {
+          amount: true
+        }
+      });
+
+      // Map group sums for constant time lookup
+      const earningsMap: Record<string, number> = {};
+      for (const group of userEarnings) {
+        earningsMap[group.userId] = group._sum.amount || 0;
+      }
+
+      mappedUsers = users.map(user => ({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        phoneNumber: user.phoneNumber,
+        coinsEarned: earningsMap[user.id] || 0,
+        createdAt: user.createdAt
+      }));
+    } else {
+      // Otherwise, return all-time totalEarned
+      mappedUsers = users.map(user => ({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        phoneNumber: user.phoneNumber,
+        coinsEarned: user.totalEarned,
+        createdAt: user.createdAt
+      }));
+    }
+
+    res.status(200).json({
+      success: true,
+      totalUsers,
+      users: mappedUsers
+    });
+  } catch (error: any) {
+    console.error('Error fetching manager stats:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
 
 
 
