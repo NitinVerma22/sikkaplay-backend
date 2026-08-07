@@ -27,6 +27,7 @@ const getLeaderboard = async (req, res) => {
                     totalEarned: true,
                     phoneNumber: true,
                     avatarUrl: true,
+                    username: true,
                 },
             });
             cache.set('top_users', topUsers);
@@ -40,6 +41,7 @@ const getLeaderboard = async (req, res) => {
                 totalEarned: true,
                 phoneNumber: true,
                 avatarUrl: true,
+                username: true,
             },
         });
         if (!currentUser) {

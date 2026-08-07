@@ -27,6 +27,7 @@ export const getLeaderboard = async (req: AuthRequest, res: Response): Promise<v
           totalEarned: true,
           phoneNumber: true,
           avatarUrl: true,
+          username: true,
         },
       });
       cache.set('top_users', topUsers);
@@ -41,6 +42,7 @@ export const getLeaderboard = async (req: AuthRequest, res: Response): Promise<v
         totalEarned: true,
         phoneNumber: true,
         avatarUrl: true,
+        username: true,
       },
     });
 
