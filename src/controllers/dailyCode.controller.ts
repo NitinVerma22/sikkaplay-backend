@@ -379,7 +379,7 @@ export const deleteDailyCode = async (req: AdminAuthRequest, res: Response): Pro
 export const updateDailyCode = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
-    const { code, coins, maxClaims } = req.body;
+    const { code, coins, maxClaims, activeDate } = req.body;
 
     const dailyCode = await prisma.dailyCode.findUnique({
       where: { id }

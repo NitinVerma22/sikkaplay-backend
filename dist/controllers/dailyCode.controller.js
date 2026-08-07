@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateDailyCode = exports.deleteDailyCode = exports.getTodayDailyCodeInfo = exports.getDailyCodes = exports.createDailyCode = exports.claimDailyCode = void 0;
 const db_1 = require("../config/db");
+const date_utils_1 = require("../utils/date.utils");
 // --- USER ENDPOINTS ---
 // claimDailyCode: Allows users to enter a daily code and claim a reward
 const claimDailyCode = async (req, res) => {
@@ -24,6 +25,14 @@ const claimDailyCode = async (req, res) => {
         if (!dailyCode) {
             res.status(400).json({ error: 'Invalid code of the day. Please check and try again!' });
             return;
+        }
+        // Check if the daily code is only active on a specific scheduled date
+        if (dailyCode.activeDate) {
+            const todayIST = (0, date_utils_1.getISTDateString)();
+            if (dailyCode.activeDate !== todayIST) {
+                res.status(400).json({ error: `This daily code is not active today! It is scheduled for ${dailyCode.activeDate}.` });
+                return;
+            }
         }
         // 2. Count user's claims for this specific code to enforce exactly 1 claim per user
         const userClaimsCount = await db_1.prisma.dailyCodeClaim.count({
@@ -96,12 +105,11 @@ exports.claimDailyCode = claimDailyCode;
 // createDailyCode: Allows admins to create/register a new daily code
 const createDailyCode = async (req, res) => {
     try {
-        const { code, coins, maxClaims } = req.body;
+        const { code, coins, maxClaims, activeDate } = req.body;
         if (!code || typeof code !== 'string') {
             res.status(400).json({ error: 'Code is required' });
             return;
         }
-        const normalizedCode = code.trim().toUpperCase();
         const coinsReward = typeof coins === 'number' ? coins : parseInt(coins) || 0;
         const maxClaimsVal = typeof maxClaims === 'number' ? maxClaims : parseInt(maxClaims) || 1;
         if (coinsReward <= 0) {
@@ -112,25 +120,51 @@ const createDailyCode = async (req, res) => {
             res.status(400).json({ error: 'Maximum claims limit must be greater than 0' });
             return;
         }
-        // Verify if this code already exists
-        const existingCode = await db_1.prisma.dailyCode.findUnique({
-            where: { code: normalizedCode }
-        });
-        if (existingCode) {
-            res.status(400).json({ error: 'This daily code already exists' });
+        // Split code by commas or newlines to support bulk creation
+        const rawCodes = code.split(/[\n,]+/).map(c => c.trim().toUpperCase()).filter(c => c.length > 0);
+        if (rawCodes.length === 0) {
+            res.status(400).json({ error: 'No valid codes provided' });
             return;
         }
-        const newDailyCode = await db_1.prisma.dailyCode.create({
-            data: {
-                code: normalizedCode,
-                coins: coinsReward,
-                maxClaims: maxClaimsVal
-            }
+        // Validate that none of the input codes already exist
+        const duplicates = await db_1.prisma.dailyCode.findMany({
+            where: { code: { in: rawCodes } }
         });
+        if (duplicates.length > 0) {
+            const dupNames = duplicates.map(d => d.code).join(', ');
+            res.status(400).json({ error: `The following codes already exist: ${dupNames}` });
+            return;
+        }
+        // Prepare creation array
+        const codesToCreate = [];
+        let baseDate = null;
+        if (activeDate && typeof activeDate === 'string' && activeDate.trim().length > 0) {
+            baseDate = new Date(activeDate);
+        }
+        for (let i = 0; i < rawCodes.length; i++) {
+            let codeActiveDateStr = null;
+            if (baseDate) {
+                const nextDate = new Date(baseDate.getTime());
+                nextDate.setDate(baseDate.getDate() + i);
+                const year = nextDate.getFullYear();
+                const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+                const day = String(nextDate.getDate()).padStart(2, '0');
+                codeActiveDateStr = `${year}-${month}-${day}`;
+            }
+            codesToCreate.push({
+                code: rawCodes[i],
+                coins: coinsReward,
+                maxClaims: maxClaimsVal,
+                activeDate: codeActiveDateStr
+            });
+        }
+        // Create all in database
+        const createdCodes = await db_1.prisma.$transaction(codesToCreate.map(data => db_1.prisma.dailyCode.create({ data })));
         res.status(200).json({
             success: true,
-            message: 'Daily code created successfully',
-            dailyCode: newDailyCode
+            message: `Successfully created ${createdCodes.length} daily codes`,
+            dailyCodes: createdCodes,
+            dailyCode: createdCodes[0]
         });
     }
     catch (error) {
@@ -302,7 +336,7 @@ exports.deleteDailyCode = deleteDailyCode;
 const updateDailyCode = async (req, res) => {
     try {
         const id = req.params.id;
-        const { code, coins, maxClaims } = req.body;
+        const { code, coins, maxClaims, activeDate } = req.body;
         const dailyCode = await db_1.prisma.dailyCode.findUnique({
             where: { id }
         });
@@ -340,6 +374,9 @@ const updateDailyCode = async (req, res) => {
                 return;
             }
             dataToUpdate.maxClaims = maxClaimsVal;
+        }
+        if (activeDate !== undefined) {
+            dataToUpdate.activeDate = activeDate;
         }
         const updatedCode = await db_1.prisma.dailyCode.update({
             where: { id },

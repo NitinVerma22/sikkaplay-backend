@@ -45,6 +45,9 @@ const matchmakingLimiter = rateLimit({
   message: { error: 'Too many matchmaking attempts. Please slow down.' }
 });
 
+// Username Setup (Check username uniqueness must be accessible without logging in during registration)
+router.post('/username/check', checkUsernameUnique);
+
 // Protect all playground routes with JWT validation
 router.use(requireJwt);
 
@@ -52,8 +55,7 @@ router.use(requireJwt);
 router.get('/lobby', getPlaygroundLobby);
 router.post('/swap-minutes', swapCoinsForMinutes);
 
-// Username Setup
-router.post('/username/check', checkUsernameUnique);
+// Username Setup (Setting username requires auth)
 router.post('/username/set', setUsername);
 
 // Crates Playtime

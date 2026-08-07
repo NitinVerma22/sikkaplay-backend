@@ -19,13 +19,14 @@ const matchmakingLimiter = (0, express_rate_limit_1.default)({
     max: 10, // Max 10 matchmaking requests per minute
     message: { error: 'Too many matchmaking attempts. Please slow down.' }
 });
+// Username Setup (Check username uniqueness must be accessible without logging in during registration)
+router.post('/username/check', playground_controller_1.checkUsernameUnique);
 // Protect all playground routes with JWT validation
 router.use(auth_middleware_1.requireJwt);
 // Lobby & Economy
 router.get('/lobby', playground_controller_1.getPlaygroundLobby);
 router.post('/swap-minutes', playground_controller_1.swapCoinsForMinutes);
-// Username Setup
-router.post('/username/check', playground_controller_1.checkUsernameUnique);
+// Username Setup (Setting username requires auth)
 router.post('/username/set', playground_controller_1.setUsername);
 // Crates Playtime
 router.post('/crates/claim', playground_controller_1.claimCrate);

@@ -1178,7 +1178,10 @@ const getSuspiciousGames = async (req, res) => {
             where: {
                 OR: [
                     { status: 'invalidated' },
-                    { coinsEarned: { gte: 50 } }
+                    {
+                        gameType: { not: 'spin' },
+                        coinsEarned: { gt: 80 }
+                    }
                 ]
             },
             orderBy: { createdAt: 'desc' },
