@@ -315,7 +315,8 @@ export const checkUsernameUnique = async (req: AuthRequest, res: Response): Prom
 
     res.status(200).json({
       success: true,
-      available: !existing
+      available: !existing,
+      isUnique: !existing
     });
   } catch (error) {
     console.error('Error checking username:', error);

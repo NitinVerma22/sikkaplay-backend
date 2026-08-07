@@ -293,7 +293,8 @@ const checkUsernameUnique = async (req, res) => {
         });
         res.status(200).json({
             success: true,
-            available: !existing
+            available: !existing,
+            isUnique: !existing
         });
     }
     catch (error) {
