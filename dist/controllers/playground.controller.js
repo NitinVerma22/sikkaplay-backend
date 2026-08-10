@@ -972,7 +972,7 @@ const sendPlaygroundMessage = async (req, res) => {
                 if (recipientUser?.fcmToken) {
                     const isSignaling = text.startsWith('__');
                     if (!isSignaling) {
-                        await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, `Message from ${senderName}`, text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text, 'playground_chat', null, recipientId, false, senderId);
+                        await (0, push_service_1.sendPushNotification)(recipientUser.fcmToken, `Message from ${senderName}`, text.startsWith('[Reply to:') ? text.split('\n').slice(1).join('\n') : text, 'playground_chat', null, recipientId, false, senderId, finalChannelName);
                     }
                 }
             }
@@ -1051,8 +1051,9 @@ const syncPlaygroundMessages = async (req, res) => {
             // Mark any unread incoming messages in history as seen
             const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);
             if (unreadIncoming.length > 0) {
+                const messageIds = unreadIncoming.map(m => m.id);
                 await db_1.prisma.playgroundMessage.updateMany({
-                    where: { id: { in: unreadIncoming.map(m => m.id) } },
+                    where: { id: { in: messageIds } },
                     data: { isSeen: true }
                 });
                 // Update in-memory objects to show seen
@@ -1060,6 +1061,17 @@ const syncPlaygroundMessages = async (req, res) => {
                     if (m.senderId !== userId) {
                         m.isSeen = true;
                     }
+                }
+                // Notify the sender(s) in real-time that their messages were read
+                try {
+                    index_1.io.to(finalChannelName).emit('message_seen', { messageIds });
+                    const senderIds = Array.from(new Set(unreadIncoming.map(m => m.senderId)));
+                    for (const sId of senderIds) {
+                        index_1.io.to(`friend-chat-${sId}`).emit('message_seen', { messageIds });
+                    }
+                }
+                catch (socketErr) {
+                    console.error('Error emitting message_seen during sync:', socketErr);
                 }
             }
             // Populate outgoing status for client history sync

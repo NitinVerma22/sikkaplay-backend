@@ -37,7 +37,7 @@ exports.sendPushNotificationBatch = exports.sendPushNotification = void 0;
 const db_1 = require("../config/db");
 const admin = __importStar(require("firebase-admin"));
 require("../config/firebase"); // Ensure Firebase Admin is initialized
-const sendPushNotification = async (fcmToken, title, body, type = 'alert', bannerUrl = null, userId, skipDb = false, senderId) => {
+const sendPushNotification = async (fcmToken, title, body, type = 'alert', bannerUrl = null, userId, skipDb = false, senderId, channelName) => {
     if (!fcmToken)
         return;
     // 1. Save to database so it appears in the Notification Tab
@@ -71,7 +71,8 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
                 body,
                 type,
                 ...(bannerUrl ? { bannerUrl } : {}),
-                ...(senderId ? { senderId } : {})
+                ...(senderId ? { senderId, partnerId: senderId } : {}),
+                ...(channelName ? { channelName } : {})
             },
             android: {
                 priority: 'high',

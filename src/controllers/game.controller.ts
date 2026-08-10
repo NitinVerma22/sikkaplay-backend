@@ -137,7 +137,7 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         throw new Error('User not found');
       }
 
-      // Generate a spin reward matching the client's wheel slots: 1, 2, 3, 5, 7, 10, 15, 20, 30
+      // Generate a spin reward matching the client's wheel slots: 1, 2, 3, 5, 10, 15, 20, 30
       const rand = Math.random() * 100;
       let reward = 1;
       if (rand < 0.01) {
@@ -145,7 +145,7 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
       } else if (rand < 5.0) {
         reward = Math.random() > 0.5 ? 15 : 20; // Rare
       } else if (rand < 20.0) {
-        reward = Math.random() > 0.5 ? 7 : 10; // Medium
+        reward = 10; // Medium
       } else {
         const common = [1, 2, 3, 5];
         reward = common[Math.floor(Math.random() * common.length)]; // Common
