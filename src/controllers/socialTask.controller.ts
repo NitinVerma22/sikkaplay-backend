@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { prisma } from '../config/db';
+import { invalidateSocialTasksCache } from './home.controller';
 
 // --- ADMIN ENDPOINTS ---
 
@@ -71,6 +72,8 @@ export const createSocialTaskAdmin = async (req: AdminAuthRequest, res: Response
       }
     });
 
+    invalidateSocialTasksCache();
+
     res.status(200).json({
       success: true,
       message: 'Social task created successfully',
@@ -133,6 +136,8 @@ export const updateSocialTaskAdmin = async (req: AdminAuthRequest, res: Response
       });
     }
 
+    invalidateSocialTasksCache();
+
     res.status(200).json({
       success: true,
       message: linkChanged 
@@ -163,6 +168,8 @@ export const deleteSocialTaskAdmin = async (req: AdminAuthRequest, res: Response
     await prisma.socialTask.delete({
       where: { id }
     });
+
+    invalidateSocialTasksCache();
 
     res.status(200).json({
       success: true,

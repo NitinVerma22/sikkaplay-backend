@@ -1,11 +1,10 @@
 import { prisma } from './src/config/db';
 
 async function main() {
-  const result = await prisma.user.updateMany({
-    where: { isBlocked: true },
-    data: { isBlocked: false }
+  await prisma.dailyCode.deleteMany({
+    where: { code: "EXPIREDCODE24" }
   });
-  console.log(`Unblocked ${result.count} users.`);
+  console.log("Cleaned up test daily code.");
 }
 
 main()

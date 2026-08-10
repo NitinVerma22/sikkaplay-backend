@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimSocialTaskUser = exports.deleteSocialTaskAdmin = exports.updateSocialTaskAdmin = exports.createSocialTaskAdmin = exports.getSocialTasksAdmin = void 0;
 const db_1 = require("../config/db");
+const home_controller_1 = require("./home.controller");
 // --- ADMIN ENDPOINTS ---
 // getSocialTasksAdmin: List all tasks in the admin panel
 const getSocialTasksAdmin = async (req, res) => {
@@ -62,6 +63,7 @@ const createSocialTaskAdmin = async (req, res) => {
                 coinsReward
             }
         });
+        (0, home_controller_1.invalidateSocialTasksCache)();
         res.status(200).json({
             success: true,
             message: 'Social task created successfully',
@@ -118,6 +120,7 @@ const updateSocialTaskAdmin = async (req, res) => {
                 where: { socialTaskId: id }
             });
         }
+        (0, home_controller_1.invalidateSocialTasksCache)();
         res.status(200).json({
             success: true,
             message: linkChanged
@@ -146,6 +149,7 @@ const deleteSocialTaskAdmin = async (req, res) => {
         await db_1.prisma.socialTask.delete({
             where: { id }
         });
+        (0, home_controller_1.invalidateSocialTasksCache)();
         res.status(200).json({
             success: true,
             message: 'Social task deleted successfully'

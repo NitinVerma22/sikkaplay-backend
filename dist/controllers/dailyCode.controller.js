@@ -26,6 +26,13 @@ const claimDailyCode = async (req, res) => {
             res.status(400).json({ error: 'Invalid code of the day. Please check and try again!' });
             return;
         }
+        // Check if the daily code has expired (older than 24 hours)
+        const ageInMilliseconds = Date.now() - new Date(dailyCode.createdAt).getTime();
+        const ageInHours = ageInMilliseconds / (1000 * 60 * 60);
+        if (ageInHours >= 24) {
+            res.status(400).json({ error: 'This daily code has expired (valid only for 24 hours)!' });
+            return;
+        }
         // Check if the daily code is only active on a specific scheduled date
         if (dailyCode.activeDate) {
             const todayIST = (0, date_utils_1.getISTDateString)();
@@ -198,6 +205,9 @@ const getDailyCodes = async (req, res) => {
         const formattedCodes = codes.map((c) => {
             const claimsCount = c.claims.length;
             const totalCoinsPaid = c.claims.reduce((sum, claim) => sum + claim.coinsEarned, 0);
+            const ageInMilliseconds = Date.now() - new Date(c.createdAt).getTime();
+            const ageInHours = ageInMilliseconds / (1000 * 60 * 60);
+            const isExpired = ageInHours >= 24;
             return {
                 id: c.id,
                 code: c.code,
@@ -206,7 +216,8 @@ const getDailyCodes = async (req, res) => {
                 createdAt: c.createdAt,
                 claimsCount,
                 totalCoinsPaid,
-                claims: c.claims
+                claims: c.claims,
+                isExpired
             };
         });
         res.status(200).json({
@@ -252,6 +263,17 @@ const getTodayDailyCodeInfo = async (req, res) => {
                 success: true,
                 codeExists: false,
                 message: 'No daily code active'
+            });
+            return;
+        }
+        // Check if the latest code has expired (older than 24 hours)
+        const latestAgeInMs = Date.now() - new Date(latestCode.createdAt).getTime();
+        const latestAgeInHours = latestAgeInMs / (1000 * 60 * 60);
+        if (latestAgeInHours >= 24) {
+            res.status(200).json({
+                success: true,
+                codeExists: false,
+                message: 'No active daily code (latest code has expired)'
             });
             return;
         }

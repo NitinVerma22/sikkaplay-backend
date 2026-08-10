@@ -1,8 +1,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHomeState = void 0;
+exports.getHomeState = exports.invalidateSocialTasksCache = exports.getCachedSocialTasks = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+// Social Tasks In-Memory Cache
+let cachedSocialTasks = null;
+let socialTasksCacheExpiry = 0;
+const getCachedSocialTasks = async () => {
+    const now = Date.now();
+    if (cachedSocialTasks && now < socialTasksCacheExpiry) {
+        return cachedSocialTasks;
+    }
+    const tasks = await db_1.prisma.socialTask.findMany({
+        orderBy: { createdAt: 'asc' }
+    });
+    cachedSocialTasks = tasks;
+    socialTasksCacheExpiry = now + 10 * 60 * 1000; // 10 minutes cache duration
+    return tasks;
+};
+exports.getCachedSocialTasks = getCachedSocialTasks;
+const invalidateSocialTasksCache = () => {
+    cachedSocialTasks = null;
+    socialTasksCacheExpiry = 0;
+    console.log('[CACHE] SocialTasks cache invalidated.');
+};
+exports.invalidateSocialTasksCache = invalidateSocialTasksCache;
 const getHomeState = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -12,6 +34,12 @@ const getHomeState = async (req, res) => {
         }
         const user = await db_1.prisma.user.findUnique({
             where: { id: userId },
+            select: {
+                balance: true,
+                totalEarned: true,
+                referralBalance: true,
+                withdrawalAmount: true
+            }
         });
         if (!user) {
             res.status(404).json({ error: 'User not found' });
@@ -22,6 +50,13 @@ const getHomeState = async (req, res) => {
             where: { userId },
             orderBy: { createdAt: 'desc' },
             take: 10,
+            select: {
+                description: true,
+                amount: true,
+                createdAt: true,
+                status: true,
+                type: true
+            }
         });
         const today = new Date();
         const todayStr = (0, date_utils_1.getISTDateString)(today);
@@ -33,6 +68,9 @@ const getHomeState = async (req, res) => {
                     userId,
                     dateStr: todayStr,
                 }
+            },
+            select: {
+                gamesMinutes: true
             }
         });
         // Determine streak claim status for today
@@ -41,6 +79,9 @@ const getHomeState = async (req, res) => {
                 userId,
                 type: 'daily_streak',
                 createdAt: { gte: startOfToday }
+            },
+            select: {
+                id: true
             }
         });
         const hasClaimedToday = !!streakToday;
@@ -116,7 +157,10 @@ const getHomeState = async (req, res) => {
         }));
         // Find claimed milestones for today from today's transactions
         const todaysTransactions = await db_1.prisma.transaction.findMany({
-            where: { userId, createdAt: { gte: startOfToday } }
+            where: { userId, createdAt: { gte: startOfToday } },
+            select: {
+                description: true
+            }
         });
         const playEarnClaimedMilestones = [];
         todaysTransactions.forEach(t => {
@@ -131,9 +175,7 @@ const getHomeState = async (req, res) => {
         });
         const completedSocialTasks = claimedSocialTasks.map(c => c.socialTaskId);
         // Fetch all active social tasks
-        const activeSocialTasks = await db_1.prisma.socialTask.findMany({
-            orderBy: { createdAt: 'asc' }
-        });
+        const activeSocialTasks = await (0, exports.getCachedSocialTasks)();
         const socialTasks = activeSocialTasks.map(task => ({
             id: task.id,
             platform: task.platform,

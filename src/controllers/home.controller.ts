@@ -4,6 +4,29 @@ import { prisma } from '../config/db';
 import { getISTDateString, getStartOfTodayIST } from '../utils/date.utils';
 import { getCachedAppConfig } from '../services/config.service';
 
+// Social Tasks In-Memory Cache
+let cachedSocialTasks: any[] | null = null;
+let socialTasksCacheExpiry = 0;
+
+export const getCachedSocialTasks = async () => {
+  const now = Date.now();
+  if (cachedSocialTasks && now < socialTasksCacheExpiry) {
+    return cachedSocialTasks;
+  }
+  const tasks = await prisma.socialTask.findMany({
+    orderBy: { createdAt: 'asc' }
+  });
+  cachedSocialTasks = tasks;
+  socialTasksCacheExpiry = now + 10 * 60 * 1000; // 10 minutes cache duration
+  return tasks;
+};
+
+export const invalidateSocialTasksCache = () => {
+  cachedSocialTasks = null;
+  socialTasksCacheExpiry = 0;
+  console.log('[CACHE] SocialTasks cache invalidated.');
+};
+
 export const getHomeState = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
@@ -14,6 +37,12 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      select: {
+        balance: true,
+        totalEarned: true,
+        referralBalance: true,
+        withdrawalAmount: true
+      }
     });
 
     if (!user) {
@@ -26,6 +55,13 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 10,
+      select: {
+        description: true,
+        amount: true,
+        createdAt: true,
+        status: true,
+        type: true
+      }
     });
 
     const today = new Date();
@@ -39,6 +75,9 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
           userId,
           dateStr: todayStr,
         }
+      },
+      select: {
+        gamesMinutes: true
       }
     });
 
@@ -48,6 +87,9 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
         userId,
         type: 'daily_streak',
         createdAt: { gte: startOfToday }
+      },
+      select: {
+        id: true
       }
     });
     const hasClaimedToday = !!streakToday;
@@ -134,7 +176,10 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
 
     // Find claimed milestones for today from today's transactions
     const todaysTransactions = await prisma.transaction.findMany({
-      where: { userId, createdAt: { gte: startOfToday } }
+      where: { userId, createdAt: { gte: startOfToday } },
+      select: {
+        description: true
+      }
     });
 
     const playEarnClaimedMilestones: number[] = [];
@@ -153,9 +198,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
     const completedSocialTasks = claimedSocialTasks.map(c => c.socialTaskId);
 
     // Fetch all active social tasks
-    const activeSocialTasks = await prisma.socialTask.findMany({
-      orderBy: { createdAt: 'asc' }
-    });
+    const activeSocialTasks = await getCachedSocialTasks();
 
     const socialTasks = activeSocialTasks.map(task => ({
       id: task.id,
