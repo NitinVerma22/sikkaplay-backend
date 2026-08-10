@@ -27,6 +27,27 @@ export const invalidateSocialTasksCache = () => {
   console.log('[CACHE] SocialTasks cache invalidated.');
 };
 
+// VisitEarnLinks Count Cache
+let cachedVisitEarnLinksCount: number | null = null;
+let visitEarnLinksCountCacheExpiry = 0;
+
+export const getCachedVisitEarnLinksCount = async (): Promise<number> => {
+  const now = Date.now();
+  if (cachedVisitEarnLinksCount !== null && now < visitEarnLinksCountCacheExpiry) {
+    return cachedVisitEarnLinksCount;
+  }
+  const count = await prisma.visitEarnLink.count();
+  cachedVisitEarnLinksCount = count;
+  visitEarnLinksCountCacheExpiry = now + 10 * 60 * 1000; // 10 minutes cache duration
+  return count;
+};
+
+export const invalidateVisitEarnLinksCountCache = () => {
+  cachedVisitEarnLinksCount = null;
+  visitEarnLinksCountCacheExpiry = 0;
+  console.log('[CACHE] VisitEarnLinksCount cache invalidated.');
+};
+
 export const getHomeState = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
@@ -210,7 +231,7 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
     }));
 
     // 1. Visit All Links calculations
-    const totalLinks = await prisma.visitEarnLink.count();
+    const totalLinks = await getCachedVisitEarnLinksCount();
     const visitedClaimsToday = await prisma.visitEarnClaim.findMany({
       where: {
         userId,

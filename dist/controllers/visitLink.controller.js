@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimVisitLinkReward = exports.deleteVisitLink = exports.createVisitLink = exports.getVisitLinks = void 0;
 const db_1 = require("../config/db");
+const home_controller_1 = require("./home.controller");
 // --- GET ALL LINKS (USER & ADMIN) ---
 const getVisitLinks = async (req, res) => {
     try {
@@ -87,6 +88,7 @@ const createVisitLink = async (req, res) => {
                 rewardAmount: coinsReward,
             },
         });
+        (0, home_controller_1.invalidateVisitEarnLinksCountCache)();
         res.status(200).json({
             success: true,
             message: 'Visit link created successfully',
@@ -117,6 +119,7 @@ const deleteVisitLink = async (req, res) => {
         await db_1.prisma.visitEarnLink.delete({
             where: { id },
         });
+        (0, home_controller_1.invalidateVisitEarnLinksCountCache)();
         res.status(200).json({
             success: true,
             message: 'Visit link deleted successfully',

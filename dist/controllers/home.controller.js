@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHomeState = exports.invalidateSocialTasksCache = exports.getCachedSocialTasks = void 0;
+exports.getHomeState = exports.invalidateVisitEarnLinksCountCache = exports.getCachedVisitEarnLinksCount = exports.invalidateSocialTasksCache = exports.getCachedSocialTasks = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 // Social Tasks In-Memory Cache
@@ -25,6 +25,26 @@ const invalidateSocialTasksCache = () => {
     console.log('[CACHE] SocialTasks cache invalidated.');
 };
 exports.invalidateSocialTasksCache = invalidateSocialTasksCache;
+// VisitEarnLinks Count Cache
+let cachedVisitEarnLinksCount = null;
+let visitEarnLinksCountCacheExpiry = 0;
+const getCachedVisitEarnLinksCount = async () => {
+    const now = Date.now();
+    if (cachedVisitEarnLinksCount !== null && now < visitEarnLinksCountCacheExpiry) {
+        return cachedVisitEarnLinksCount;
+    }
+    const count = await db_1.prisma.visitEarnLink.count();
+    cachedVisitEarnLinksCount = count;
+    visitEarnLinksCountCacheExpiry = now + 10 * 60 * 1000; // 10 minutes cache duration
+    return count;
+};
+exports.getCachedVisitEarnLinksCount = getCachedVisitEarnLinksCount;
+const invalidateVisitEarnLinksCountCache = () => {
+    cachedVisitEarnLinksCount = null;
+    visitEarnLinksCountCacheExpiry = 0;
+    console.log('[CACHE] VisitEarnLinksCount cache invalidated.');
+};
+exports.invalidateVisitEarnLinksCountCache = invalidateVisitEarnLinksCountCache;
 const getHomeState = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -185,7 +205,7 @@ const getHomeState = async (req, res) => {
             isCompleted: completedSocialTasks.includes(task.id)
         }));
         // 1. Visit All Links calculations
-        const totalLinks = await db_1.prisma.visitEarnLink.count();
+        const totalLinks = await (0, exports.getCachedVisitEarnLinksCount)();
         const visitedClaimsToday = await db_1.prisma.visitEarnClaim.findMany({
             where: {
                 userId,

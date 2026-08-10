@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { prisma } from '../config/db';
+import { invalidateVisitEarnLinksCountCache } from './home.controller';
 
 // --- GET ALL LINKS (USER & ADMIN) ---
 export const getVisitLinks = async (req: Request, res: Response): Promise<void> => {
@@ -98,6 +99,8 @@ export const createVisitLink = async (req: AdminAuthRequest, res: Response): Pro
       },
     });
 
+    invalidateVisitEarnLinksCountCache();
+
     res.status(200).json({
       success: true,
       message: 'Visit link created successfully',
@@ -131,6 +134,8 @@ export const deleteVisitLink = async (req: AdminAuthRequest, res: Response): Pro
     await prisma.visitEarnLink.delete({
       where: { id },
     });
+
+    invalidateVisitEarnLinksCountCache();
 
     res.status(200).json({
       success: true,
