@@ -1086,7 +1086,8 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
               null,
               recipientId,
               false,
-              senderId
+              senderId,
+              finalChannelName
             );
           }
         }
@@ -1174,8 +1175,9 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
       // Mark any unread incoming messages in history as seen
       const unreadIncoming = messages.filter(m => m.senderId !== userId && !m.isSeen);
       if (unreadIncoming.length > 0) {
+        const messageIds = unreadIncoming.map(m => m.id);
         await prisma.playgroundMessage.updateMany({
-          where: { id: { in: unreadIncoming.map(m => m.id) } },
+          where: { id: { in: messageIds } },
           data: { isSeen: true }
         });
         // Update in-memory objects to show seen
@@ -1183,6 +1185,17 @@ export const syncPlaygroundMessages = async (req: AuthRequest, res: Response): P
           if (m.senderId !== userId) {
             m.isSeen = true;
           }
+        }
+        
+        // Notify the sender(s) in real-time that their messages were read
+        try {
+          io.to(finalChannelName).emit('message_seen', { messageIds });
+          const senderIds = Array.from(new Set(unreadIncoming.map(m => m.senderId)));
+          for (const sId of senderIds) {
+            io.to(`friend-chat-${sId}`).emit('message_seen', { messageIds });
+          }
+        } catch (socketErr) {
+          console.error('Error emitting message_seen during sync:', socketErr);
         }
       }
 
