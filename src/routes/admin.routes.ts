@@ -33,7 +33,10 @@ import {
   createAdminFaq,
   updateAdminFaq,
   deleteAdminFaq,
-  getManagerStats
+  getManagerStats,
+  getPlaygroundReports,
+  getPlaygroundBans,
+  liftPlaygroundBan
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
@@ -76,6 +79,9 @@ router.delete('/moderators/:id', requireRole(['superadmin']), deleteModerator);
 router.get('/fraud/multi-accounts', getMultiAccountFraudGroups);
 router.post('/fraud/bulk-block', requireRole(['superadmin']), bulkBlockUsers);
 router.get('/fraud/suspicious-games', getSuspiciousGames);
+router.get('/playground/reports', getPlaygroundReports);
+router.get('/playground/bans', getPlaygroundBans);
+router.delete('/playground/bans/:id', requireRole(['superadmin']), liftPlaygroundBan);
 
 // App Config Settings
 router.get('/config', getConfigs);

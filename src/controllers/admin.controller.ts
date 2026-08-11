@@ -1710,6 +1710,116 @@ export const getManagerStats = async (req: AdminAuthRequest, res: Response): Pro
   }
 };
 
+// 47. Get Playground Reports
+export const getPlaygroundReports = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const reports = await prisma.playgroundReport.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Fetch user details for all reporterId and reportedId
+    const userIds = Array.from(new Set([
+      ...reports.map(r => r.reporterId),
+      ...reports.map(r => r.reportedId)
+    ]));
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, username: true, phoneNumber: true }
+    });
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    const formattedReports = reports.map(r => ({
+      id: r.id,
+      reason: r.reason,
+      createdAt: r.createdAt,
+      reporter: userMap.get(r.reporterId) || { id: r.reporterId, name: 'Unknown', username: 'unknown', phoneNumber: '' },
+      reported: userMap.get(r.reportedId) || { id: r.reportedId, name: 'Unknown', username: 'unknown', phoneNumber: '' }
+    }));
+
+    res.status(200).json({ success: true, reports: formattedReports });
+  } catch (error: any) {
+    console.error('Error fetching playground reports:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
+// 48. Get Playground Bans
+export const getPlaygroundBans = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const bans = await prisma.playgroundBan.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            phoneNumber: true,
+            isBlocked: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Group by userId to count total suspensions for each user
+    const bansCount = await prisma.playgroundBan.groupBy({
+      by: ['userId'],
+      _count: {
+        id: true
+      }
+    });
+
+    const banCountMap = new Map(bansCount.map(b => [b.userId, b._count.id]));
+
+    const formattedBans = bans.map(b => ({
+      id: b.id,
+      expiresAt: b.expiresAt,
+      reason: b.reason,
+      createdAt: b.createdAt,
+      user: b.user,
+      totalBans: banCountMap.get(b.userId) || 1
+    }));
+
+    res.status(200).json({ success: true, bans: formattedBans });
+  } catch (error: any) {
+    console.error('Error fetching playground bans:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
+// 49. Lift Playground Ban
+export const liftPlaygroundBan = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    
+    // Find user ID associated with this ban to log it
+    const ban = await prisma.playgroundBan.findUnique({
+      where: { id }
+    });
+
+    if (!ban) {
+      res.status(404).json({ error: 'Ban record not found' });
+      return;
+    }
+
+    await prisma.playgroundBan.delete({
+      where: { id }
+    });
+
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(adminId, adminName, 'LIFT_PLAYGROUND_BAN', { banId: id, userId: ban.userId }, ip);
+
+    res.status(200).json({ success: true, message: 'Suspension lifted successfully.' });
+  } catch (error: any) {
+    console.error('Error lifting playground ban:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
 
 
 

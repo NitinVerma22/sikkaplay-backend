@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -1506,3 +1506,102 @@ const getManagerStats = async (req, res) => {
     }
 };
 exports.getManagerStats = getManagerStats;
+// 47. Get Playground Reports
+const getPlaygroundReports = async (req, res) => {
+    try {
+        const reports = await db_1.prisma.playgroundReport.findMany({
+            orderBy: { createdAt: 'desc' }
+        });
+        // Fetch user details for all reporterId and reportedId
+        const userIds = Array.from(new Set([
+            ...reports.map(r => r.reporterId),
+            ...reports.map(r => r.reportedId)
+        ]));
+        const users = await db_1.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, username: true, phoneNumber: true }
+        });
+        const userMap = new Map(users.map(u => [u.id, u]));
+        const formattedReports = reports.map(r => ({
+            id: r.id,
+            reason: r.reason,
+            createdAt: r.createdAt,
+            reporter: userMap.get(r.reporterId) || { id: r.reporterId, name: 'Unknown', username: 'unknown', phoneNumber: '' },
+            reported: userMap.get(r.reportedId) || { id: r.reportedId, name: 'Unknown', username: 'unknown', phoneNumber: '' }
+        }));
+        res.status(200).json({ success: true, reports: formattedReports });
+    }
+    catch (error) {
+        console.error('Error fetching playground reports:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.getPlaygroundReports = getPlaygroundReports;
+// 48. Get Playground Bans
+const getPlaygroundBans = async (req, res) => {
+    try {
+        const bans = await db_1.prisma.playgroundBan.findMany({
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        username: true,
+                        phoneNumber: true,
+                        isBlocked: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        // Group by userId to count total suspensions for each user
+        const bansCount = await db_1.prisma.playgroundBan.groupBy({
+            by: ['userId'],
+            _count: {
+                id: true
+            }
+        });
+        const banCountMap = new Map(bansCount.map(b => [b.userId, b._count.id]));
+        const formattedBans = bans.map(b => ({
+            id: b.id,
+            expiresAt: b.expiresAt,
+            reason: b.reason,
+            createdAt: b.createdAt,
+            user: b.user,
+            totalBans: banCountMap.get(b.userId) || 1
+        }));
+        res.status(200).json({ success: true, bans: formattedBans });
+    }
+    catch (error) {
+        console.error('Error fetching playground bans:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.getPlaygroundBans = getPlaygroundBans;
+// 49. Lift Playground Ban
+const liftPlaygroundBan = async (req, res) => {
+    try {
+        const id = req.params.id;
+        // Find user ID associated with this ban to log it
+        const ban = await db_1.prisma.playgroundBan.findUnique({
+            where: { id }
+        });
+        if (!ban) {
+            res.status(404).json({ error: 'Ban record not found' });
+            return;
+        }
+        await db_1.prisma.playgroundBan.delete({
+            where: { id }
+        });
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'LIFT_PLAYGROUND_BAN', { banId: id, userId: ban.userId }, ip);
+        res.status(200).json({ success: true, message: 'Suspension lifted successfully.' });
+    }
+    catch (error) {
+        console.error('Error lifting playground ban:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.liftPlaygroundBan = liftPlaygroundBan;
