@@ -71,7 +71,7 @@ router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);
 router.post('/social-tasks', socialTask_controller_1.createSocialTaskAdmin);
 router.put('/social-tasks/:id', socialTask_controller_1.updateSocialTaskAdmin);
 router.delete('/social-tasks/:id', socialTask_controller_1.deleteSocialTaskAdmin);
-router.post('/transactions/:id/revert', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.revertTransaction);
+router.post('/transactions/:id/revert', admin_controller_1.revertTransaction);
 // Database Maintenance Management (Super Admin only)
 router.get('/maintenance/tables', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.getCleanableTables);
 router.post('/maintenance/preview', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.previewMaintenanceRecords);

@@ -135,7 +135,7 @@ router.post('/social-tasks', createSocialTaskAdmin);
 router.put('/social-tasks/:id', updateSocialTaskAdmin);
 router.delete('/social-tasks/:id', deleteSocialTaskAdmin);
 
-router.post('/transactions/:id/revert', requireRole(['superadmin']), revertTransaction);
+router.post('/transactions/:id/revert', revertTransaction);
 
 // Database Maintenance Management (Super Admin only)
 router.get('/maintenance/tables', requireRole(['superadmin']), getCleanableTables);
