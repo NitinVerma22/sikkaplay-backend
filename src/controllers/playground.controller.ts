@@ -503,6 +503,14 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // Check if the current user has an active ban
+    const activeBan = await prisma.playgroundBan.findFirst({
+      where: {
+        userId,
+        expiresAt: { gte: new Date() }
+      }
+    });
+
     const friendships = await prisma.friendship.findMany({
       where: {
         OR: [
@@ -575,7 +583,10 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
     res.status(200).json({
       success: true,
       friends,
-      pendingRequests
+      pendingRequests,
+      isSuspended: !!activeBan,
+      suspendedReason: activeBan ? activeBan.reason : null,
+      suspendedUntil: activeBan ? activeBan.expiresAt : null
     });
   } catch (error) {
     console.error('Error fetching friends:', error);
@@ -1004,6 +1015,19 @@ export const sendPlaygroundMessage = async (req: AuthRequest, res: Response): Pr
 
     if (!channelName || !text) {
       res.status(400).json({ error: 'Missing parameters' });
+      return;
+    }
+
+    // Check if the sender is suspended
+    const activeBan = await prisma.playgroundBan.findFirst({
+      where: {
+        userId: senderId,
+        expiresAt: { gte: new Date() }
+      }
+    });
+
+    if (activeBan) {
+      res.status(403).json({ error: `Your chat access is suspended until ${activeBan.expiresAt.toLocaleString()} due to reports.`, suspended: true });
       return;
     }
 
