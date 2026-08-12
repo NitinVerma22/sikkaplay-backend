@@ -35,6 +35,7 @@ router.post('/matchmaking/join', matchmakingLimiter, playground_controller_1.joi
 router.post('/matchmaking/status', playground_controller_1.checkMatchmakingStatus);
 // Friends
 router.get('/friends', playground_controller_1.getFriendsList);
+router.get('/friends/suggestions', playground_controller_1.getSuggestions);
 router.get('/friends/search', playground_controller_1.searchFriends);
 router.post('/friends/request', playground_controller_1.sendFriendRequest);
 router.post('/friends/accept', playground_controller_1.acceptFriendRequest);

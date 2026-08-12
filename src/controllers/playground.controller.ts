@@ -594,6 +594,85 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+// 9b. Get user suggestions (paginated, 8 users at a time, excluding current user, friends, pending requests, and blocked users)
+export const getSuggestions = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // 1. Get all friendships of the current user
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { userOneId: userId },
+          { userTwoId: userId }
+        ]
+      },
+      select: {
+        userOneId: true,
+        userTwoId: true
+      }
+    });
+
+    const friendIds = friendships.map(f => f.userOneId === userId ? f.userTwoId : f.userOneId);
+
+    // 2. Get all blocked users (both ways)
+    const blocks = await prisma.blockedUser.findMany({
+      where: {
+        OR: [
+          { blockerId: userId },
+          { blockedId: userId }
+        ]
+      },
+      select: {
+        blockerId: true,
+        blockedId: true
+      }
+    });
+
+    const blockedIds = blocks.map(b => b.blockerId === userId ? b.blockedId : b.blockerId);
+
+    // 3. Exclude self, friends, blocked
+    const excludeIds = Array.from(new Set([userId, ...friendIds, ...blockedIds]));
+
+    // 4. Query paginated suggestions
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 8;
+    const skip = (page - 1) * limit;
+
+    const suggestions = await prisma.user.findMany({
+      where: {
+        id: { notIn: excludeIds },
+        isBlocked: false,
+        name: { not: null }
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        gender: true,
+        avatarUrl: true
+      },
+      skip,
+      take: limit,
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      suggestions
+    });
+  } catch (error) {
+    console.error('Error fetching suggestions:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // 10. Friends lookup search
 export const searchFriends = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setTypingStatus = exports.clearChatHistory = exports.unfriendUser = exports.getBlockedUsers = exports.unblockUser = exports.blockUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.typingUsersCache = exports.userActiveChannelCache = void 0;
+exports.setTypingStatus = exports.clearChatHistory = exports.unfriendUser = exports.getBlockedUsers = exports.unblockUser = exports.blockUser = exports.getPublicProfile = exports.updateBio = exports.updateActiveChannel = exports.syncPlaygroundMessages = exports.sendPlaygroundMessage = exports.reportUser = exports.sellVirtualGift = exports.sendVirtualGift = exports.acceptFriendRequest = exports.sendFriendRequest = exports.searchFriends = exports.getSuggestions = exports.getFriendsList = exports.checkMatchmakingStatus = exports.joinMatchmaking = exports.claimCrate = exports.setUsername = exports.checkUsernameUnique = exports.swapCoinsForMinutes = exports.getPlaygroundLobby = exports.typingUsersCache = exports.userActiveChannelCache = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const crypto_utils_1 = require("../utils/crypto.utils");
@@ -551,6 +551,78 @@ const getFriendsList = async (req, res) => {
     }
 };
 exports.getFriendsList = getFriendsList;
+// 9b. Get user suggestions (paginated, 8 users at a time, excluding current user, friends, pending requests, and blocked users)
+const getSuggestions = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        // 1. Get all friendships of the current user
+        const friendships = await db_1.prisma.friendship.findMany({
+            where: {
+                OR: [
+                    { userOneId: userId },
+                    { userTwoId: userId }
+                ]
+            },
+            select: {
+                userOneId: true,
+                userTwoId: true
+            }
+        });
+        const friendIds = friendships.map(f => f.userOneId === userId ? f.userTwoId : f.userOneId);
+        // 2. Get all blocked users (both ways)
+        const blocks = await db_1.prisma.blockedUser.findMany({
+            where: {
+                OR: [
+                    { blockerId: userId },
+                    { blockedId: userId }
+                ]
+            },
+            select: {
+                blockerId: true,
+                blockedId: true
+            }
+        });
+        const blockedIds = blocks.map(b => b.blockerId === userId ? b.blockedId : b.blockerId);
+        // 3. Exclude self, friends, blocked
+        const excludeIds = Array.from(new Set([userId, ...friendIds, ...blockedIds]));
+        // 4. Query paginated suggestions
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 8;
+        const skip = (page - 1) * limit;
+        const suggestions = await db_1.prisma.user.findMany({
+            where: {
+                id: { notIn: excludeIds },
+                isBlocked: false,
+                name: { not: null }
+            },
+            select: {
+                id: true,
+                name: true,
+                username: true,
+                gender: true,
+                avatarUrl: true
+            },
+            skip,
+            take: limit,
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+        res.status(200).json({
+            success: true,
+            suggestions
+        });
+    }
+    catch (error) {
+        console.error('Error fetching suggestions:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getSuggestions = getSuggestions;
 // 10. Friends lookup search
 const searchFriends = async (req, res) => {
     try {

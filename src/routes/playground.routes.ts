@@ -10,6 +10,7 @@ import {
   joinMatchmaking,
   checkMatchmakingStatus,
   getFriendsList,
+  getSuggestions,
   searchFriends,
   sendFriendRequest,
   acceptFriendRequest,
@@ -67,6 +68,7 @@ router.post('/matchmaking/status', checkMatchmakingStatus);
 
 // Friends
 router.get('/friends', getFriendsList);
+router.get('/friends/suggestions', getSuggestions);
 router.get('/friends/search', searchFriends);
 router.post('/friends/request', sendFriendRequest);
 router.post('/friends/accept', acceptFriendRequest);
