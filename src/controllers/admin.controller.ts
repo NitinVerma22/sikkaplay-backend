@@ -1820,6 +1820,99 @@ export const liftPlaygroundBan = async (req: AdminAuthRequest, res: Response): P
   }
 };
 
+// Revert a transaction ledger entry
+export const revertTransaction = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const txId = req.params.id as string;
+
+    // Find transaction
+    const tx = await prisma.transaction.findUnique({
+      where: { id: txId },
+      include: { user: true }
+    });
+
+    if (!tx) {
+      res.status(404).json({ error: 'Transaction not found' });
+      return;
+    }
+
+    if (tx.status !== 'success') {
+      res.status(400).json({ error: 'Only successful transactions can be reverted' });
+      return;
+    }
+
+    // Don't allow double reversion
+    if (tx.description.includes('(Reverted)')) {
+      res.status(400).json({ error: 'Transaction is already reverted' });
+      return;
+    }
+
+    const user = (tx as any).user;
+    const amountToReverse = tx.amount;
+
+    let newBalance = user.balance - amountToReverse;
+    if (newBalance < 0) newBalance = 0; // prevent negative balance
+
+    let newTotalEarned = user.totalEarned;
+    // Only subtract from totalEarned if it was a positive addition (earning/bonus) that contributed to it
+    if (amountToReverse > 0) {
+      newTotalEarned = user.totalEarned - amountToReverse;
+      if (newTotalEarned < 0) newTotalEarned = 0;
+    }
+
+    // Execute database transaction
+    await prisma.$transaction([
+      // 1. Update user balance and totalEarned
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          balance: newBalance,
+          totalEarned: newTotalEarned
+        }
+      }),
+      // 2. Mark the original transaction as reverted in the description
+      prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          description: `${tx.description} (Reverted)`,
+          status: 'failed'
+        }
+      }),
+      // 3. Create a reversal transaction entry
+      prisma.transaction.create({
+        data: {
+          userId: user.id,
+          amount: -amountToReverse,
+          type: 'bonus',
+          status: 'success',
+          description: `Reversal of transaction #${tx.id.substring(0, 8)}`,
+        }
+      })
+    ]);
+
+    // Log admin action
+    const adminId = req.admin?.adminId || 'unknown-id';
+    const adminName = req.admin?.username || 'unknown-admin';
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    await logAdminAction(
+      adminId,
+      adminName,
+      'REVERT_TRANSACTION',
+      {
+        transactionId: txId,
+        userId: user.id,
+        reversalAmount: -amountToReverse,
+      },
+      ip
+    );
+
+    res.status(200).json({ success: true, message: 'Transaction successfully reverted' });
+  } catch (error: any) {
+    console.error('Error reverting transaction:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+};
+
 
 
 

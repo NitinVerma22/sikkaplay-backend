@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -1605,3 +1605,83 @@ const liftPlaygroundBan = async (req, res) => {
     }
 };
 exports.liftPlaygroundBan = liftPlaygroundBan;
+// Revert a transaction ledger entry
+const revertTransaction = async (req, res) => {
+    try {
+        const txId = req.params.id;
+        // Find transaction
+        const tx = await db_1.prisma.transaction.findUnique({
+            where: { id: txId },
+            include: { user: true }
+        });
+        if (!tx) {
+            res.status(404).json({ error: 'Transaction not found' });
+            return;
+        }
+        if (tx.status !== 'success') {
+            res.status(400).json({ error: 'Only successful transactions can be reverted' });
+            return;
+        }
+        // Don't allow double reversion
+        if (tx.description.includes('(Reverted)')) {
+            res.status(400).json({ error: 'Transaction is already reverted' });
+            return;
+        }
+        const user = tx.user;
+        const amountToReverse = tx.amount;
+        let newBalance = user.balance - amountToReverse;
+        if (newBalance < 0)
+            newBalance = 0; // prevent negative balance
+        let newTotalEarned = user.totalEarned;
+        // Only subtract from totalEarned if it was a positive addition (earning/bonus) that contributed to it
+        if (amountToReverse > 0) {
+            newTotalEarned = user.totalEarned - amountToReverse;
+            if (newTotalEarned < 0)
+                newTotalEarned = 0;
+        }
+        // Execute database transaction
+        await db_1.prisma.$transaction([
+            // 1. Update user balance and totalEarned
+            db_1.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    balance: newBalance,
+                    totalEarned: newTotalEarned
+                }
+            }),
+            // 2. Mark the original transaction as reverted in the description
+            db_1.prisma.transaction.update({
+                where: { id: tx.id },
+                data: {
+                    description: `${tx.description} (Reverted)`,
+                    status: 'failed'
+                }
+            }),
+            // 3. Create a reversal transaction entry
+            db_1.prisma.transaction.create({
+                data: {
+                    userId: user.id,
+                    amount: -amountToReverse,
+                    type: 'bonus',
+                    status: 'success',
+                    description: `Reversal of transaction #${tx.id.substring(0, 8)}`,
+                }
+            })
+        ]);
+        // Log admin action
+        const adminId = req.admin?.adminId || 'unknown-id';
+        const adminName = req.admin?.username || 'unknown-admin';
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        await (0, audit_service_1.logAdminAction)(adminId, adminName, 'REVERT_TRANSACTION', {
+            transactionId: txId,
+            userId: user.id,
+            reversalAmount: -amountToReverse,
+        }, ip);
+        res.status(200).json({ success: true, message: 'Transaction successfully reverted' });
+    }
+    catch (error) {
+        console.error('Error reverting transaction:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+};
+exports.revertTransaction = revertTransaction;

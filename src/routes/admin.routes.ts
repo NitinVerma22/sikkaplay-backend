@@ -36,7 +36,8 @@ import {
   getManagerStats,
   getPlaygroundReports,
   getPlaygroundBans,
-  liftPlaygroundBan
+  liftPlaygroundBan,
+  revertTransaction
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
@@ -133,6 +134,8 @@ router.get('/social-tasks', getSocialTasksAdmin);
 router.post('/social-tasks', createSocialTaskAdmin);
 router.put('/social-tasks/:id', updateSocialTaskAdmin);
 router.delete('/social-tasks/:id', deleteSocialTaskAdmin);
+
+router.post('/transactions/:id/revert', requireRole(['superadmin']), revertTransaction);
 
 // Database Maintenance Management (Super Admin only)
 router.get('/maintenance/tables', requireRole(['superadmin']), getCleanableTables);
