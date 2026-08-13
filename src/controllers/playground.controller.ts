@@ -735,6 +735,21 @@ export const sendFriendRequest = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // Check block
+    const isBlocked = await prisma.blockedUser.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: userId }
+        ]
+      }
+    });
+
+    if (isBlocked) {
+      res.status(403).json({ error: 'Cannot send friend request to a blocked user' });
+      return;
+    }
+
     // Sort IDs to maintain unique pair index
     const [u1, u2] = userId < targetUserId ? [userId, targetUserId] : [targetUserId, userId];
 
@@ -1466,6 +1481,16 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    // Check block status
+    const blockRecord = await prisma.blockedUser.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: targetUser.id },
+          { blockerId: targetUser.id, blockedId: userId }
+        ]
+      }
+    });
+
     // Check friendship status between current user and target user
     const friendship = await prisma.friendship.findFirst({
       where: {
@@ -1476,10 +1501,16 @@ export const getPublicProfile = async (req: AuthRequest, res: Response): Promise
       }
     });
 
-    let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS'
+    let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS' | 'BLOCKED_BY_ME' | 'BLOCKED_BY_OTHER'
     let friendshipId: string | null = null;
 
-    if (friendship) {
+    if (blockRecord) {
+      if (blockRecord.blockerId === userId) {
+        friendshipState = 'BLOCKED_BY_ME';
+      } else {
+        friendshipState = 'BLOCKED_BY_OTHER';
+      }
+    } else if (friendship) {
       friendshipId = friendship.id;
       if (friendship.status === 'ACCEPTED') {
         friendshipState = 'FRIENDS';
