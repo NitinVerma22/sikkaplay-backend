@@ -14,6 +14,7 @@ import adminRoutes from './routes/admin.routes';
 import callbackRoutes from './routes/callback.routes';
 import gameRoutes from './routes/game.routes';
 import playgroundRoutes from './routes/playground.routes';
+import waterSortRoutes from './routes/waterSort.routes';
 import { startCronJobs } from './services/cron.service';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
@@ -77,6 +78,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/callbacks', callbackRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/playground', playgroundRoutes);
+app.use('/api/v1/water-sort', waterSortRoutes);
+app.use('/api/water-sort', waterSortRoutes);
 
 // Basic health check route
 app.get('/', (req: Request, res: Response) => {
