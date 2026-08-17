@@ -54,6 +54,7 @@ export const loginAdmin = async (req: Request, res: Response): Promise<void> => 
 // 2. Get Dashboard Stats
 export const getDashboardStats = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     const totalUsers = await prisma.user.count();
     
     // Sum of user balances
@@ -177,11 +178,11 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       users: m.users
     }));
 
-    // --- GRANULAR EARNINGS ANALYTICS BREAKDOWN ---
+    // --- GRANULAR EARNINGS ANALYTICS BREAKDOWN (REAL DATABASE DATA) ---
     const allEarningTxs = await prisma.transaction.findMany({
       where: {
         status: 'success',
-        type: { in: ['earning', 'bonus'] }
+        type: { in: ['earning', 'bonus', 'game', 'daily_streak', 'network_income', 'playground'] }
       },
       select: {
         amount: true,
@@ -198,27 +199,25 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     let totalReferralCommissions = 0;
 
     for (const tx of allEarningTxs) {
+      const type = (tx.type || '').toLowerCase();
       const desc = (tx.description || '').toLowerCase();
       const amt = Math.abs(tx.amount);
 
-      if (desc.includes('referral') || desc.includes('invite') || desc.includes('signup bonus')) {
-        if (desc.includes('commission') || desc.includes('mlm') || desc.includes('level') || desc.includes('network')) {
+      if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
+        if (desc.includes('commission summary') || desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
           totalReferralCommissions += amt;
         } else {
           totalDirectReferrals += amt;
         }
-      } else if (desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
-        totalReferralCommissions += amt;
-      } else if (desc.includes('game') || desc.includes('water sort') || desc.includes('spin') || desc.includes('math') || desc.includes('word') || desc.includes('tic tac') || desc.includes('crate')) {
-        totalGamesEarnings += amt;
-      } else if (desc.includes('visit') || desc.includes('web task') || desc.includes('social task') || desc.includes('task')) {
-        totalVisitAndEarn += amt;
+      } else if (type === 'daily_streak' || desc.includes('streak') || desc.includes('checkin') || desc.includes('check-in')) {
+        totalDailyStreakCheckin += amt;
       } else if (desc.includes('daily code') || desc.includes('code claim')) {
         totalDailyCodes += amt;
-      } else if (desc.includes('streak') || desc.includes('check-in') || desc.includes('checkin') || desc.includes('daily bonus')) {
-        totalDailyStreakCheckin += amt;
+      } else if (desc.includes('visited sponsored') || desc.includes('visited all links') || desc.includes('visit') || desc.includes('task')) {
+        totalVisitAndEarn += amt;
+      } else if (type === 'game' || desc.includes('spin') || desc.includes('math_rush') || desc.includes('gameplay') || desc.includes('water sort') || desc.includes('played games')) {
+        totalGamesEarnings += amt;
       } else {
-        // Default uncategorized self earnings
         totalGamesEarnings += amt;
       }
     }

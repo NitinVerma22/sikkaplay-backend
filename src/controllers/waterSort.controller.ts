@@ -1,131 +1,120 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
+import { AuthRequest } from '../middleware/auth.middleware';
 
-export class WaterSortController {
-  /**
-   * GET /api/v1/water-sort/progress
-   * Returns user's highest unlocked level, stars map, and global multiplier N
-   */
-  async getProgress(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
-      }
+/**
+ * GET /api/v1/water-sort/progress
+ * Fetch user progress and current global coin multiplier N from Admin AppConfig.
+ */
+export const getWaterSortProgress = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.uid || req.user?.id;
+    let maxUnlockedLevel = 1;
+    let starsMap: Record<number, number> = {};
+    let multiplier = 2; // Default multiplier
 
-      // Fetch global app settings for multiplier N
-      const config = await prisma.appConfig.findFirst({
-        orderBy: { createdAt: 'desc' }
-      });
-      const multiplier = (config as any)?.waterSortCoinMultiplier ?? 2;
-
-      // Fetch user's water sort progress
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          waterSortMaxLevel: true,
-          waterSortStars: true,
-        } as any
-      });
-
-      const maxUnlockedLevel = (user as any)?.waterSortMaxLevel ?? 1;
-      const stars = (user as any)?.waterSortStars ?? {};
-
-      return res.json({
-        success: true,
-        maxUnlockedLevel,
-        stars,
-        multiplier,
-      });
-    } catch (error) {
-      console.error('Error fetching water sort progress:', error);
-      return res.status(500).json({ success: false, message: 'Internal server error' });
+    // 1. Fetch multiplier N from AppConfig
+    const config = await prisma.appConfig.findFirst();
+    if (config && (config as any).waterSortMultiplier) {
+      multiplier = (config as any).waterSortMultiplier;
     }
-  }
 
-  /**
-   * POST /api/v1/water-sort/complete-level
-   * Completes a level, credits coins = levelNumber * multiplier N, and unlocks next level
-   */
-  async completeLevel(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
-      }
-
-      const { levelNumber, stars, movesCount } = req.body;
-      if (!levelNumber || levelNumber < 1) {
-        return res.status(400).json({ success: false, message: 'Invalid level number' });
-      }
-
-      // Fetch global multiplier N
-      const config = await prisma.appConfig.findFirst({
-        orderBy: { createdAt: 'desc' }
-      });
-      const multiplier = (config as any)?.waterSortCoinMultiplier ?? 2;
-
-      // Calculate coin reward = Level * N
-      const coinsEarned = levelNumber * multiplier;
-
-      // Fetch user
+    // 2. Fetch user's recorded water sort level if authenticated
+    if (userId) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
+        select: { totalEarned: true }
       });
+      if (user) {
+        // Fetch completed levels from game sessions or user progress
+        const sessions = await prisma.gameSession.findMany({
+          where: { userId, gameType: 'water_sort', status: 'completed' },
+          select: { coinsEarned: true, createdAt: true }
+        });
 
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+        maxUnlockedLevel = Math.max(1, sessions.length + 1);
+        sessions.forEach((s, idx) => {
+          starsMap[idx + 1] = 3;
+        });
       }
+    }
 
-      const currentMax = (user as any).waterSortMaxLevel ?? 1;
-      const nextMax = Math.max(currentMax, levelNumber + 1);
+    res.status(200).json({
+      success: true,
+      maxUnlockedLevel,
+      stars: starsMap,
+      multiplier
+    });
+  } catch (error) {
+    console.error('Error fetching water sort progress:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch water sort progress' });
+  }
+};
 
-      let currentStars: Record<string, number> = {};
-      try {
-        currentStars = typeof (user as any).waterSortStars === 'object' && (user as any).waterSortStars
-          ? (user as any).waterSortStars
-          : {};
-      } catch (e) {
-        currentStars = {};
-      }
+/**
+ * POST /api/v1/water-sort/complete-level
+ * Validates level completion, awards coins (levelNumber * N), creates transaction, and unlocks next level.
+ */
+export const completeWaterSortLevel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.uid || req.user?.id;
+    const { levelNumber, stars, movesCount } = req.body;
 
-      // Update stars for this level if higher
-      const prevStars = currentStars[levelNumber.toString()] || 0;
-      if (stars > prevStars) {
-        currentStars[levelNumber.toString()] = stars;
-      }
+    if (!levelNumber || levelNumber < 1) {
+      res.status(400).json({ success: false, error: 'Invalid level number' });
+      return;
+    }
 
-      // Execute transaction: update coins & level progress
-      await prisma.$transaction([
-        prisma.user.update({
+    // 1. Fetch Multiplier N from AppConfig
+    let multiplier = 2;
+    const config = await prisma.appConfig.findFirst();
+    if (config && (config as any).waterSortMultiplier) {
+      multiplier = (config as any).waterSortMultiplier;
+    }
+
+    const coinsEarned = levelNumber * multiplier;
+
+    if (userId) {
+      await prisma.$transaction(async (tx) => {
+        // Record game session
+        await tx.gameSession.create({
+          data: {
+            userId,
+            gameType: 'water_sort',
+            coinsEarned,
+            status: 'completed'
+          }
+        });
+
+        // Credit user balance
+        await tx.user.update({
           where: { id: userId },
           data: {
-            coins: { increment: coinsEarned },
-            waterSortMaxLevel: nextMax,
-            waterSortStars: currentStars,
-          } as any,
-        }),
-        prisma.transaction.create({
-          data: {
-            userId: userId,
-            type: 'GAME_REWARD',
-            amount: coinsEarned,
-            description: `Water Sort Level ${levelNumber} Reward (${stars}⭐)`,
-            status: 'COMPLETED',
-          },
-        }),
-      ]);
+            balance: { increment: coinsEarned },
+            totalEarned: { increment: coinsEarned }
+          }
+        });
 
-      return res.json({
-        success: true,
-        coinsEarned,
-        newUnlockedLevel: nextMax,
-        stars: currentStars,
+        // Create transaction record
+        await tx.transaction.create({
+          data: {
+            userId,
+            amount: coinsEarned,
+            type: 'earning',
+            status: 'success',
+            description: `Water Sort Level ${levelNumber} Reward`
+          }
+        });
       });
-    } catch (error) {
-      console.error('Error completing water sort level:', error);
-      return res.status(500).json({ success: false, message: 'Internal server error' });
     }
+
+    res.status(200).json({
+      success: true,
+      coinsEarned,
+      newUnlockedLevel: levelNumber + 1
+    });
+  } catch (error) {
+    console.error('Error completing water sort level:', error);
+    res.status(500).json({ success: false, error: 'Failed to record level completion' });
   }
-}
+};

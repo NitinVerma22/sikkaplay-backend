@@ -48,6 +48,7 @@ exports.loginAdmin = loginAdmin;
 // 2. Get Dashboard Stats
 const getDashboardStats = async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         const totalUsers = await db_1.prisma.user.count();
         // Sum of user balances
         const userBalances = await db_1.prisma.user.aggregate({
@@ -155,6 +156,74 @@ const getDashboardStats = async (req, res) => {
             withdrawals: m.withdrawals,
             users: m.users
         }));
+        // --- GRANULAR EARNINGS ANALYTICS BREAKDOWN (REAL DATABASE DATA) ---
+        const allEarningTxs = await db_1.prisma.transaction.findMany({
+            where: {
+                status: 'success',
+                type: { in: ['earning', 'bonus', 'game', 'daily_streak', 'network_income', 'playground'] }
+            },
+            select: {
+                amount: true,
+                description: true,
+                type: true
+            }
+        });
+        let totalGamesEarnings = 0;
+        let totalVisitAndEarn = 0;
+        let totalDailyCodes = 0;
+        let totalDailyStreakCheckin = 0;
+        let totalDirectReferrals = 0;
+        let totalReferralCommissions = 0;
+        for (const tx of allEarningTxs) {
+            const type = (tx.type || '').toLowerCase();
+            const desc = (tx.description || '').toLowerCase();
+            const amt = Math.abs(tx.amount);
+            if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
+                if (desc.includes('commission summary') || desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
+                    totalReferralCommissions += amt;
+                }
+                else {
+                    totalDirectReferrals += amt;
+                }
+            }
+            else if (type === 'daily_streak' || desc.includes('streak') || desc.includes('checkin') || desc.includes('check-in')) {
+                totalDailyStreakCheckin += amt;
+            }
+            else if (desc.includes('daily code') || desc.includes('code claim')) {
+                totalDailyCodes += amt;
+            }
+            else if (desc.includes('visited sponsored') || desc.includes('visited all links') || desc.includes('visit') || desc.includes('task')) {
+                totalVisitAndEarn += amt;
+            }
+            else if (type === 'game' || desc.includes('spin') || desc.includes('math_rush') || desc.includes('gameplay') || desc.includes('water sort') || desc.includes('played games')) {
+                totalGamesEarnings += amt;
+            }
+            else {
+                totalGamesEarnings += amt;
+            }
+        }
+        const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin;
+        const referralEarningsTotal = totalDirectReferrals + totalReferralCommissions;
+        const totalDisbursedCoins = selfEarningsTotal + referralEarningsTotal;
+        const earningsAnalytics = {
+            totalDisbursedCoins,
+            selfEarnings: {
+                total: selfEarningsTotal,
+                breakdown: {
+                    games: totalGamesEarnings,
+                    visitAndEarn: totalVisitAndEarn,
+                    dailyCodes: totalDailyCodes,
+                    dailyStreakCheckin: totalDailyStreakCheckin
+                }
+            },
+            referralEarnings: {
+                total: referralEarningsTotal,
+                breakdown: {
+                    directReferrals: totalDirectReferrals,
+                    referralCommissions: totalReferralCommissions
+                }
+            }
+        };
         res.status(200).json({
             success: true,
             stats: {
@@ -166,6 +235,7 @@ const getDashboardStats = async (req, res) => {
                 openTicketsCount,
                 totalWithdrawn: Math.abs(totalWithdrawnAmount._sum.amount || 0),
             },
+            earningsAnalytics,
             recentTransactions,
             monthlyStats
         });

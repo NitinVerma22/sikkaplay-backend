@@ -679,6 +679,19 @@ const sendFriendRequest = async (req, res) => {
             res.status(400).json({ error: 'Cannot add yourself as a friend' });
             return;
         }
+        // Check block
+        const isBlocked = await db_1.prisma.blockedUser.findFirst({
+            where: {
+                OR: [
+                    { blockerId: userId, blockedId: targetUserId },
+                    { blockerId: targetUserId, blockedId: userId }
+                ]
+            }
+        });
+        if (isBlocked) {
+            res.status(403).json({ error: 'Cannot send friend request to a blocked user' });
+            return;
+        }
         // Sort IDs to maintain unique pair index
         const [u1, u2] = userId < targetUserId ? [userId, targetUserId] : [targetUserId, userId];
         // Check existing
@@ -1319,6 +1332,15 @@ const getPublicProfile = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
+        // Check block status
+        const blockRecord = await db_1.prisma.blockedUser.findFirst({
+            where: {
+                OR: [
+                    { blockerId: userId, blockedId: targetUser.id },
+                    { blockerId: targetUser.id, blockedId: userId }
+                ]
+            }
+        });
         // Check friendship status between current user and target user
         const friendship = await db_1.prisma.friendship.findFirst({
             where: {
@@ -1328,9 +1350,17 @@ const getPublicProfile = async (req, res) => {
                 ]
             }
         });
-        let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS'
+        let friendshipState = 'NONE'; // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS' | 'BLOCKED_BY_ME' | 'BLOCKED_BY_OTHER'
         let friendshipId = null;
-        if (friendship) {
+        if (blockRecord) {
+            if (blockRecord.blockerId === userId) {
+                friendshipState = 'BLOCKED_BY_ME';
+            }
+            else {
+                friendshipState = 'BLOCKED_BY_OTHER';
+            }
+        }
+        else if (friendship) {
             friendshipId = friendship.id;
             if (friendship.status === 'ACCEPTED') {
                 friendshipState = 'FRIENDS';
