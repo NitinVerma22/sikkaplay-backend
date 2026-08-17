@@ -177,6 +177,76 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       users: m.users
     }));
 
+    // --- GRANULAR EARNINGS ANALYTICS BREAKDOWN ---
+    const allEarningTxs = await prisma.transaction.findMany({
+      where: {
+        status: 'success',
+        type: { in: ['earning', 'bonus'] }
+      },
+      select: {
+        amount: true,
+        description: true,
+        type: true
+      }
+    });
+
+    let totalGamesEarnings = 0;
+    let totalVisitAndEarn = 0;
+    let totalDailyCodes = 0;
+    let totalDailyStreakCheckin = 0;
+    let totalDirectReferrals = 0;
+    let totalReferralCommissions = 0;
+
+    for (const tx of allEarningTxs) {
+      const desc = (tx.description || '').toLowerCase();
+      const amt = Math.abs(tx.amount);
+
+      if (desc.includes('referral') || desc.includes('invite') || desc.includes('signup bonus')) {
+        if (desc.includes('commission') || desc.includes('mlm') || desc.includes('level') || desc.includes('network')) {
+          totalReferralCommissions += amt;
+        } else {
+          totalDirectReferrals += amt;
+        }
+      } else if (desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
+        totalReferralCommissions += amt;
+      } else if (desc.includes('game') || desc.includes('water sort') || desc.includes('spin') || desc.includes('math') || desc.includes('word') || desc.includes('tic tac') || desc.includes('crate')) {
+        totalGamesEarnings += amt;
+      } else if (desc.includes('visit') || desc.includes('web task') || desc.includes('social task') || desc.includes('task')) {
+        totalVisitAndEarn += amt;
+      } else if (desc.includes('daily code') || desc.includes('code claim')) {
+        totalDailyCodes += amt;
+      } else if (desc.includes('streak') || desc.includes('check-in') || desc.includes('checkin') || desc.includes('daily bonus')) {
+        totalDailyStreakCheckin += amt;
+      } else {
+        // Default uncategorized self earnings
+        totalGamesEarnings += amt;
+      }
+    }
+
+    const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin;
+    const referralEarningsTotal = totalDirectReferrals + totalReferralCommissions;
+    const totalDisbursedCoins = selfEarningsTotal + referralEarningsTotal;
+
+    const earningsAnalytics = {
+      totalDisbursedCoins,
+      selfEarnings: {
+        total: selfEarningsTotal,
+        breakdown: {
+          games: totalGamesEarnings,
+          visitAndEarn: totalVisitAndEarn,
+          dailyCodes: totalDailyCodes,
+          dailyStreakCheckin: totalDailyStreakCheckin
+        }
+      },
+      referralEarnings: {
+        total: referralEarningsTotal,
+        breakdown: {
+          directReferrals: totalDirectReferrals,
+          referralCommissions: totalReferralCommissions
+        }
+      }
+    };
+
     res.status(200).json({
       success: true,
       stats: {
@@ -188,6 +258,7 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
         openTicketsCount,
         totalWithdrawn: Math.abs(totalWithdrawnAmount._sum.amount || 0),
       },
+      earningsAnalytics,
       recentTransactions,
       monthlyStats
     });
