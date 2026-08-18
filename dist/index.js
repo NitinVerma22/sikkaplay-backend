@@ -21,6 +21,7 @@ const callback_routes_1 = __importDefault(require("./routes/callback.routes"));
 const game_routes_1 = __importDefault(require("./routes/game.routes"));
 const playground_routes_1 = __importDefault(require("./routes/playground.routes"));
 const waterSort_routes_1 = __importDefault(require("./routes/waterSort.routes"));
+const bubbleShooter_routes_1 = __importDefault(require("./routes/bubbleShooter.routes"));
 const cron_service_1 = require("./services/cron.service");
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
@@ -80,6 +81,8 @@ app.use('/api/game', game_routes_1.default);
 app.use('/api/playground', playground_routes_1.default);
 app.use('/api/v1/water-sort', waterSort_routes_1.default);
 app.use('/api/water-sort', waterSort_routes_1.default);
+app.use('/api/v1/bubble-shooter', bubbleShooter_routes_1.default);
+app.use('/api/bubble-shooter', bubbleShooter_routes_1.default);
 // Basic health check route
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'SikkaPlay API is running' });
