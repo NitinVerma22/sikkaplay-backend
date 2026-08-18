@@ -16,6 +16,7 @@ import gameRoutes from './routes/game.routes';
 import playgroundRoutes from './routes/playground.routes';
 import waterSortRoutes from './routes/waterSort.routes';
 import bubbleShooterRoutes from './routes/bubbleShooter.routes';
+import arrowEscapeRoutes from './routes/arrowEscape.routes';
 import { startCronJobs } from './services/cron.service';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
@@ -83,6 +84,8 @@ app.use('/api/v1/water-sort', waterSortRoutes);
 app.use('/api/water-sort', waterSortRoutes);
 app.use('/api/v1/bubble-shooter', bubbleShooterRoutes);
 app.use('/api/bubble-shooter', bubbleShooterRoutes);
+app.use('/api/v1/arrow-escape', arrowEscapeRoutes);
+app.use('/api/arrow-escape', arrowEscapeRoutes);
 
 // Basic health check route
 app.get('/', (req: Request, res: Response) => {
