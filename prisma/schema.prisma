@@ -230,6 +230,7 @@ model AppConfig {
   giftCommissionRate         Float    @default(0.20) // 20% platform commission on virtual gifts
   selfWithdrawalNotice       String   @default("")
   referralWithdrawalNotice   String   @default("")
+  showWithdrawalPackages     Boolean  @default(true)
 
   updatedAt           DateTime @updatedAt
 }

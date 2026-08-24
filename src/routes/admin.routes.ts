@@ -37,7 +37,11 @@ import {
   getPlaygroundReports,
   getPlaygroundBans,
   liftPlaygroundBan,
-  revertTransaction
+  revertTransaction,
+  getWithdrawalOptionsAdmin,
+  createWithdrawalOptionAdmin,
+  updateWithdrawalOptionAdmin,
+  deleteWithdrawalOptionAdmin
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
@@ -107,6 +111,12 @@ router.post('/broadcast-push', broadcastPushNotification);
 router.get('/withdrawals', getWithdrawals);
 router.put('/withdrawals/:id', requireRole(['superadmin']), updateWithdrawalStatus);
 router.post('/withdrawals/bulk', requireRole(['superadmin']), bulkUpdateWithdrawalStatus);
+
+// Withdrawal Options Management (CRUD)
+router.get('/withdrawal-options', getWithdrawalOptionsAdmin);
+router.post('/withdrawal-options', requireRole(['superadmin']), createWithdrawalOptionAdmin);
+router.put('/withdrawal-options/:id', requireRole(['superadmin']), updateWithdrawalOptionAdmin);
+router.delete('/withdrawal-options/:id', requireRole(['superadmin']), deleteWithdrawalOptionAdmin);
 
 // Support & FAQ Tickets Management
 router.get('/tickets', getSupportTickets);

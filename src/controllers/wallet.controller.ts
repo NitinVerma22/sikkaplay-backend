@@ -385,7 +385,8 @@ export const getWithdrawalOptions = async (req: AuthRequest, res: Response): Pro
       success: true,
       options,
       selfWithdrawalNotice: config?.selfWithdrawalNotice || '',
-      referralWithdrawalNotice: config?.referralWithdrawalNotice || ''
+      referralWithdrawalNotice: config?.referralWithdrawalNotice || '',
+      showWithdrawalPackages: config?.showWithdrawalPackages ?? true
     });
   } catch (error) {
     console.error('Error fetching withdrawal options:', error);

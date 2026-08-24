@@ -1999,6 +1999,86 @@ export const revertTransaction = async (req: AdminAuthRequest, res: Response): P
   }
 };
 
+// Withdrawal Options CRUD Management
+export const getWithdrawalOptionsAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const options = await prisma.withdrawalOption.findMany({
+      orderBy: { coins: 'asc' }
+    });
+    res.status(200).json({ success: true, options });
+  } catch (error) {
+    console.error('Get withdrawal options error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const createWithdrawalOptionAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { earningType, coins, baseRupees, bonusRupees, totalRupees, netUpi, cashbackCoins, badge, tagline, color, buttonColor, lightBg, iconName } = req.body;
+    const option = await prisma.withdrawalOption.create({
+      data: {
+        earningType,
+        coins: parseInt(coins) || 0,
+        baseRupees: parseInt(baseRupees) || 0,
+        bonusRupees: parseInt(bonusRupees) || 0,
+        totalRupees: parseInt(totalRupees) || 0,
+        netUpi: parseInt(netUpi) || 0,
+        cashbackCoins: parseInt(cashbackCoins) || 0,
+        badge: badge || '',
+        tagline: tagline || '',
+        color: color || '#6366F1',
+        buttonColor: buttonColor || '#4F46E5',
+        lightBg: lightBg || '#EEF2FF',
+        iconName: iconName || 'account_balance_wallet_rounded'
+      }
+    });
+    res.status(201).json({ success: true, option });
+  } catch (error) {
+    console.error('Create withdrawal option error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateWithdrawalOptionAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { earningType, coins, baseRupees, bonusRupees, totalRupees, netUpi, cashbackCoins, badge, tagline, color, buttonColor, lightBg, iconName } = req.body;
+    const option = await prisma.withdrawalOption.update({
+      where: { id: id as string },
+      data: {
+        earningType,
+        coins: parseInt(coins) || 0,
+        baseRupees: parseInt(baseRupees) || 0,
+        bonusRupees: parseInt(bonusRupees) || 0,
+        totalRupees: parseInt(totalRupees) || 0,
+        netUpi: parseInt(netUpi) || 0,
+        cashbackCoins: parseInt(cashbackCoins) || 0,
+        badge: badge || '',
+        tagline: tagline || '',
+        color: color || '#6366F1',
+        buttonColor: buttonColor || '#4F46E5',
+        lightBg: lightBg || '#EEF2FF',
+        iconName: iconName || 'account_balance_wallet_rounded'
+      }
+    });
+    res.status(200).json({ success: true, option });
+  } catch (error) {
+    console.error('Update withdrawal option error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const deleteWithdrawalOptionAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await prisma.withdrawalOption.delete({ where: { id: id as string } });
+    res.status(200).json({ success: true, message: 'Withdrawal option deleted successfully' });
+  } catch (error) {
+    console.error('Delete withdrawal option error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 
 
 
