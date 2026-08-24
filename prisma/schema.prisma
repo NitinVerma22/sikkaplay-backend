@@ -172,7 +172,7 @@ model AppConfig {
   commissionRate      Float    @default(0.10) // 10% commission on MLM network withdrawals
   minWithdrawalLimit  Int      @default(1000) // Minimum coins required to withdraw
   apkDownloadUrl      String   @default("https://sikkaplay-apk.web.app/app-release.apk")
-  latestAppVersion    String   @default("1.0.0")
+  latestAppVersion    String   @default("1.0.9")
   forceUpdate         Boolean  @default(false)
   telegramLink        String   @default("https://t.me/sikkaplay")
   whatsappLink        String   @default("https://whatsapp.com/channel/sikkaplay")

@@ -35,7 +35,7 @@ async function main() {
         commissionRate: 0.10,
         minWithdrawalLimit: 1000,
         apkDownloadUrl: 'https://sikkaplay-apk.web.app/app-release.apk',
-        latestAppVersion: '1.0.0',
+        latestAppVersion: '1.0.9',
         forceUpdate: false,
         telegramLink: 'https://t.me/sikkaplay',
         whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
