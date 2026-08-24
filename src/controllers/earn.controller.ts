@@ -59,12 +59,12 @@ export const claimDailyStreak = async (req: AuthRequest, res: Response): Promise
 
     // Calculate coins for the day
     const getCoinsForDay = (day: number): number => {
-      if (day === 7) return 500;
-      if (day === 14) return 1000;
-      if (day === 21) return 1500;
-      if (day === 28) return 2000;
-      if (day > 28) return 200;
-      return day * 10;
+      if (day === 7) return 100;
+      if (day === 14) return 150;
+      if (day === 21) return 200;
+      if (day === 28) return 500;
+      if (day >= 29) return 150;
+      return 10 + (day - 1) * 5;
     };
 
     const coinsReward = getCoinsForDay(activeDay);
@@ -81,7 +81,7 @@ export const claimDailyStreak = async (req: AuthRequest, res: Response): Promise
         }
       });
 
-      const description = activeDay > 28 ? 'Daily Bonus Reward (200 Coins)' : `Daily Streak Day ${activeDay} Reward`;
+      const description = activeDay > 28 ? 'Daily Bonus Reward (150 Coins)' : `Daily Streak Day ${activeDay} Reward`;
 
       const transaction = await tx.transaction.create({
         data: {

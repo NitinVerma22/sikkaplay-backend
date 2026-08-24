@@ -623,12 +623,27 @@ const processWithdrawal = async (
       });
     } else if (status === 'success') {
       const withdrawAmount = Math.abs(tx.amount);
-      console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} for user ID: ${tx.userId}`);
-      // Increment withdrawalAmount stats
+      const cashbackCoins = Math.round(withdrawAmount * 0.15);
+      console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} and crediting cashback ${cashbackCoins} for user ID: ${tx.userId}`);
+      
+      // Increment withdrawalAmount stats and credit cashback coins
       await prismaTx.user.update({
         where: { id: tx.userId },
         data: {
-          withdrawalAmount: { increment: withdrawAmount }
+          withdrawalAmount: { increment: withdrawAmount },
+          balance: { increment: cashbackCoins },
+          totalEarned: { increment: cashbackCoins }
+        }
+      });
+
+      // Create transaction record for cashback
+      await prismaTx.transaction.create({
+        data: {
+          userId: tx.userId,
+          amount: cashbackCoins,
+          type: 'bonus',
+          status: 'success',
+          description: `Withdrawal Cashback Reward (15% of ${withdrawAmount} Coins)`
         }
       });
     }
@@ -642,9 +657,10 @@ const processWithdrawal = async (
     select: { fcmToken: true }
   });
 
+  const cashbackCoins = Math.round(Math.abs(tx.amount) * 0.15);
   const notifTitle = status === 'success' ? 'Withdrawal Approved 💰' : 'Withdrawal Failed ❌';
   const notifBody = status === 'success'
-    ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Ref: ${referenceId || 'N/A'}`
+    ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Cashback of ${cashbackCoins} coins credited to wallet. Ref: ${referenceId || 'N/A'}`
     : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`;
 
   if (targetUser?.fcmToken) {
