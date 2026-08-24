@@ -117,6 +117,63 @@ async function main() {
     console.log('Default sponsored visit link seeded');
   }
 
+  // 4. Create default App Offers if none exist
+  const existingOffersCount = await prisma.appOffer.count();
+  if (existingOffersCount === 0) {
+    const defaultOffers = [
+      {
+        offerId: 'binance',
+        title: 'Binance Crypto Exchange',
+        description: 'Install and create a verified account to earn coins.',
+        size: '85 MB',
+        rewardAmount: 350,
+        iconName: 'currency_bitcoin',
+        iconBg: '#F59E0B',
+      },
+      {
+        offerId: 'phonepe',
+        title: 'PhonePe: UPI payments',
+        description: 'Install and complete your first UPI transaction.',
+        size: '42 MB',
+        rewardAmount: 180,
+        iconName: 'account_balance',
+        iconBg: '#7B1FA2',
+      },
+      {
+        offerId: 'telegram',
+        title: 'Telegram Messenger',
+        description: 'Download Telegram app and join our official chat.',
+        size: '30 MB',
+        rewardAmount: 60,
+        iconName: 'send_rounded',
+        iconBg: '#1E88E5',
+      },
+      {
+        offerId: 'gpay',
+        title: 'Google Pay payments',
+        description: 'Install and register a new UPI bank account.',
+        size: '51 MB',
+        rewardAmount: 220,
+        iconName: 'payments',
+        iconBg: '#00796B',
+      },
+      {
+        offerId: 'whatsapp_biz',
+        title: 'WhatsApp Business',
+        description: 'Download business messenger and setup profile.',
+        size: '38 MB',
+        rewardAmount: 80,
+        iconName: 'business_center',
+        iconBg: '#43A047',
+      },
+    ];
+
+    for (const o of defaultOffers) {
+      await prisma.appOffer.create({ data: o });
+    }
+    console.log('Default app install offers seeded');
+  }
+
   console.log('Seeding complete.');
 }
 

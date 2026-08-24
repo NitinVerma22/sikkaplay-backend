@@ -6,6 +6,7 @@ import {
   claimSocialTask,
   claimSurvey,
   claimAppInstall,
+  getAppInstallOffers,
   claimMilestone,
   resumeDailyStreak
 } from '../controllers/earn.controller';
@@ -59,6 +60,7 @@ router.post('/earn/daily-streak/resume', vpnGuard, earnLimiter, resumeDailyStrea
 router.post('/earn/social-task', vpnGuard, earnLimiter, claimSocialTask);
 router.post('/earn/survey', vpnGuard, earnLimiter, claimSurvey);
 router.post('/earn/app-install', vpnGuard, earnLimiter, claimAppInstall);
+router.get('/earn/app-install/offers', getAppInstallOffers);
 router.post('/earn/milestone', vpnGuard, earnLimiter, claimMilestone);
 
 // POST /api/user/usage

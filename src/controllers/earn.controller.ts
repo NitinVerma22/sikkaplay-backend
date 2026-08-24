@@ -272,6 +272,39 @@ export const claimSurvey = async (req: AuthRequest, res: Response): Promise<void
  * Claim App Install Reward (mock downloads)
  * Server-authoritative mapping of valid apps and coin rewards.
  */
+export const getAppInstallOffers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // Fetch all enabled offers
+    const offers = await prisma.appOffer.findMany({
+      where: { enabled: true },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Fetch user's completed offers
+    const claims = await prisma.appOfferClaim.findMany({
+      where: { userId },
+      select: { offerId: true }
+    });
+
+    const completedOfferIds = claims.map(c => c.offerId);
+
+    res.status(200).json({
+      success: true,
+      offers,
+      completedOfferIds
+    });
+  } catch (error) {
+    console.error('Error fetching app install offers:', error);
+    res.status(500).json({ error: 'Failed to fetch offers' });
+  }
+};
+
 export const claimAppInstall = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
@@ -282,38 +315,36 @@ export const claimAppInstall = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Offers configuration map matching app_install_screen.dart
-    const OFFERS: Record<string, { title: string, rewardAmount: number }> = {
-      binance: { title: 'Binance Crypto Exchange', rewardAmount: 350 },
-      phonepe: { title: 'PhonePe: UPI payments', rewardAmount: 180 },
-      telegram: { title: 'Telegram Messenger', rewardAmount: 60 },
-      gpay: { title: 'Google Pay payments', rewardAmount: 220 },
-      whatsapp_biz: { title: 'WhatsApp Business', rewardAmount: 80 }
-    };
+    // 1. Fetch the offer from database
+    const offer = await prisma.appOffer.findUnique({
+      where: { offerId }
+    });
 
-    const offer = OFFERS[offerId];
-    if (!offer) {
-      res.status(400).json({ error: 'Invalid offer ID' });
+    if (!offer || !offer.enabled) {
+      res.status(400).json({ error: 'Offer not found or disabled' });
+      return;
+    }
+
+    // 2. Check if user already claimed it using AppOfferClaim
+    const existingClaim = await prisma.appOfferClaim.findUnique({
+      where: {
+        userId_offerId: {
+          userId,
+          offerId
+        }
+      }
+    });
+
+    if (existingClaim) {
+      res.status(400).json({ error: 'App offer already completed' });
       return;
     }
 
     const description = `Installed & verified ${offer.title}`;
 
-    // Verify user hasn't already claimed this app install
-    const existing = await prisma.transaction.findFirst({
-      where: {
-        userId,
-        type: 'app_install',
-        description
-      }
-    });
-
-    if (existing) {
-      res.status(400).json({ error: 'App offer already completed' });
-      return;
-    }
-
+    // 3. Process database transaction to credit coins and log claim & transaction
     const result = await prisma.$transaction(async (tx) => {
+      // Row lock user
       await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
 
       const updatedUser = await tx.user.update({
@@ -324,6 +355,23 @@ export const claimAppInstall = async (req: AuthRequest, res: Response): Promise<
         }
       });
 
+      // Increment claimCount on AppOffer
+      await tx.appOffer.update({
+        where: { id: offer.id },
+        data: {
+          claimCount: { increment: 1 }
+        }
+      });
+
+      // Create AppOfferClaim
+      const claim = await tx.appOfferClaim.create({
+        data: {
+          userId,
+          offerId
+        }
+      });
+
+      // Create transaction record
       const transaction = await tx.transaction.create({
         data: {
           userId,
@@ -334,7 +382,7 @@ export const claimAppInstall = async (req: AuthRequest, res: Response): Promise<
         }
       });
 
-      return { user: updatedUser, transaction };
+      return { user: updatedUser, transaction, claim };
     });
 
     res.status(200).json({

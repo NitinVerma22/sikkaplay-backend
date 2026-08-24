@@ -467,4 +467,28 @@ model PlaygroundMessage {
   @@index([channelName, isSeen])
 }
 
+model AppOffer {
+  id           String   @id @default(uuid())
+  offerId      String   @unique
+  title        String
+  description  String
+  size         String
+  rewardAmount Int
+  iconName     String
+  iconBg       String
+  enabled      Boolean  @default(true)
+  claimCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AppOfferClaim {
+  id         String   @id @default(uuid())
+  userId     String
+  offerId    String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, offerId])
+}
+
 
