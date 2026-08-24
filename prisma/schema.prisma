@@ -86,6 +86,7 @@ model Transaction {
   createdAt           DateTime @default(now())
   isReferralProcessed Boolean  @default(false)
   externalTransactionId String?  @unique
+  withdrawalOptionId    String?
 
   @@index([userId])
   @@index([userId, status])
@@ -227,6 +228,8 @@ model AppConfig {
   playgroundMaleFilterCost   Int      @default(50)
   playgroundFemaleFilterCost Int      @default(50)
   giftCommissionRate         Float    @default(0.20) // 20% platform commission on virtual gifts
+  selfWithdrawalNotice       String   @default("")
+  referralWithdrawalNotice   String   @default("")
 
   updatedAt           DateTime @updatedAt
 }
@@ -489,6 +492,28 @@ model AppOfferClaim {
   createdAt  DateTime @default(now())
 
   @@unique([userId, offerId])
+}
+
+model WithdrawalOption {
+  id            String   @id @default(uuid())
+  earningType   String
+  coins         Int
+  baseRupees    Int
+  bonusRupees   Int
+  totalRupees   Int
+  netUpi        Int
+  cashbackCoins Int
+  badge         String   @default("")
+  tagline       String   @default("")
+  iconName      String   @default("account_balance_wallet_rounded")
+  iconBg        String   @default("#6366F1")
+  color         String   @default("#6366F1")
+  buttonColor   String   @default("#4F46E5")
+  lightBg       String   @default("#EEF2FF")
+  enabled       Boolean  @default(true)
+  claimCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 

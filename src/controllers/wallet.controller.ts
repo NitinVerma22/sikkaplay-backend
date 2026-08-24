@@ -93,11 +93,24 @@ export const getWalletStats = async (req: AuthRequest, res: Response): Promise<v
 export const requestWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { amount, upiId, earningType } = req.body;
+    let { amount, upiId, earningType, withdrawalOptionId } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
+    }
+
+    let withdrawalOption = null;
+    if (withdrawalOptionId) {
+      withdrawalOption = await prisma.withdrawalOption.findUnique({
+        where: { id: withdrawalOptionId }
+      });
+      if (!withdrawalOption || !withdrawalOption.enabled) {
+        res.status(400).json({ error: 'Selected withdrawal package is invalid or disabled' });
+        return;
+      }
+      amount = withdrawalOption.coins;
+      earningType = withdrawalOption.earningType;
     }
 
     if (!amount || amount <= 0) {
@@ -296,6 +309,13 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
 
       const latestUser = users[0];
 
+      if (withdrawalOptionId) {
+        await tx.withdrawalOption.update({
+          where: { id: withdrawalOptionId },
+          data: { claimCount: { increment: 1 } }
+        });
+      }
+
       if (targetEarningType === 'referral') {
         if (latestUser.referralBalance < amount) {
           throw new Error('Insufficient referral balance');
@@ -312,7 +332,8 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
             amount: -amount,
             type: 'withdrawal',
             status: 'pending',
-            description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`
+            description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`,
+            withdrawalOptionId: withdrawalOptionId || null
           }
         });
       } else {
@@ -331,7 +352,8 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
             amount: -amount,
             type: 'withdrawal',
             status: 'pending',
-            description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`
+            description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`,
+            withdrawalOptionId: withdrawalOptionId || null
           }
         });
       }
@@ -341,5 +363,32 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
   } catch (error) {
     console.error('Error requesting withdrawal:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getWithdrawalOptions = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const options = await prisma.withdrawalOption.findMany({
+      where: { enabled: true },
+      orderBy: { coins: 'asc' }
+    });
+
+    const config = await prisma.appConfig.findFirst();
+
+    res.status(200).json({
+      success: true,
+      options,
+      selfWithdrawalNotice: config?.selfWithdrawalNotice || '',
+      referralWithdrawalNotice: config?.referralWithdrawalNotice || ''
+    });
+  } catch (error) {
+    console.error('Error fetching withdrawal options:', error);
+    res.status(500).json({ error: 'Failed to fetch withdrawal options' });
   }
 };

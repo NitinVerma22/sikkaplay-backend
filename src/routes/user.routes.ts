@@ -82,8 +82,9 @@ router.get('/network', getMyNetwork);
 router.get('/home', getHomeState);
 
 // GET /api/user/wallet
-import { getWalletStats, requestWithdrawal } from '../controllers/wallet.controller';
+import { getWalletStats, requestWithdrawal, getWithdrawalOptions } from '../controllers/wallet.controller';
 router.get('/wallet', getWalletStats);
+router.get('/wallet/withdrawal-options', getWithdrawalOptions);
 router.post('/withdraw', vpnGuard, withdrawLimiter, requestWithdrawal);
 
 // Visit Links

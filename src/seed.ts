@@ -174,6 +174,116 @@ async function main() {
     console.log('Default app install offers seeded');
   }
 
+  // 5. Create default Withdrawal Options if none exist
+  const existingWithdrawalOptionsCount = await prisma.withdrawalOption.count();
+  if (existingWithdrawalOptionsCount === 0) {
+    const defaultWithdrawalOptions = [
+      // Self Earning Options
+      {
+        earningType: 'self',
+        coins: 10000,
+        baseRupees: 10,
+        bonusRupees: 40,
+        totalRupees: 50,
+        netUpi: 35,
+        cashbackCoins: 1500,
+        badge: 'SPECIAL OFFER',
+        tagline: '★ Best for getting started',
+        iconName: 'account_balance_wallet_rounded',
+        iconBg: '#6366F1',
+        color: '#6366F1',
+        buttonColor: '#4F46E5',
+        lightBg: '#EEF2FF',
+      },
+      {
+        earningType: 'self',
+        coins: 50000,
+        baseRupees: 50,
+        bonusRupees: 200,
+        totalRupees: 250,
+        netUpi: 175,
+        cashbackCoins: 7500,
+        badge: 'SPECIAL OFFER',
+        tagline: '🎁 Great value package',
+        iconName: 'card_giftcard_rounded',
+        iconBg: '#10B981',
+        color: '#10B981',
+        buttonColor: '#059669',
+        lightBg: '#ECFDF5',
+      },
+      {
+        earningType: 'self',
+        coins: 100000,
+        baseRupees: 100,
+        bonusRupees: 400,
+        totalRupees: 500,
+        netUpi: 350,
+        cashbackCoins: 15000,
+        badge: 'POPULAR OFFER',
+        tagline: '🔥 Maximum bonus coins',
+        iconName: 'savings_rounded',
+        iconBg: '#F97316',
+        color: '#F97316',
+        buttonColor: '#EA580C',
+        lightBg: '#FFF7ED',
+      },
+      // Referral Earning Options (Cleaned - no special offers)
+      {
+        earningType: 'referral',
+        coins: 10000,
+        baseRupees: 10,
+        bonusRupees: 0,
+        totalRupees: 10,
+        netUpi: 7,
+        cashbackCoins: 0,
+        badge: '',
+        tagline: '',
+        iconName: 'account_balance_wallet_rounded',
+        iconBg: '#6366F1',
+        color: '#6366F1',
+        buttonColor: '#4F46E5',
+        lightBg: '#EEF2FF',
+      },
+      {
+        earningType: 'referral',
+        coins: 50000,
+        baseRupees: 50,
+        bonusRupees: 0,
+        totalRupees: 50,
+        netUpi: 35,
+        cashbackCoins: 0,
+        badge: '',
+        tagline: '',
+        iconName: 'card_giftcard_rounded',
+        iconBg: '#10B981',
+        color: '#10B981',
+        buttonColor: '#059669',
+        lightBg: '#ECFDF5',
+      },
+      {
+        earningType: 'referral',
+        coins: 100000,
+        baseRupees: 100,
+        bonusRupees: 0,
+        totalRupees: 100,
+        netUpi: 70,
+        cashbackCoins: 0,
+        badge: '',
+        tagline: '',
+        iconName: 'savings_rounded',
+        iconBg: '#F97316',
+        color: '#F97316',
+        buttonColor: '#EA580C',
+        lightBg: '#FFF7ED',
+      },
+    ];
+
+    for (const w of defaultWithdrawalOptions) {
+      await prisma.withdrawalOption.create({ data: w });
+    }
+    console.log('Default withdrawal options seeded');
+  }
+
   console.log('Seeding complete.');
 }
 
