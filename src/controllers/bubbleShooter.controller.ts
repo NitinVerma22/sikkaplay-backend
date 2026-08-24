@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 
 export const getBubbleShooterProgress = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.uid || req.user?.id;
+    const userId = req.user?.userId || req.user?.uid || req.user?.id;
     let maxUnlockedLevel = 1;
     let starsMap: Record<number, number> = {};
     let multiplier = 2; // Default multiplier
@@ -40,7 +40,7 @@ export const getBubbleShooterProgress = async (req: AuthRequest, res: Response):
 
 export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.uid || req.user?.id;
+    const userId = req.user?.userId || req.user?.uid || req.user?.id;
     const { levelNumber, stars, score } = req.body;
 
     if (!levelNumber || levelNumber < 1) {

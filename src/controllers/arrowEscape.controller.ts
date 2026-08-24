@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 
 export const getArrowEscapeProgress = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.uid || req.user?.id;
+    const userId = req.user?.userId || req.user?.uid || req.user?.id;
     let maxUnlockedLevel = 1;
     let starsMap: Record<number, number> = {};
     let multiplier = 2;
@@ -40,7 +40,7 @@ export const getArrowEscapeProgress = async (req: AuthRequest, res: Response): P
 
 export const completeArrowEscapeLevel = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.uid || req.user?.id;
+    const userId = req.user?.userId || req.user?.uid || req.user?.id;
     const { levelNumber, stars, score } = req.body;
 
     if (!levelNumber || levelNumber < 1) {
