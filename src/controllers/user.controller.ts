@@ -64,7 +64,7 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
 export const updateFcmToken = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { token } = req.body;
+    const token = req.body.token || req.body.fcmToken;
 
     if (!userId || !token) {
       res.status(400).json({ error: 'Missing user ID or token' });
