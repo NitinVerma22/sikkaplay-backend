@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requestWithdrawal = exports.getWalletStats = void 0;
+exports.getWithdrawalOptions = exports.requestWithdrawal = exports.getWalletStats = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 const config_service_1 = require("../services/config.service");
@@ -83,10 +83,22 @@ exports.getWalletStats = getWalletStats;
 const requestWithdrawal = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { amount, upiId, earningType } = req.body;
+        let { amount, upiId, earningType, withdrawalOptionId } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
+        }
+        let withdrawalOption = null;
+        if (withdrawalOptionId) {
+            withdrawalOption = await db_1.prisma.withdrawalOption.findUnique({
+                where: { id: withdrawalOptionId }
+            });
+            if (!withdrawalOption || !withdrawalOption.enabled) {
+                res.status(400).json({ error: 'Selected withdrawal package is invalid or disabled' });
+                return;
+            }
+            amount = withdrawalOption.coins;
+            earningType = withdrawalOption.earningType;
         }
         if (!amount || amount <= 0) {
             res.status(400).json({ error: 'Invalid withdrawal amount' });
@@ -233,6 +245,12 @@ const requestWithdrawal = async (req, res) => {
                 throw new Error('User not found');
             }
             const latestUser = users[0];
+            if (withdrawalOptionId) {
+                await tx.withdrawalOption.update({
+                    where: { id: withdrawalOptionId },
+                    data: { claimCount: { increment: 1 } }
+                });
+            }
             if (targetEarningType === 'referral') {
                 if (latestUser.referralBalance < amount) {
                     throw new Error('Insufficient referral balance');
@@ -247,7 +265,8 @@ const requestWithdrawal = async (req, res) => {
                         amount: -amount,
                         type: 'withdrawal',
                         status: 'pending',
-                        description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`
+                        description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`,
+                        withdrawalOptionId: withdrawalOptionId || null
                     }
                 });
             }
@@ -265,7 +284,8 @@ const requestWithdrawal = async (req, res) => {
                         amount: -amount,
                         type: 'withdrawal',
                         status: 'pending',
-                        description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`
+                        description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`,
+                        withdrawalOptionId: withdrawalOptionId || null
                     }
                 });
             }
@@ -278,3 +298,29 @@ const requestWithdrawal = async (req, res) => {
     }
 };
 exports.requestWithdrawal = requestWithdrawal;
+const getWithdrawalOptions = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        const options = await db_1.prisma.withdrawalOption.findMany({
+            where: { enabled: true },
+            orderBy: { coins: 'asc' }
+        });
+        const config = await db_1.prisma.appConfig.findFirst();
+        res.status(200).json({
+            success: true,
+            options,
+            selfWithdrawalNotice: config?.selfWithdrawalNotice || '',
+            referralWithdrawalNotice: config?.referralWithdrawalNotice || '',
+            showWithdrawalPackages: config?.showWithdrawalPackages ?? true
+        });
+    }
+    catch (error) {
+        console.error('Error fetching withdrawal options:', error);
+        res.status(500).json({ error: 'Failed to fetch withdrawal options' });
+    }
+};
+exports.getWithdrawalOptions = getWithdrawalOptions;

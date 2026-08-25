@@ -42,6 +42,7 @@ router.post('/earn/daily-streak/resume', vpn_middleware_1.vpnGuard, rateLimiter_
 router.post('/earn/social-task', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSocialTask);
 router.post('/earn/survey', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimSurvey);
 router.post('/earn/app-install', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimAppInstall);
+router.get('/earn/app-install/offers', earn_controller_1.getAppInstallOffers);
 router.post('/earn/milestone', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, earn_controller_1.claimMilestone);
 // POST /api/user/usage
 router.post('/usage', usage_controller_1.logUsage);
@@ -58,6 +59,7 @@ router.get('/home', home_controller_1.getHomeState);
 // GET /api/user/wallet
 const wallet_controller_1 = require("../controllers/wallet.controller");
 router.get('/wallet', wallet_controller_1.getWalletStats);
+router.get('/wallet/withdrawal-options', wallet_controller_1.getWithdrawalOptions);
 router.post('/withdraw', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.withdrawLimiter, wallet_controller_1.requestWithdrawal);
 // Visit Links
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);

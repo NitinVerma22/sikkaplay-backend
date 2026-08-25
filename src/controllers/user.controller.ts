@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { storage, auth } from '../config/firebase';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -293,9 +295,6 @@ export const updateProfileDetails = async (req: AuthRequest, res: Response): Pro
   }
 };
 
-import fs from 'fs';
-import path from 'path';
-
 export const updateAvatar = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
@@ -335,39 +334,54 @@ export const updateAvatar = async (req: AuthRequest, res: Response): Promise<voi
     // Convert base64 to buffer
     const buffer = Buffer.from(finalBase64, 'base64');
     
-    // Upload to Firebase Storage
-    const bucket = storage.bucket();
-    const token = randomUUID();
-    const fileName = `avatars/${userId}_${Date.now()}.jpg`;
-    const file = bucket.file(fileName);
-    
-    await file.save(buffer, {
-      metadata: {
-        contentType: 'image/jpeg',
+    let publicUrl = '';
+    try {
+      // 1. Upload to Firebase Storage
+      const bucket = storage.bucket();
+      const token = randomUUID();
+      const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+      const file = bucket.file(fileName);
+      
+      await file.save(buffer, {
         metadata: {
-          firebaseStorageDownloadTokens: token,
-        }
-      },
-    });
-    
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+          contentType: 'image/jpeg',
+          metadata: {
+            firebaseStorageDownloadTokens: token,
+          }
+        },
+      });
+      
+      publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
-    // Delete old avatar if it's a Firebase Storage URL and not the same
-    if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
-      try {
-        const urlObj = new URL(user.avatarUrl);
-        const pathname = decodeURIComponent(urlObj.pathname);
-        const match = pathname.match(/\/o\/(.+)$/);
-        if (match && match[1]) {
-          // match[1] could have query params like ?alt=media, so we strip them
-          const oldFileName = match[1].split('?')[0];
-          const oldFile = bucket.file(oldFileName);
-          await oldFile.delete();
-          console.log(`Deleted old avatar: ${oldFileName}`);
+      // Delete old avatar if it's a Firebase Storage URL and not the same
+      if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
+        try {
+          const urlObj = new URL(user.avatarUrl);
+          const pathname = decodeURIComponent(urlObj.pathname);
+          const match = pathname.match(/\/o\/(.+)$/);
+          if (match && match[1]) {
+            const oldFileName = match[1].split('?')[0];
+            const oldFile = bucket.file(oldFileName);
+            await oldFile.delete();
+          }
+        } catch (err) {
+          console.error('Error deleting old avatar:', err);
         }
-      } catch (err) {
-        console.error('Error deleting old avatar:', err);
       }
+    } catch (storageError: any) {
+      console.error('Firebase Storage upload failed (JWT/Auth error), falling back to local static storage:', storageError?.message || storageError);
+      
+      const uploadsDir = path.join(__dirname, '../../public/uploads/avatars');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const localFileName = `${userId}_${Date.now()}.jpg`;
+      const localFilePath = path.join(uploadsDir, localFileName);
+      fs.writeFileSync(localFilePath, buffer);
+
+      const host = req.get('host') || 'localhost:3000';
+      const protocol = req.protocol || 'http';
+      publicUrl = `${protocol}://${host}/uploads/avatars/${localFileName}`;
     }
 
     const updatedUser = await prisma.user.update({

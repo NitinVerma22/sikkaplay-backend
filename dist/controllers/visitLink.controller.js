@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.claimVisitLinkReward = exports.deleteVisitLink = exports.createVisitLink = exports.getVisitLinks = void 0;
+exports.claimVisitLinkReward = exports.deleteVisitLink = exports.updateVisitLink = exports.createVisitLink = exports.getVisitLinks = void 0;
 const db_1 = require("../config/db");
 const home_controller_1 = require("./home.controller");
 // --- GET ALL LINKS (USER & ADMIN) ---
@@ -16,6 +16,7 @@ const getVisitLinks = async (req, res) => {
             title: link.title,
             url: link.url,
             rewardAmount: link.rewardAmount,
+            timerSeconds: link.timerSeconds || 15,
             createdAt: link.createdAt,
             cooldownRemaining: 0
         }));
@@ -38,6 +39,7 @@ const getVisitLinks = async (req, res) => {
                             title: link.title,
                             url: link.url,
                             rewardAmount: link.rewardAmount,
+                            timerSeconds: link.timerSeconds || 15,
                             createdAt: link.createdAt,
                             cooldownRemaining: cooldownRemainingSecs
                         };
@@ -48,6 +50,7 @@ const getVisitLinks = async (req, res) => {
                     title: link.title,
                     url: link.url,
                     rewardAmount: link.rewardAmount,
+                    timerSeconds: link.timerSeconds || 15,
                     createdAt: link.createdAt,
                     cooldownRemaining: 0
                 };
@@ -67,7 +70,7 @@ exports.getVisitLinks = getVisitLinks;
 // --- CREATE LINK (ADMIN ONLY) ---
 const createVisitLink = async (req, res) => {
     try {
-        const { title, url, rewardAmount } = req.body;
+        const { title, url, rewardAmount, timerSeconds } = req.body;
         if (!title || typeof title !== 'string') {
             res.status(400).json({ error: 'Title is required and must be a string' });
             return;
@@ -81,11 +84,13 @@ const createVisitLink = async (req, res) => {
             res.status(400).json({ error: 'Coins reward must be greater than 0' });
             return;
         }
+        const seconds = typeof timerSeconds === 'number' ? timerSeconds : parseInt(timerSeconds) || 15;
         const newLink = await db_1.prisma.visitEarnLink.create({
             data: {
                 title: title.trim(),
                 url: url.trim(),
                 rewardAmount: coinsReward,
+                timerSeconds: seconds > 0 ? seconds : 15,
             },
         });
         (0, home_controller_1.invalidateVisitEarnLinksCountCache)();
@@ -101,6 +106,42 @@ const createVisitLink = async (req, res) => {
     }
 };
 exports.createVisitLink = createVisitLink;
+// --- UPDATE LINK (ADMIN ONLY) ---
+const updateVisitLink = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, url, rewardAmount, timerSeconds } = req.body;
+        if (!id) {
+            res.status(400).json({ error: 'Link ID is required' });
+            return;
+        }
+        const existing = await db_1.prisma.visitEarnLink.findUnique({ where: { id: id } });
+        if (!existing) {
+            res.status(404).json({ error: 'Visit link not found' });
+            return;
+        }
+        const updated = await db_1.prisma.visitEarnLink.update({
+            where: { id: id },
+            data: {
+                title: title !== undefined ? title.trim() : existing.title,
+                url: url !== undefined ? url.trim() : existing.url,
+                rewardAmount: rewardAmount !== undefined ? (typeof rewardAmount === 'number' ? rewardAmount : parseInt(rewardAmount) || 5) : existing.rewardAmount,
+                timerSeconds: timerSeconds !== undefined ? (typeof timerSeconds === 'number' ? timerSeconds : parseInt(timerSeconds) || 15) : existing.timerSeconds,
+            },
+        });
+        (0, home_controller_1.invalidateVisitEarnLinksCountCache)();
+        res.status(200).json({
+            success: true,
+            message: 'Visit link updated successfully',
+            link: updated,
+        });
+    }
+    catch (error) {
+        console.error('Error updating visit link:', error);
+        res.status(500).json({ error: 'Internal server error while updating visit link' });
+    }
+};
+exports.updateVisitLink = updateVisitLink;
 // --- DELETE LINK (ADMIN ONLY) ---
 const deleteVisitLink = async (req, res) => {
     try {

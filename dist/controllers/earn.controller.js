@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resumeDailyStreak = exports.claimMilestone = exports.claimAppInstall = exports.claimSurvey = exports.claimSocialTask = exports.claimDailyStreak = void 0;
+exports.resumeDailyStreak = exports.claimMilestone = exports.claimAppInstall = exports.getAppInstallOffers = exports.claimSurvey = exports.claimSocialTask = exports.claimDailyStreak = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
 /**
@@ -52,16 +52,16 @@ const claimDailyStreak = async (req, res) => {
         // Calculate coins for the day
         const getCoinsForDay = (day) => {
             if (day === 7)
-                return 500;
+                return 100;
             if (day === 14)
-                return 1000;
+                return 150;
             if (day === 21)
-                return 1500;
-            if (day === 28)
-                return 2000;
-            if (day > 28)
                 return 200;
-            return day * 10;
+            if (day === 28)
+                return 500;
+            if (day >= 29)
+                return 150;
+            return 10 + (day - 1) * 5;
         };
         const coinsReward = getCoinsForDay(activeDay);
         const result = await db_1.prisma.$transaction(async (tx) => {
@@ -74,7 +74,7 @@ const claimDailyStreak = async (req, res) => {
                     totalEarned: { increment: coinsReward },
                 }
             });
-            const description = activeDay > 28 ? 'Daily Bonus Reward (200 Coins)' : `Daily Streak Day ${activeDay} Reward`;
+            const description = activeDay > 28 ? 'Daily Bonus Reward (150 Coins)' : `Daily Streak Day ${activeDay} Reward`;
             const transaction = await tx.transaction.create({
                 data: {
                     userId,
@@ -246,6 +246,36 @@ exports.claimSurvey = claimSurvey;
  * Claim App Install Reward (mock downloads)
  * Server-authoritative mapping of valid apps and coin rewards.
  */
+const getAppInstallOffers = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        // Fetch all enabled offers
+        const offers = await db_1.prisma.appOffer.findMany({
+            where: { enabled: true },
+            orderBy: { createdAt: 'asc' }
+        });
+        // Fetch user's completed offers
+        const claims = await db_1.prisma.appOfferClaim.findMany({
+            where: { userId },
+            select: { offerId: true }
+        });
+        const completedOfferIds = claims.map(c => c.offerId);
+        res.status(200).json({
+            success: true,
+            offers,
+            completedOfferIds
+        });
+    }
+    catch (error) {
+        console.error('Error fetching app install offers:', error);
+        res.status(500).json({ error: 'Failed to fetch offers' });
+    }
+};
+exports.getAppInstallOffers = getAppInstallOffers;
 const claimAppInstall = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -254,33 +284,31 @@ const claimAppInstall = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        // Offers configuration map matching app_install_screen.dart
-        const OFFERS = {
-            binance: { title: 'Binance Crypto Exchange', rewardAmount: 350 },
-            phonepe: { title: 'PhonePe: UPI payments', rewardAmount: 180 },
-            telegram: { title: 'Telegram Messenger', rewardAmount: 60 },
-            gpay: { title: 'Google Pay payments', rewardAmount: 220 },
-            whatsapp_biz: { title: 'WhatsApp Business', rewardAmount: 80 }
-        };
-        const offer = OFFERS[offerId];
-        if (!offer) {
-            res.status(400).json({ error: 'Invalid offer ID' });
+        // 1. Fetch the offer from database
+        const offer = await db_1.prisma.appOffer.findUnique({
+            where: { offerId }
+        });
+        if (!offer || !offer.enabled) {
+            res.status(400).json({ error: 'Offer not found or disabled' });
             return;
         }
-        const description = `Installed & verified ${offer.title}`;
-        // Verify user hasn't already claimed this app install
-        const existing = await db_1.prisma.transaction.findFirst({
+        // 2. Check if user already claimed it using AppOfferClaim
+        const existingClaim = await db_1.prisma.appOfferClaim.findUnique({
             where: {
-                userId,
-                type: 'app_install',
-                description
+                userId_offerId: {
+                    userId,
+                    offerId
+                }
             }
         });
-        if (existing) {
+        if (existingClaim) {
             res.status(400).json({ error: 'App offer already completed' });
             return;
         }
+        const description = `Installed & verified ${offer.title}`;
+        // 3. Process database transaction to credit coins and log claim & transaction
         const result = await db_1.prisma.$transaction(async (tx) => {
+            // Row lock user
             await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', userId);
             const updatedUser = await tx.user.update({
                 where: { id: userId },
@@ -289,6 +317,21 @@ const claimAppInstall = async (req, res) => {
                     totalEarned: { increment: offer.rewardAmount },
                 }
             });
+            // Increment claimCount on AppOffer
+            await tx.appOffer.update({
+                where: { id: offer.id },
+                data: {
+                    claimCount: { increment: 1 }
+                }
+            });
+            // Create AppOfferClaim
+            const claim = await tx.appOfferClaim.create({
+                data: {
+                    userId,
+                    offerId
+                }
+            });
+            // Create transaction record
             const transaction = await tx.transaction.create({
                 data: {
                     userId,
@@ -298,7 +341,7 @@ const claimAppInstall = async (req, res) => {
                     description
                 }
             });
-            return { user: updatedUser, transaction };
+            return { user: updatedUser, transaction, claim };
         });
         res.status(200).json({
             success: true,

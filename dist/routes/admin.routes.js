@@ -49,6 +49,11 @@ router.post('/broadcast-push', admin_controller_1.broadcastPushNotification);
 router.get('/withdrawals', admin_controller_1.getWithdrawals);
 router.put('/withdrawals/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.updateWithdrawalStatus);
 router.post('/withdrawals/bulk', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkUpdateWithdrawalStatus);
+// Withdrawal Options Management (CRUD)
+router.get('/withdrawal-options', admin_controller_1.getWithdrawalOptionsAdmin);
+router.post('/withdrawal-options', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.createWithdrawalOptionAdmin);
+router.put('/withdrawal-options/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.updateWithdrawalOptionAdmin);
+router.delete('/withdrawal-options/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.deleteWithdrawalOptionAdmin);
 // Support & FAQ Tickets Management
 router.get('/tickets', admin_controller_1.getSupportTickets);
 router.post('/tickets/:id/reply', admin_controller_1.replySupportTicket);
@@ -65,6 +70,7 @@ router.delete('/daily-code/:id', dailyCode_controller_1.deleteDailyCode);
 // Visit Links Management
 router.post('/visit-links', visitLink_controller_1.createVisitLink);
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
+router.put('/visit-links/:id', visitLink_controller_1.updateVisitLink);
 router.delete('/visit-links/:id', visitLink_controller_1.deleteVisitLink);
 // Social Tasks Management
 router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);

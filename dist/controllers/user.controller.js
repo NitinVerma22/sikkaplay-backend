@@ -1,9 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncPhone = exports.deleteAccount = exports.updateAvatar = exports.updateProfileDetails = exports.updateBio = exports.recordAdImpression = exports.updateUpi = exports.getTransactions = exports.updateFcmToken = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const firebase_1 = require("../config/firebase");
 const crypto_1 = require("crypto");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const getProfile = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -57,7 +62,7 @@ exports.getProfile = getProfile;
 const updateFcmToken = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { token } = req.body;
+        const token = req.body.token || req.body.fcmToken;
         if (!userId || !token) {
             res.status(400).json({ error: 'Missing user ID or token' });
             return;
@@ -298,37 +303,51 @@ const updateAvatar = async (req, res) => {
         }
         // Convert base64 to buffer
         const buffer = Buffer.from(finalBase64, 'base64');
-        // Upload to Firebase Storage
-        const bucket = firebase_1.storage.bucket();
-        const token = (0, crypto_1.randomUUID)();
-        const fileName = `avatars/${userId}_${Date.now()}.jpg`;
-        const file = bucket.file(fileName);
-        await file.save(buffer, {
-            metadata: {
-                contentType: 'image/jpeg',
+        let publicUrl = '';
+        try {
+            // 1. Upload to Firebase Storage
+            const bucket = firebase_1.storage.bucket();
+            const token = (0, crypto_1.randomUUID)();
+            const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+            const file = bucket.file(fileName);
+            await file.save(buffer, {
                 metadata: {
-                    firebaseStorageDownloadTokens: token,
+                    contentType: 'image/jpeg',
+                    metadata: {
+                        firebaseStorageDownloadTokens: token,
+                    }
+                },
+            });
+            publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+            // Delete old avatar if it's a Firebase Storage URL and not the same
+            if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
+                try {
+                    const urlObj = new URL(user.avatarUrl);
+                    const pathname = decodeURIComponent(urlObj.pathname);
+                    const match = pathname.match(/\/o\/(.+)$/);
+                    if (match && match[1]) {
+                        const oldFileName = match[1].split('?')[0];
+                        const oldFile = bucket.file(oldFileName);
+                        await oldFile.delete();
+                    }
                 }
-            },
-        });
-        const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
-        // Delete old avatar if it's a Firebase Storage URL and not the same
-        if (user.avatarUrl && user.avatarUrl.includes('firebasestorage.googleapis.com') && user.avatarUrl !== publicUrl) {
-            try {
-                const urlObj = new URL(user.avatarUrl);
-                const pathname = decodeURIComponent(urlObj.pathname);
-                const match = pathname.match(/\/o\/(.+)$/);
-                if (match && match[1]) {
-                    // match[1] could have query params like ?alt=media, so we strip them
-                    const oldFileName = match[1].split('?')[0];
-                    const oldFile = bucket.file(oldFileName);
-                    await oldFile.delete();
-                    console.log(`Deleted old avatar: ${oldFileName}`);
+                catch (err) {
+                    console.error('Error deleting old avatar:', err);
                 }
             }
-            catch (err) {
-                console.error('Error deleting old avatar:', err);
+        }
+        catch (storageError) {
+            console.error('Firebase Storage upload failed (JWT/Auth error), falling back to local static storage:', storageError?.message || storageError);
+            const uploadsDir = path_1.default.join(__dirname, '../../public/uploads/avatars');
+            if (!fs_1.default.existsSync(uploadsDir)) {
+                fs_1.default.mkdirSync(uploadsDir, { recursive: true });
             }
+            const localFileName = `${userId}_${Date.now()}.jpg`;
+            const localFilePath = path_1.default.join(uploadsDir, localFileName);
+            fs_1.default.writeFileSync(localFilePath, buffer);
+            const host = req.get('host') || 'localhost:3000';
+            const protocol = req.protocol || 'http';
+            publicUrl = `${protocol}://${host}/uploads/avatars/${localFileName}`;
         }
         const updatedUser = await db_1.prisma.user.update({
             where: { id: userId },

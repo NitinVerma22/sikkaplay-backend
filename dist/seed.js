@@ -36,7 +36,7 @@ async function main() {
                 commissionRate: 0.10,
                 minWithdrawalLimit: 1000,
                 apkDownloadUrl: 'https://sikkaplay-apk.web.app/app-release.apk',
-                latestAppVersion: '1.0.0',
+                latestAppVersion: '1.0.9',
                 forceUpdate: false,
                 telegramLink: 'https://t.me/sikkaplay',
                 whatsappLink: 'https://whatsapp.com/channel/sikkaplay',
@@ -116,6 +116,169 @@ async function main() {
             }
         });
         console.log('Default sponsored visit link seeded');
+    }
+    // 4. Create default App Offers if none exist
+    const existingOffersCount = await db_1.prisma.appOffer.count();
+    if (existingOffersCount === 0) {
+        const defaultOffers = [
+            {
+                offerId: 'binance',
+                title: 'Binance Crypto Exchange',
+                description: 'Install and create a verified account to earn coins.',
+                size: '85 MB',
+                rewardAmount: 350,
+                iconName: 'currency_bitcoin',
+                iconBg: '#F59E0B',
+            },
+            {
+                offerId: 'phonepe',
+                title: 'PhonePe: UPI payments',
+                description: 'Install and complete your first UPI transaction.',
+                size: '42 MB',
+                rewardAmount: 180,
+                iconName: 'account_balance',
+                iconBg: '#7B1FA2',
+            },
+            {
+                offerId: 'telegram',
+                title: 'Telegram Messenger',
+                description: 'Download Telegram app and join our official chat.',
+                size: '30 MB',
+                rewardAmount: 60,
+                iconName: 'send_rounded',
+                iconBg: '#1E88E5',
+            },
+            {
+                offerId: 'gpay',
+                title: 'Google Pay payments',
+                description: 'Install and register a new UPI bank account.',
+                size: '51 MB',
+                rewardAmount: 220,
+                iconName: 'payments',
+                iconBg: '#00796B',
+            },
+            {
+                offerId: 'whatsapp_biz',
+                title: 'WhatsApp Business',
+                description: 'Download business messenger and setup profile.',
+                size: '38 MB',
+                rewardAmount: 80,
+                iconName: 'business_center',
+                iconBg: '#43A047',
+            },
+        ];
+        for (const o of defaultOffers) {
+            await db_1.prisma.appOffer.create({ data: o });
+        }
+        console.log('Default app install offers seeded');
+    }
+    // 5. Create default Withdrawal Options if none exist
+    const existingWithdrawalOptionsCount = await db_1.prisma.withdrawalOption.count();
+    if (existingWithdrawalOptionsCount === 0) {
+        const defaultWithdrawalOptions = [
+            // Self Earning Options
+            {
+                earningType: 'self',
+                coins: 10000,
+                baseRupees: 10,
+                bonusRupees: 40,
+                totalRupees: 50,
+                netUpi: 35,
+                cashbackCoins: 1500,
+                badge: 'SPECIAL OFFER',
+                tagline: '★ Best for getting started',
+                iconName: 'account_balance_wallet_rounded',
+                iconBg: '#6366F1',
+                color: '#6366F1',
+                buttonColor: '#4F46E5',
+                lightBg: '#EEF2FF',
+            },
+            {
+                earningType: 'self',
+                coins: 50000,
+                baseRupees: 50,
+                bonusRupees: 200,
+                totalRupees: 250,
+                netUpi: 175,
+                cashbackCoins: 7500,
+                badge: 'SPECIAL OFFER',
+                tagline: '🎁 Great value package',
+                iconName: 'card_giftcard_rounded',
+                iconBg: '#10B981',
+                color: '#10B981',
+                buttonColor: '#059669',
+                lightBg: '#ECFDF5',
+            },
+            {
+                earningType: 'self',
+                coins: 100000,
+                baseRupees: 100,
+                bonusRupees: 400,
+                totalRupees: 500,
+                netUpi: 350,
+                cashbackCoins: 15000,
+                badge: 'POPULAR OFFER',
+                tagline: '🔥 Maximum bonus coins',
+                iconName: 'savings_rounded',
+                iconBg: '#F97316',
+                color: '#F97316',
+                buttonColor: '#EA580C',
+                lightBg: '#FFF7ED',
+            },
+            // Referral Earning Options (Cleaned - no special offers)
+            {
+                earningType: 'referral',
+                coins: 10000,
+                baseRupees: 10,
+                bonusRupees: 0,
+                totalRupees: 10,
+                netUpi: 7,
+                cashbackCoins: 0,
+                badge: '',
+                tagline: '',
+                iconName: 'account_balance_wallet_rounded',
+                iconBg: '#6366F1',
+                color: '#6366F1',
+                buttonColor: '#4F46E5',
+                lightBg: '#EEF2FF',
+            },
+            {
+                earningType: 'referral',
+                coins: 50000,
+                baseRupees: 50,
+                bonusRupees: 0,
+                totalRupees: 50,
+                netUpi: 35,
+                cashbackCoins: 0,
+                badge: '',
+                tagline: '',
+                iconName: 'card_giftcard_rounded',
+                iconBg: '#10B981',
+                color: '#10B981',
+                buttonColor: '#059669',
+                lightBg: '#ECFDF5',
+            },
+            {
+                earningType: 'referral',
+                coins: 100000,
+                baseRupees: 100,
+                bonusRupees: 0,
+                totalRupees: 100,
+                netUpi: 70,
+                cashbackCoins: 0,
+                badge: '',
+                tagline: '',
+                iconName: 'savings_rounded',
+                iconBg: '#F97316',
+                color: '#F97316',
+                buttonColor: '#EA580C',
+                lightBg: '#FFF7ED',
+            },
+        ];
+        for (const w of defaultWithdrawalOptions) {
+            await db_1.prisma.withdrawalOption.create({ data: w });
+        }
+        console.log('Default withdrawal options seeded');
     }
     console.log('Seeding complete.');
 }

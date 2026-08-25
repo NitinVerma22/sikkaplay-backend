@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -565,12 +565,25 @@ const processWithdrawal = async (txId, status, referenceId, adminId = 'unknown-i
         }
         else if (status === 'success') {
             const withdrawAmount = Math.abs(tx.amount);
-            console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} for user ID: ${tx.userId}`);
-            // Increment withdrawalAmount stats
+            const cashbackCoins = Math.round(withdrawAmount * 0.15);
+            console.log(`[WITHDRAWAL APPROVE] Incrementing withdrawalAmount by ${withdrawAmount} and crediting cashback ${cashbackCoins} for user ID: ${tx.userId}`);
+            // Increment withdrawalAmount stats and credit cashback coins
             await prismaTx.user.update({
                 where: { id: tx.userId },
                 data: {
-                    withdrawalAmount: { increment: withdrawAmount }
+                    withdrawalAmount: { increment: withdrawAmount },
+                    balance: { increment: cashbackCoins },
+                    totalEarned: { increment: cashbackCoins }
+                }
+            });
+            // Create transaction record for cashback
+            await prismaTx.transaction.create({
+                data: {
+                    userId: tx.userId,
+                    amount: cashbackCoins,
+                    type: 'bonus',
+                    status: 'success',
+                    description: `Withdrawal Cashback Reward (15% of ${withdrawAmount} Coins)`
                 }
             });
         }
@@ -581,9 +594,10 @@ const processWithdrawal = async (txId, status, referenceId, adminId = 'unknown-i
         where: { id: tx.userId },
         select: { fcmToken: true }
     });
+    const cashbackCoins = Math.round(Math.abs(tx.amount) * 0.15);
     const notifTitle = status === 'success' ? 'Withdrawal Approved 💰' : 'Withdrawal Failed ❌';
     const notifBody = status === 'success'
-        ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Ref: ${referenceId || 'N/A'}`
+        ? `Your withdrawal of ${Math.abs(tx.amount)} coins is successful. Cashback of ${cashbackCoins} coins credited to wallet. Ref: ${referenceId || 'N/A'}`
         : `Your withdrawal of ${Math.abs(tx.amount)} coins was rejected. Coins refunded to wallet.`;
     if (targetUser?.fcmToken) {
         await (0, push_service_1.sendPushNotification)(targetUser.fcmToken, notifTitle, notifBody, 'withdrawal', null, tx.userId);
@@ -1755,3 +1769,87 @@ const revertTransaction = async (req, res) => {
     }
 };
 exports.revertTransaction = revertTransaction;
+// Withdrawal Options CRUD Management
+const getWithdrawalOptionsAdmin = async (req, res) => {
+    try {
+        const options = await db_1.prisma.withdrawalOption.findMany({
+            orderBy: { coins: 'asc' }
+        });
+        res.status(200).json({ success: true, options });
+    }
+    catch (error) {
+        console.error('Get withdrawal options error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getWithdrawalOptionsAdmin = getWithdrawalOptionsAdmin;
+const createWithdrawalOptionAdmin = async (req, res) => {
+    try {
+        const { earningType, coins, baseRupees, bonusRupees, totalRupees, netUpi, cashbackCoins, badge, tagline, color, buttonColor, lightBg, iconName } = req.body;
+        const option = await db_1.prisma.withdrawalOption.create({
+            data: {
+                earningType,
+                coins: parseInt(coins) || 0,
+                baseRupees: parseInt(baseRupees) || 0,
+                bonusRupees: parseInt(bonusRupees) || 0,
+                totalRupees: parseInt(totalRupees) || 0,
+                netUpi: parseInt(netUpi) || 0,
+                cashbackCoins: parseInt(cashbackCoins) || 0,
+                badge: badge || '',
+                tagline: tagline || '',
+                color: color || '#6366F1',
+                buttonColor: buttonColor || '#4F46E5',
+                lightBg: lightBg || '#EEF2FF',
+                iconName: iconName || 'account_balance_wallet_rounded'
+            }
+        });
+        res.status(201).json({ success: true, option });
+    }
+    catch (error) {
+        console.error('Create withdrawal option error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.createWithdrawalOptionAdmin = createWithdrawalOptionAdmin;
+const updateWithdrawalOptionAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { earningType, coins, baseRupees, bonusRupees, totalRupees, netUpi, cashbackCoins, badge, tagline, color, buttonColor, lightBg, iconName } = req.body;
+        const option = await db_1.prisma.withdrawalOption.update({
+            where: { id: id },
+            data: {
+                earningType,
+                coins: parseInt(coins) || 0,
+                baseRupees: parseInt(baseRupees) || 0,
+                bonusRupees: parseInt(bonusRupees) || 0,
+                totalRupees: parseInt(totalRupees) || 0,
+                netUpi: parseInt(netUpi) || 0,
+                cashbackCoins: parseInt(cashbackCoins) || 0,
+                badge: badge || '',
+                tagline: tagline || '',
+                color: color || '#6366F1',
+                buttonColor: buttonColor || '#4F46E5',
+                lightBg: lightBg || '#EEF2FF',
+                iconName: iconName || 'account_balance_wallet_rounded'
+            }
+        });
+        res.status(200).json({ success: true, option });
+    }
+    catch (error) {
+        console.error('Update withdrawal option error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.updateWithdrawalOptionAdmin = updateWithdrawalOptionAdmin;
+const deleteWithdrawalOptionAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db_1.prisma.withdrawalOption.delete({ where: { id: id } });
+        res.status(200).json({ success: true, message: 'Withdrawal option deleted successfully' });
+    }
+    catch (error) {
+        console.error('Delete withdrawal option error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.deleteWithdrawalOptionAdmin = deleteWithdrawalOptionAdmin;
