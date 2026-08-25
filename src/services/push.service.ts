@@ -46,6 +46,7 @@ export const sendPushNotification = async (
         title,
         body,
         type,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
         ...(bannerUrl ? { bannerUrl } : {}),
         ...(senderId ? { senderId, partnerId: senderId } : {}),
         ...(channelName ? { channelName } : {})
@@ -54,6 +55,11 @@ export const sendPushNotification = async (
         priority: 'high',
         notification: {
           channelId: 'sikkaplay_high_channel',
+          priority: 'high',
+          sound: 'default',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          visibility: 'public',
           color: '#7C3AED', // App brand theme color (Purple)
           icon: 'ic_launcher',
         }
@@ -89,10 +95,22 @@ export const sendPushNotificationBatch = async (
       const message: any = {
         token,
         notification: { title, body },
+        data: {
+          title,
+          body,
+          type,
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          ...(bannerUrl ? { bannerUrl } : {})
+        },
         android: {
           priority: 'high' as const,
           notification: {
             channelId: 'sikkaplay_high_channel',
+            priority: 'high',
+            sound: 'default',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            visibility: 'public',
             color: '#7C3AED',
             icon: 'ic_launcher',
           }
