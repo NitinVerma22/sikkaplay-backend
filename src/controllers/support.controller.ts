@@ -41,7 +41,7 @@ export const getFaqs = async (req: AuthRequest, res: Response): Promise<void> =>
         },
         {
           question: "What are the rules of Lucky Spin Wheel?",
-          answer: "Every day you get 3 free spins. Spin the wheel to win rewards ranging from 1 to 30 Sikka. If you run out of spins, you can watch a rewarded video ad to get 3 more spins. Spins are 100% free!"
+          answer: "Every day you get 3 free spins. Spin the wheel to win rewards ranging from 10 to 100 Sikka. If you run out of spins, you can watch a rewarded video ad to get 3 more spins. Spins are 100% free!"
         }
       ];
 

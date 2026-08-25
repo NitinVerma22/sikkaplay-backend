@@ -137,18 +137,18 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         throw new Error('User not found');
       }
 
-      // Generate a spin reward matching the client's wheel slots: 1, 2, 3, 5, 10, 15, 20, 30
+      // Generate a spin reward matching the client's wheel slots: 10, 15, 20, 25, 30, 50, 80, 100
       const rand = Math.random() * 100;
-      let reward = 1;
+      let reward = 10;
       if (rand < 0.01) {
-        reward = 30; // Ultra rare
-      } else if (rand < 5.0) {
-        reward = Math.random() > 0.5 ? 15 : 20; // Rare
-      } else if (rand < 20.0) {
-        reward = 10; // Medium
+        reward = 100; // 0.01% Ultra rare jackpot
+      } else if (rand < 1.01) {
+        reward = 80; // 1% Rare
+      } else if (rand < 11.01) {
+        reward = Math.random() > 0.5 ? 30 : 50; // 10% Medium
       } else {
-        const common = [1, 2, 3, 5];
-        reward = common[Math.floor(Math.random() * common.length)]; // Common
+        const common = [10, 15, 20, 25];
+        reward = common[Math.floor(Math.random() * common.length)]; // 80% Common
       }
 
       // Update User balance and total earned (spin is free, only increment reward)
