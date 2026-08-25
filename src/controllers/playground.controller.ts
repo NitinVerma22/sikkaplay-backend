@@ -777,9 +777,24 @@ export const sendFriendRequest = async (req: AuthRequest, res: Response): Promis
       }
     });
 
-    // Send push notification to target user
+    // Create In-App Notification in DB for target recipient
     const sender = await prisma.user.findUnique({ where: { id: userId } });
     const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+    
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: 'New Friend Request',
+          body: `${senderName} sent you a friend request!`,
+          type: 'friend_request',
+        }
+      });
+    } catch (notifErr) {
+      console.error('Error creating in-app friend_request notification:', notifErr);
+    }
+
+    // Send push notification if recipient user has FCM token
     const recipientUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (recipientUser?.fcmToken) {
       await sendPushNotification(
@@ -788,6 +803,8 @@ export const sendFriendRequest = async (req: AuthRequest, res: Response): Promis
         `${senderName} sent you a friend request!`,
         'friend_request',
         null,
+        targetUserId,
+        true, // skipDb since we created it explicitly above
         userId
       );
     }
@@ -836,10 +853,24 @@ export const acceptFriendRequest = async (req: AuthRequest, res: Response): Prom
       }
     });
 
-    // Send push notification to target user (the one who sent the request)
+    // Send push & in-app notification to target user (the one who originally sent the request)
     const targetUserId = updated.userOneId === userId ? updated.userTwoId : updated.userOneId;
     const acceptor = await prisma.user.findUnique({ where: { id: userId } });
     const acceptorName = acceptor?.name || acceptor?.username || 'SikkaPlay User';
+    
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: 'Friend Request Accepted',
+          body: `${acceptorName} accepted your friend request!`,
+          type: 'friend_accept',
+        }
+      });
+    } catch (notifErr) {
+      console.error('Error creating in-app friend_accept notification:', notifErr);
+    }
+
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (targetUser?.fcmToken) {
       await sendPushNotification(
@@ -848,6 +879,8 @@ export const acceptFriendRequest = async (req: AuthRequest, res: Response): Prom
         `${acceptorName} accepted your friend request!`,
         'friend_accept',
         null,
+        targetUserId,
+        true, // skipDb since we created it explicitly above
         userId
       );
     }
