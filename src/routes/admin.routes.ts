@@ -45,7 +45,7 @@ import {
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
-import { createVisitLink, getVisitLinks, deleteVisitLink } from '../controllers/visitLink.controller';
+import { createVisitLink, getVisitLinks, updateVisitLink, deleteVisitLink } from '../controllers/visitLink.controller';
 import {
   getSocialTasksAdmin,
   createSocialTaskAdmin,
@@ -137,6 +137,7 @@ router.delete('/daily-code/:id', deleteDailyCode);
 // Visit Links Management
 router.post('/visit-links', createVisitLink);
 router.get('/visit-links', getVisitLinks);
+router.put('/visit-links/:id', updateVisitLink);
 router.delete('/visit-links/:id', deleteVisitLink);
 
 // Social Tasks Management

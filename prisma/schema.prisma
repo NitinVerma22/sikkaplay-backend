@@ -282,6 +282,7 @@ model VisitEarnLink {
   title        String
   url          String
   rewardAmount Int      @default(5)
+  timerSeconds Int      @default(15)
   createdAt    DateTime @default(now())
 }
 

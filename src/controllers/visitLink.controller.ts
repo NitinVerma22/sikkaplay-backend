@@ -19,6 +19,7 @@ export const getVisitLinks = async (req: Request, res: Response): Promise<void> 
       title: link.title,
       url: link.url,
       rewardAmount: link.rewardAmount,
+      timerSeconds: link.timerSeconds || 15,
       createdAt: link.createdAt,
       cooldownRemaining: 0
     }));
@@ -44,6 +45,7 @@ export const getVisitLinks = async (req: Request, res: Response): Promise<void> 
               title: link.title,
               url: link.url,
               rewardAmount: link.rewardAmount,
+              timerSeconds: link.timerSeconds || 15,
               createdAt: link.createdAt,
               cooldownRemaining: cooldownRemainingSecs
             };
@@ -54,6 +56,7 @@ export const getVisitLinks = async (req: Request, res: Response): Promise<void> 
           title: link.title,
           url: link.url,
           rewardAmount: link.rewardAmount,
+          timerSeconds: link.timerSeconds || 15,
           createdAt: link.createdAt,
           cooldownRemaining: 0
         };
@@ -73,7 +76,7 @@ export const getVisitLinks = async (req: Request, res: Response): Promise<void> 
 // --- CREATE LINK (ADMIN ONLY) ---
 export const createVisitLink = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, url, rewardAmount } = req.body;
+    const { title, url, rewardAmount, timerSeconds } = req.body;
 
     if (!title || typeof title !== 'string') {
       res.status(400).json({ error: 'Title is required and must be a string' });
@@ -91,11 +94,14 @@ export const createVisitLink = async (req: AdminAuthRequest, res: Response): Pro
       return;
     }
 
+    const seconds = typeof timerSeconds === 'number' ? timerSeconds : parseInt(timerSeconds) || 15;
+
     const newLink = await prisma.visitEarnLink.create({
       data: {
         title: title.trim(),
         url: url.trim(),
         rewardAmount: coinsReward,
+        timerSeconds: seconds > 0 ? seconds : 15,
       },
     });
 
@@ -109,6 +115,46 @@ export const createVisitLink = async (req: AdminAuthRequest, res: Response): Pro
   } catch (error) {
     console.error('Error creating visit link:', error);
     res.status(500).json({ error: 'Internal server error while creating visit link' });
+  }
+};
+
+// --- UPDATE LINK (ADMIN ONLY) ---
+export const updateVisitLink = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { title, url, rewardAmount, timerSeconds } = req.body;
+
+    if (!id) {
+      res.status(400).json({ error: 'Link ID is required' });
+      return;
+    }
+
+    const existing = await prisma.visitEarnLink.findUnique({ where: { id: id as string } });
+    if (!existing) {
+      res.status(404).json({ error: 'Visit link not found' });
+      return;
+    }
+
+    const updated = await prisma.visitEarnLink.update({
+      where: { id: id as string },
+      data: {
+        title: title !== undefined ? title.trim() : existing.title,
+        url: url !== undefined ? url.trim() : existing.url,
+        rewardAmount: rewardAmount !== undefined ? (typeof rewardAmount === 'number' ? rewardAmount : parseInt(rewardAmount) || 5) : existing.rewardAmount,
+        timerSeconds: timerSeconds !== undefined ? (typeof timerSeconds === 'number' ? timerSeconds : parseInt(timerSeconds) || 15) : existing.timerSeconds,
+      },
+    });
+
+    invalidateVisitEarnLinksCountCache();
+
+    res.status(200).json({
+      success: true,
+      message: 'Visit link updated successfully',
+      link: updated,
+    });
+  } catch (error) {
+    console.error('Error updating visit link:', error);
+    res.status(500).json({ error: 'Internal server error while updating visit link' });
   }
 };
 
