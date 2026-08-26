@@ -140,15 +140,15 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
       // Generate a spin reward matching the client's wheel slots: 1, 2, 3, 5, 10, 15, 20, 30
       const rand = Math.random() * 100;
       let reward = 1;
-      if (rand < 1) {
-        reward = 30; // 1% Jackpot (30 Sikka)
-      } else if (rand < 6) {
-        reward = Math.random() > 0.5 ? 15 : 20; // 5% Rare (15 or 20 Sikka)
-      } else if (rand < 25) {
-        reward = 10; // 19% Medium (10 Sikka)
+      if (rand < 0.01) {
+        reward = 30; // 0.01% Jackpot (30 Sikka)
+      } else if (rand < 1.01) {
+        reward = Math.random() > 0.5 ? 15 : 20; // 1% Rare (15 or 20 Sikka)
+      } else if (rand < 9.01) {
+        reward = 10; // 8% Medium (10 Sikka)
       } else {
         const common = [1, 2, 3, 5];
-        reward = common[Math.floor(Math.random() * common.length)]; // 75% Common (1, 2, 3, 5)
+        reward = common[Math.floor(Math.random() * common.length)]; // 90.99% Common (1, 2, 3, 5)
       }
 
       // Update User balance and total earned (spin is free, only increment reward)
