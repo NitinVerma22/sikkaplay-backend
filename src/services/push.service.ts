@@ -54,7 +54,7 @@ export const sendPushNotification = async (
       android: {
         priority: 'high',
         notification: {
-          channelId: 'sikkaplay_high_channel_v2',
+          channelId: 'sikkaplay_high_channel_v3',
           priority: 'high',
           sound: 'default',
           defaultSound: true,
@@ -105,7 +105,7 @@ export const sendPushNotificationBatch = async (
         android: {
           priority: 'high' as const,
           notification: {
-            channelId: 'sikkaplay_high_channel_v2',
+            channelId: 'sikkaplay_high_channel_v3',
             priority: 'high',
             sound: 'default',
             defaultSound: true,
