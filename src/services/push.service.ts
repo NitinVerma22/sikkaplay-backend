@@ -1,4 +1,4 @@
-﻿import { prisma } from '../config/db';
+import { prisma } from '../config/db';
 import * as admin from 'firebase-admin';
 import '../config/firebase'; // Ensure Firebase Admin is initialized
 
@@ -18,15 +18,15 @@ export const sendPushNotification = async (
   // 1. Save to database so it appears in the Notification Tab
   if (!skipDb) {
     try {
-      const user = userId ? { id: userId } : await prisma.user.findFirst({ where: { fcmToken } });
-      if (user) {
+      const uId = userId || (await prisma.user.findFirst({ where: { fcmToken } }))?.id;
+      if (uId) {
         await prisma.notification.create({
           data: {
-            userId: user.id,
+            userId: uId,
             title,
             body,
             type,
-            ...(bannerUrl ? { bannerUrl } : {})
+            bannerUrl,
           }
         });
       }
@@ -37,7 +37,7 @@ export const sendPushNotification = async (
 
   // 2. Send real push notification via FCM
   try {
-    console.log(Sending push to :  -  [type: , banner: ]);
+    console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}, banner: ${bannerUrl}]`);
     
     const message: any = {
       token: fcmToken,
@@ -127,14 +127,12 @@ export const sendPushNotificationBatch = async (
     });
 
     try {
-      console.log(Sending batch of \ push notifications...);
+      console.log(`Sending batch of ${messages.length} push notifications...`);
       const response = await admin.messaging().sendEach(messages);
-      console.log(Successfully sent \ messages; failed \ messages.);
-      if (response.failureCount > 0) {
-        console.error('First failure error:', response.responses.find(r => !r.success)?.error);
-      }
+      console.log(`Successfully sent ${response.successCount} messages; failed ${response.failureCount} messages.`);
     } catch (error) {
       console.error('Error sending batch push notifications via FCM:', error);
     }
   }
 };
+
