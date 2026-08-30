@@ -51,15 +51,14 @@ export const sendPushNotification = async (
         ...(senderId ? { senderId, partnerId: senderId } : {}),
         ...(channelName ? { channelName } : {})
       },
-      android: {
-        priority: 'high',
+      android: { priority: 'high',
         notification: {
           channelId: 'sikkaplay_high_channel_v4',
-          priority: 'high',
+          notificationPriority: 'PRIORITY_HIGH',
           sound: 'default',
           defaultSound: true,
           defaultVibrateTimings: true,
-          visibility: 'public',
+          visibility: 'PUBLIC',
           color: '#7C3AED', // App brand theme color (Purple)
           icon: 'ic_launcher',
         }
@@ -106,11 +105,11 @@ export const sendPushNotificationBatch = async (
           priority: 'high' as const,
           notification: {
             channelId: 'sikkaplay_high_channel_v4',
-            priority: 'high',
+            notificationPriority: 'PRIORITY_HIGH',
             sound: 'default',
             defaultSound: true,
             defaultVibrateTimings: true,
-            visibility: 'public',
+            visibility: 'PUBLIC',
             color: '#7C3AED',
             icon: 'ic_launcher',
           }
