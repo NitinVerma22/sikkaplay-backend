@@ -1741,11 +1741,9 @@ export const getManagerStats = async (req: AdminAuthRequest, res: Response): Pro
     let mappedUsers = [];
 
     if (date && typeof date === 'string' && date.trim().length > 0) {
-      // If date is provided (format: YYYY-MM-DD), filter success earnings & bonuses for that day
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
+      // Convert incoming YYYY-MM-DD string to India time start and end (IST is +05:30)
+      const start = new Date(`${date}T00:00:00+05:30`);
+      const end = new Date(`${date}T23:59:59.999+05:30`);
 
       const userEarnings = await prisma.transaction.groupBy({
         by: ['userId'],
