@@ -73,8 +73,14 @@ export const sendPushNotification = async (
     }
 
     await admin.messaging().send(message);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending push notification via FCM:', error);
+    console.error('[FCM FAILURE CATCH]', {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+      name: error?.name
+    });
   }
 };
 
@@ -130,8 +136,28 @@ export const sendPushNotificationBatch = async (
       console.log(`Sending batch of ${messages.length} push notifications...`);
       const response = await admin.messaging().sendEach(messages);
       console.log(`Successfully sent ${response.successCount} messages; failed ${response.failureCount} messages.`);
-    } catch (error) {
+      
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, index) => {
+          if (!resp.success && resp.error) {
+            console.error('[FCM FAILURE]', {
+              code: resp.error.code,
+              message: resp.error.message,
+              details: resp.error.details,
+              name: resp.error.name,
+              index
+            });
+          }
+        });
+      }
+    } catch (error: any) {
       console.error('Error sending batch push notifications via FCM:', error);
+      console.error('[FCM FAILURE CATCH]', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        name: error?.name
+      });
     }
   }
 };
