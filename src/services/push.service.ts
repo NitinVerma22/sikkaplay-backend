@@ -143,8 +143,8 @@ export const sendPushNotificationBatch = async (
             console.error('[FCM FAILURE]', {
               code: resp.error.code,
               message: resp.error.message,
-              details: resp.error.details,
-              name: resp.error.name,
+              details: (resp.error as any).details,
+              name: (resp.error as any).name,
               index
             });
           }
