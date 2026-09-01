@@ -318,6 +318,7 @@ export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<vo
     const search = (req.query.search as string) || '';
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const sort = (req.query.sort as string) || 'newest';
 
     const where: any = {};
     
@@ -344,7 +345,8 @@ export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<vo
           OR: [
             { phoneNumber: { contains: search, mode: 'insensitive' } },
             { name: { contains: search, mode: 'insensitive' } },
-            { referralCode: { contains: search, mode: 'insensitive' } }
+            { referralCode: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } }
           ]
         }
       ];
@@ -354,9 +356,18 @@ export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<vo
       delete where.isBlocked;
     }
 
+    let orderBy: any = { createdAt: 'desc' };
+    if (sort === 'coins_desc') {
+      orderBy = { totalEarned: 'desc' };
+    } else if (sort === 'coins_asc') {
+      orderBy = { totalEarned: 'asc' };
+    } else if (sort === 'oldest') {
+      orderBy = { createdAt: 'asc' };
+    }
+
     const users = await prisma.user.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     });
