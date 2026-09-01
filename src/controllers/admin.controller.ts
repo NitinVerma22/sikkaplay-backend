@@ -319,8 +319,19 @@ export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<vo
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const sort = (req.query.sort as string) || 'newest';
+    const date = (req.query.date as string) || '';
 
     const where: any = {};
+    
+    if (date && date.trim().length > 0) {
+      // YYYY-MM-DD to IST bounds
+      const start = new Date(`${date}T00:00:00+05:30`);
+      const end = new Date(`${date}T23:59:59.999+05:30`);
+      where.createdAt = {
+        gte: start,
+        lte: end
+      };
+    }
     
     if (filter === 'deleted') {
       where.name = 'Deleted User';
