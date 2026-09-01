@@ -155,4 +155,17 @@ router.post('/maintenance/export', requireRole(['superadmin']), exportMaintenanc
 router.post('/maintenance/cleanup', requireRole(['superadmin']), cleanupMaintenanceRecords);
 router.post('/maintenance/nuclear-reset', requireRole(['superadmin']), systemNuclearReset);
 
+// Video Tutorials Management
+import {
+  getVideoTutorialsAdmin,
+  createVideoTutorialAdmin,
+  updateVideoTutorialAdmin,
+  deleteVideoTutorialAdmin
+} from '../controllers/videoTutorial.controller';
+
+router.get('/video-tutorials', getVideoTutorialsAdmin);
+router.post('/video-tutorials', requireRole(['superadmin']), createVideoTutorialAdmin);
+router.put('/video-tutorials/:id', requireRole(['superadmin']), updateVideoTutorialAdmin);
+router.delete('/video-tutorials/:id', requireRole(['superadmin']), deleteVideoTutorialAdmin);
+
 export default router;

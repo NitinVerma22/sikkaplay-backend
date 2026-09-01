@@ -111,10 +111,6 @@ const requestWithdrawal = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        if (user.phoneNumber && user.phoneNumber.startsWith('G-')) {
-            res.status(403).json({ error: 'PHONE_VERIFICATION_REQUIRED', message: 'Please verify your phone number before withdrawing.' });
-            return;
-        }
         // --- WITHDRAWAL FRAUD ENGINE CHECKS ---
         // Check A: Playtime check (Max 18 hours / 1080 minutes combined playtime in last 7 days)
         const recentUsages = await db_1.prisma.dailyUsage.findMany({

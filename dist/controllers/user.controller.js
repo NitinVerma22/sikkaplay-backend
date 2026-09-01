@@ -396,8 +396,13 @@ exports.deleteAccount = deleteAccount;
 const syncPhone = async (req, res) => {
     try {
         const userId = req.user?.userId;
+        const { phoneIdToken } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        if (!phoneIdToken) {
+            res.status(400).json({ error: 'Missing phone verification token' });
             return;
         }
         const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
@@ -405,14 +410,14 @@ const syncPhone = async (req, res) => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        // Fetch firebase user record using Firebase Admin
-        const firebaseRecord = await firebase_1.auth.getUser(user.firebaseUid);
-        if (!firebaseRecord.phoneNumber) {
-            res.status(400).json({ error: 'No phone number linked to this Firebase account.' });
+        // Verify the phone credential ID token via Firebase Admin
+        const decodedToken = await firebase_1.auth.verifyIdToken(phoneIdToken);
+        if (!decodedToken.phone_number) {
+            res.status(400).json({ error: 'The provided credential does not have a valid phone number.' });
             return;
         }
         // Ensure the phone number starts with + for standardization
-        let formattedPhone = firebaseRecord.phoneNumber;
+        let formattedPhone = decodedToken.phone_number;
         if (!formattedPhone.startsWith('+')) {
             formattedPhone = '+91' + formattedPhone;
         }

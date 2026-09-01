@@ -292,7 +292,7 @@ const googleLogin = async (req, res) => {
 exports.googleLogin = googleLogin;
 const completeGoogleSignup = async (req, res) => {
     try {
-        const { firebaseUid, name, city, gender, referredBy, deviceId, username } = req.body;
+        const { firebaseUid, email, name, city, gender, referredBy, deviceId, username } = req.body;
         if (!firebaseUid) {
             res.status(400).json({ error: 'Missing required fields' });
             return;
@@ -364,6 +364,7 @@ const completeGoogleSignup = async (req, res) => {
             const newUser = await tx.user.create({
                 data: {
                     firebaseUid: firebaseUid,
+                    email: email || null,
                     phoneNumber: formattedPhone,
                     name: name || null,
                     username: cleanUsername,

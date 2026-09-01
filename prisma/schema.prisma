@@ -175,6 +175,7 @@ model AppConfig {
   apkDownloadUrl      String   @default("https://sikkaplay-apk.web.app/app-release.apk")
   latestAppVersion    String   @default("1.0.9")
   forceUpdate         Boolean  @default(false)
+  showVideoTutorialBar Boolean @default(true)
   telegramLink        String   @default("https://t.me/sikkaplay")
   whatsappLink        String   @default("https://whatsapp.com/channel/sikkaplay")
   groupLink           String   @default("https://t.me/sikkaplay_group")
@@ -516,7 +517,13 @@ model WithdrawalOption {
   enabled       Boolean  @default(true)
   claimCount    Int      @default(0)
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
-
+model VideoTutorial {
+  id        String   @id @default(uuid())
+  title     String
+  url       String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}

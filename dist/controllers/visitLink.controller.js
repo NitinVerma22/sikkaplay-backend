@@ -11,6 +11,11 @@ const getVisitLinks = async (req, res) => {
         const links = await db_1.prisma.visitEarnLink.findMany({
             orderBy: { createdAt: 'asc' },
         });
+        const claimCountsGrouped = await db_1.prisma.visitEarnClaim.groupBy({
+            by: ['linkId'],
+            _count: true
+        });
+        const claimCounts = new Map(claimCountsGrouped.map(c => [c.linkId, c._count]));
         let linksWithCooldown = links.map(link => ({
             id: link.id,
             title: link.title,
@@ -18,7 +23,8 @@ const getVisitLinks = async (req, res) => {
             rewardAmount: link.rewardAmount,
             timerSeconds: link.timerSeconds || 15,
             createdAt: link.createdAt,
-            cooldownRemaining: 0
+            cooldownRemaining: 0,
+            totalClaims: claimCounts.get(link.id) || 0
         }));
         if (userId) {
             const claims = await db_1.prisma.visitEarnClaim.findMany({
@@ -41,7 +47,8 @@ const getVisitLinks = async (req, res) => {
                             rewardAmount: link.rewardAmount,
                             timerSeconds: link.timerSeconds || 15,
                             createdAt: link.createdAt,
-                            cooldownRemaining: cooldownRemainingSecs
+                            cooldownRemaining: cooldownRemainingSecs,
+                            totalClaims: claimCounts.get(link.id) || 0
                         };
                     }
                 }
@@ -52,7 +59,8 @@ const getVisitLinks = async (req, res) => {
                     rewardAmount: link.rewardAmount,
                     timerSeconds: link.timerSeconds || 15,
                     createdAt: link.createdAt,
-                    cooldownRemaining: 0
+                    cooldownRemaining: 0,
+                    totalClaims: claimCounts.get(link.id) || 0
                 };
             });
         }

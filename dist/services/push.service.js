@@ -65,7 +65,6 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
         console.log(`Sending push to ${fcmToken}: ${title} - ${body} [type: ${type}, banner: ${bannerUrl}]`);
         const message = {
             token: fcmToken,
-            notification: { title, body },
             data: {
                 title,
                 body,
@@ -75,30 +74,21 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
                 ...(senderId ? { senderId, partnerId: senderId } : {}),
                 ...(channelName ? { channelName } : {})
             },
-            android: {
-                priority: 'high',
-                notification: {
-                    channelId: 'sikkaplay_high_channel',
-                    priority: 'high',
-                    sound: 'default',
-                    defaultSound: true,
-                    defaultVibrateTimings: true,
-                    visibility: 'public',
-                    color: '#7C3AED', // App brand theme color (Purple)
-                    icon: 'ic_launcher',
-                }
-            }
+            android: { priority: 'high' }
         };
         if (bannerUrl && bannerUrl.trim() !== '') {
-            message.notification.imageUrl = bannerUrl;
-            if (message.android && message.android.notification) {
-                message.android.notification.imageUrl = bannerUrl;
-            }
+            // Data-only message, flutter will handle the image download from bannerUrl
         }
         await admin.messaging().send(message);
     }
     catch (error) {
         console.error('Error sending push notification via FCM:', error);
+        console.error('[FCM FAILURE CATCH]', {
+            code: error?.code,
+            message: error?.message,
+            details: error?.details,
+            name: error?.name
+        });
     }
 };
 exports.sendPushNotification = sendPushNotification;
@@ -111,7 +101,6 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
         const messages = tokenBatch.map(token => {
             const message = {
                 token,
-                notification: { title, body },
                 data: {
                     title,
                     body,
@@ -120,24 +109,11 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
                     ...(bannerUrl ? { bannerUrl } : {})
                 },
                 android: {
-                    priority: 'high',
-                    notification: {
-                        channelId: 'sikkaplay_high_channel',
-                        priority: 'high',
-                        sound: 'default',
-                        defaultSound: true,
-                        defaultVibrateTimings: true,
-                        visibility: 'public',
-                        color: '#7C3AED',
-                        icon: 'ic_launcher',
-                    }
+                    priority: 'high'
                 }
             };
             if (bannerUrl && bannerUrl.trim() !== '') {
-                message.notification.imageUrl = bannerUrl;
-                if (message.android && message.android.notification) {
-                    message.android.notification.imageUrl = bannerUrl;
-                }
+                // Data-only message, flutter will handle the image download from bannerUrl
             }
             return message;
         });
@@ -145,9 +121,28 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
             console.log(`Sending batch of ${messages.length} push notifications...`);
             const response = await admin.messaging().sendEach(messages);
             console.log(`Successfully sent ${response.successCount} messages; failed ${response.failureCount} messages.`);
+            if (response.failureCount > 0) {
+                response.responses.forEach((resp, index) => {
+                    if (!resp.success && resp.error) {
+                        console.error('[FCM FAILURE]', {
+                            code: resp.error.code,
+                            message: resp.error.message,
+                            details: resp.error.details,
+                            name: resp.error.name,
+                            index
+                        });
+                    }
+                });
+            }
         }
         catch (error) {
             console.error('Error sending batch push notifications via FCM:', error);
+            console.error('[FCM FAILURE CATCH]', {
+                code: error?.code,
+                message: error?.message,
+                details: error?.details,
+                name: error?.name
+            });
         }
     }
 };

@@ -366,19 +366,19 @@ const claimCrate = async (req, res) => {
             res.status(400).json({ error: 'Playtime progress not found for today.' });
             return;
         }
-        // Validate milestones: Bronze=1 hour(3600s), Silver=2 hours(7200s), Gold=3 hours(10800s)
-        let requiredSeconds = 3600;
+        // Validate milestones: Bronze=80 mins(4800s), Silver=160 mins(9600s), Gold=280 mins(16800s)
+        let requiredSeconds = 4800;
         let isAlreadyClaimed = false;
         if (crateLevel === 'BRONZE') {
-            requiredSeconds = 3600;
+            requiredSeconds = 4800;
             isAlreadyClaimed = progress.bronzeClaimed;
         }
         else if (crateLevel === 'SILVER') {
-            requiredSeconds = 7200;
+            requiredSeconds = 9600;
             isAlreadyClaimed = progress.silverClaimed;
         }
         else if (crateLevel === 'GOLD') {
-            requiredSeconds = 10800;
+            requiredSeconds = 16800;
             isAlreadyClaimed = progress.goldClaimed;
         }
         else {
@@ -402,7 +402,7 @@ const claimCrate = async (req, res) => {
             updateObj.silverClaimed = true;
         else if (crateLevel === 'GOLD')
             updateObj.goldClaimed = true;
-        const coinAward = crateLevel === 'BRONZE' ? 300 : crateLevel === 'SILVER' ? 600 : 1200;
+        const coinAward = crateLevel === 'BRONZE' ? 100 : crateLevel === 'SILVER' ? 200 : 300;
         const result = await db_1.prisma.$transaction(async (tx) => {
             // Mark claimed
             await tx.crateProgress.update({

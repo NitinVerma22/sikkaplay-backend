@@ -14,6 +14,7 @@ const db_1 = require("./config/db");
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const config_routes_1 = __importDefault(require("./routes/config.routes"));
+const videoTutorial_routes_1 = __importDefault(require("./routes/videoTutorial.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const support_routes_1 = __importDefault(require("./routes/support.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
@@ -74,6 +75,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/user', user_routes_1.default);
 app.use('/api/config', config_routes_1.default);
+app.use('/api/video-tutorials', videoTutorial_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
 app.use('/api/support', support_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);

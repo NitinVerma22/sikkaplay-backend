@@ -296,7 +296,18 @@ const getUsers = async (req, res) => {
         const search = req.query.search || '';
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
+        const sort = req.query.sort || 'newest';
+        const date = req.query.date || '';
         const where = {};
+        if (date && date.trim().length > 0) {
+            // YYYY-MM-DD to IST bounds
+            const start = new Date(`${date}T00:00:00+05:30`);
+            const end = new Date(`${date}T23:59:59.999+05:30`);
+            where.createdAt = {
+                gte: start,
+                lte: end
+            };
+        }
         if (filter === 'deleted') {
             where.name = 'Deleted User';
         }
@@ -321,7 +332,8 @@ const getUsers = async (req, res) => {
                     OR: [
                         { phoneNumber: { contains: search, mode: 'insensitive' } },
                         { name: { contains: search, mode: 'insensitive' } },
-                        { referralCode: { contains: search, mode: 'insensitive' } }
+                        { referralCode: { contains: search, mode: 'insensitive' } },
+                        { email: { contains: search, mode: 'insensitive' } }
                     ]
                 }
             ];
@@ -330,9 +342,19 @@ const getUsers = async (req, res) => {
             delete where.name;
             delete where.isBlocked;
         }
+        let orderBy = { createdAt: 'desc' };
+        if (sort === 'coins_desc') {
+            orderBy = { totalEarned: 'desc' };
+        }
+        else if (sort === 'coins_asc') {
+            orderBy = { totalEarned: 'asc' };
+        }
+        else if (sort === 'oldest') {
+            orderBy = { createdAt: 'asc' };
+        }
         const users = await db_1.prisma.user.findMany({
             where,
-            orderBy: { createdAt: 'desc' },
+            orderBy,
             skip: (page - 1) * limit,
             take: limit,
         });
@@ -1537,11 +1559,9 @@ const getManagerStats = async (req, res) => {
         });
         let mappedUsers = [];
         if (date && typeof date === 'string' && date.trim().length > 0) {
-            // If date is provided (format: YYYY-MM-DD), filter success earnings & bonuses for that day
-            const start = new Date(date);
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(date);
-            end.setHours(23, 59, 59, 999);
+            // Convert incoming YYYY-MM-DD string to India time start and end (IST is +05:30)
+            const start = new Date(`${date}T00:00:00+05:30`);
+            const end = new Date(`${date}T23:59:59.999+05:30`);
             const userEarnings = await db_1.prisma.transaction.groupBy({
                 by: ['userId'],
                 where: {

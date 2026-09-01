@@ -84,4 +84,10 @@ router.post('/maintenance/preview', (0, adminAuth_middleware_1.requireRole)(['su
 router.post('/maintenance/export', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.exportMaintenanceRecords);
 router.post('/maintenance/cleanup', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.cleanupMaintenanceRecords);
 router.post('/maintenance/nuclear-reset', (0, adminAuth_middleware_1.requireRole)(['superadmin']), maintenance_controller_1.systemNuclearReset);
+// Video Tutorials Management
+const videoTutorial_controller_1 = require("../controllers/videoTutorial.controller");
+router.get('/video-tutorials', videoTutorial_controller_1.getVideoTutorialsAdmin);
+router.post('/video-tutorials', (0, adminAuth_middleware_1.requireRole)(['superadmin']), videoTutorial_controller_1.createVideoTutorialAdmin);
+router.put('/video-tutorials/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), videoTutorial_controller_1.updateVideoTutorialAdmin);
+router.delete('/video-tutorials/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), videoTutorial_controller_1.deleteVideoTutorialAdmin);
 exports.default = router;

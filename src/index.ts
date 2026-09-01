@@ -8,6 +8,7 @@ import { prisma } from './config/db';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import configRoutes from './routes/config.routes';
+import videoTutorialRoutes from './routes/videoTutorial.routes';
 import notificationRoutes from './routes/notification.routes';
 import supportRoutes from './routes/support.routes';
 import adminRoutes from './routes/admin.routes';
@@ -74,6 +75,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/video-tutorials', videoTutorialRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/admin', adminRoutes);
