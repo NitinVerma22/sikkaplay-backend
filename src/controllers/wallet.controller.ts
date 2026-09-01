@@ -127,11 +127,6 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    if (user.phoneNumber && user.phoneNumber.startsWith('G-')) {
-      res.status(403).json({ error: 'PHONE_VERIFICATION_REQUIRED', message: 'Please verify your phone number before withdrawing.' });
-      return;
-    }
-
     // --- WITHDRAWAL FRAUD ENGINE CHECKS ---
     
     // Check A: Playtime check (Max 18 hours / 1080 minutes combined playtime in last 7 days)
