@@ -12,6 +12,7 @@ datasource db {
 model User {
   id              String        @id @default(uuid())
   phoneNumber     String        @unique
+  email           String?       // Stored for Google Login users
   firebaseUid     String        @unique
   passwordHash    String?
   name            String?
