@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { handleCpxCallback, handleAdmobSsvCallback } from '../controllers/callback.controller';
+import { handleCpxCallback, handleAdmobSsvCallback, handleTapjoyCallback } from '../controllers/callback.controller';
 
 const router = Router();
 
@@ -10,5 +10,8 @@ router.post('/cpx', handleCpxCallback);
 
 // Public webhook route called by Google AdMob SSV
 router.get('/admob-ssv', handleAdmobSsvCallback);
+
+// Public webhook route called by Tapjoy Offerwall self-managed currency
+router.get('/tapjoy', handleTapjoyCallback);
 
 export default router;
