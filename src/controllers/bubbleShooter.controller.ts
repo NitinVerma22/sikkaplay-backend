@@ -54,7 +54,7 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
       multiplier = (config as any).bubbleShooterMultiplier;
     }
 
-    const coinsEarned = levelNumber * multiplier;
+    const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
 
     if (userId) {
       await prisma.$transaction(async (tx) => {

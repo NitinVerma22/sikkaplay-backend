@@ -72,7 +72,7 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
       multiplier = (config as any).waterSortMultiplier;
     }
 
-    const coinsEarned = levelNumber * multiplier;
+    const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
 
     if (userId) {
       await prisma.$transaction(async (tx) => {
