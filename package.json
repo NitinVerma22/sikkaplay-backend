@@ -7,8 +7,8 @@
     "dev": "ts-node src/index.ts",
     "dev:staging": "dotenv -e .env.staging ts-node src/index.ts",
     "dev:production": "dotenv -e .env.production ts-node src/index.ts",
-    "build": "prisma generate && prisma db push --accept-data-loss && tsc",
-    "start": "node dist/index.js",
+    "build": "prisma generate && tsc",
+    "start": "prisma db push --accept-data-loss && node dist/index.js",
     "start:staging": "dotenv -e .env.staging node dist/index.js",
     "start:production": "dotenv -e .env.production pm2 start dist/index.js -i max",
     "test": "echo \"Error: no test specified\" && exit 1"
