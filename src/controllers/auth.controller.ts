@@ -331,7 +331,7 @@ export const googleLogin = async (req: AuthRequest, res: Response): Promise<void
 
 export const completeGoogleSignup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firebaseUid, email, name, city, gender, referredBy, deviceId, username } = req.body;
+    const { firebaseUid, email, name, city, gender, referredBy, deviceId, username, phoneNumber } = req.body;
 
     if (!firebaseUid) {
       res.status(400).json({ error: 'Missing required fields' });
@@ -376,8 +376,15 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
       }
     }
 
-    // Auto-generate a dummy phone number for Google users
-    const formattedPhone = `G-${firebaseUid.substring(0, 10)}`;
+    // Use provided phone number or fallback to a dummy phone number for Google users
+    let formattedPhone = phoneNumber;
+    if (formattedPhone) {
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+91' + formattedPhone;
+      }
+    } else {
+      formattedPhone = `G-${firebaseUid.substring(0, 10)}`;
+    }
 
     // Check if phone number is already taken
     const existingPhone = await prisma.user.findUnique({
