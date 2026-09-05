@@ -29,6 +29,8 @@ model User {
   upiId           String?       // User's preferred UPI ID for withdrawal
   totalEarned     Int           @default(0)
   withdrawalAmount Int          @default(0)
+  bubbleShooterLevel Int        @default(1)
+  waterSortLevel     Int        @default(1)
   isBlocked       Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

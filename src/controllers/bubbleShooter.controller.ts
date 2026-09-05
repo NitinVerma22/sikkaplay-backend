@@ -15,15 +15,16 @@ export const getBubbleShooterProgress = async (req: AuthRequest, res: Response):
     }
 
     if (userId) {
-      const sessions = await prisma.gameSession.findMany({
-        where: { userId, gameType: 'bubble_shooter', status: 'completed' },
-        select: { coinsEarned: true, createdAt: true }
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { bubbleShooterLevel: true }
       });
-
-      maxUnlockedLevel = Math.max(1, sessions.length + 1);
-      sessions.forEach((s, idx) => {
-        starsMap[idx + 1] = 3;
-      });
+      if (user) {
+        maxUnlockedLevel = user.bubbleShooterLevel;
+        for (let i = 1; i < maxUnlockedLevel; i++) {
+          starsMap[i] = 3;
+        }
+      }
     }
 
     res.status(200).json({
@@ -57,6 +58,10 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
     const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
 
     if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { bubbleShooterLevel: true } });
+      const currentMax = user?.bubbleShooterLevel || 1;
+      const newMaxLevel = Math.max(currentMax, levelNumber + 1);
+
       await prisma.$transaction(async (tx) => {
         await tx.gameSession.create({
           data: {
@@ -71,7 +76,8 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
           where: { id: userId },
           data: {
             balance: { increment: coinsEarned },
-            totalEarned: { increment: coinsEarned }
+            totalEarned: { increment: coinsEarned },
+            bubbleShooterLevel: newMaxLevel
           }
         });
 

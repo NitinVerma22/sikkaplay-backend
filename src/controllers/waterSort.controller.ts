@@ -23,19 +23,13 @@ export const getWaterSortProgress = async (req: AuthRequest, res: Response): Pro
     if (userId) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { totalEarned: true }
+        select: { waterSortLevel: true }
       });
       if (user) {
-        // Fetch completed levels from game sessions or user progress
-        const sessions = await prisma.gameSession.findMany({
-          where: { userId, gameType: 'water_sort', status: 'completed' },
-          select: { coinsEarned: true, createdAt: true }
-        });
-
-        maxUnlockedLevel = Math.max(1, sessions.length + 1);
-        sessions.forEach((s, idx) => {
-          starsMap[idx + 1] = 3;
-        });
+        maxUnlockedLevel = user.waterSortLevel;
+        for (let i = 1; i < maxUnlockedLevel; i++) {
+          starsMap[i] = 3;
+        }
       }
     }
 
@@ -75,6 +69,10 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
     const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
 
     if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { waterSortLevel: true } });
+      const currentMax = user?.waterSortLevel || 1;
+      const newMaxLevel = Math.max(currentMax, levelNumber + 1);
+
       await prisma.$transaction(async (tx) => {
         // Record game session
         await tx.gameSession.create({
@@ -91,7 +89,8 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
           where: { id: userId },
           data: {
             balance: { increment: coinsEarned },
-            totalEarned: { increment: coinsEarned }
+            totalEarned: { increment: coinsEarned },
+            waterSortLevel: newMaxLevel
           }
         });
 
