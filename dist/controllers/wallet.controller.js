@@ -83,7 +83,7 @@ exports.getWalletStats = getWalletStats;
 const requestWithdrawal = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        let { amount, upiId, earningType, withdrawalOptionId } = req.body;
+        let { amount, upiId, earningType, withdrawalOptionId, name, phone } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -95,6 +95,18 @@ const requestWithdrawal = async (req, res) => {
             });
             if (!withdrawalOption || !withdrawalOption.enabled) {
                 res.status(400).json({ error: 'Selected withdrawal package is invalid or disabled' });
+                return;
+            }
+            // Check if user has already used this card/package
+            const existingClaim = await db_1.prisma.transaction.findFirst({
+                where: {
+                    userId,
+                    withdrawalOptionId,
+                    status: { in: ['pending', 'success'] }
+                }
+            });
+            if (existingClaim) {
+                res.status(400).json({ error: 'You have already used this withdrawal card. Please enter coins manually.' });
                 return;
             }
             amount = withdrawalOption.coins;
@@ -261,7 +273,7 @@ const requestWithdrawal = async (req, res) => {
                         amount: -amount,
                         type: 'withdrawal',
                         status: 'pending',
-                        description: `Withdrawal request to UPI: ${targetUpi} (Referral Earning)`,
+                        description: `Withdrawal request to UPI: ${targetUpi} (Name: ${name || "N/A"}, Phone: ${phone || "N/A"}) [${withdrawalOptionId ? 'Via Card/Offer' : 'Manual Entry'}] (Referral Earning)`,
                         withdrawalOptionId: withdrawalOptionId || null
                     }
                 });
@@ -280,7 +292,7 @@ const requestWithdrawal = async (req, res) => {
                         amount: -amount,
                         type: 'withdrawal',
                         status: 'pending',
-                        description: `Withdrawal request to UPI: ${targetUpi} (Self Earning)`,
+                        description: `Withdrawal request to UPI: ${targetUpi} (Name: ${name || "N/A"}, Phone: ${phone || "N/A"}) [${withdrawalOptionId ? 'Via Card/Offer' : 'Manual Entry'}] (Self Earning)`,
                         withdrawalOptionId: withdrawalOptionId || null
                     }
                 });
