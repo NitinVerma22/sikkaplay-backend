@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { handleCpxCallback, handleAdmobSsvCallback, handleTapjoyCallback } from '../controllers/callback.controller';
+import { handleCpxCallback, handleAdmobSsvCallback } from '../controllers/callback.controller';
+import { handleTapjoyCallback } from '../controllers/tapjoy.controller';
 
 const router = Router();
 
