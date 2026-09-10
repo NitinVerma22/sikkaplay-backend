@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { handleCpxCallback, handleAdmobSsvCallback } from '../controllers/callback.controller';
 import { handleTapjoyCallback } from '../controllers/tapjoy.controller';
+import { handleTimewallCallback } from '../controllers/timewall.controller';
 
 const router = Router();
 
@@ -14,5 +15,9 @@ router.get('/admob-ssv', handleAdmobSsvCallback);
 
 // Public webhook route called by Tapjoy Offerwall self-managed currency
 router.get('/tapjoy', handleTapjoyCallback);
+
+// Public webhook route called by TimeWall Offerwall
+router.get('/timewall', handleTimewallCallback);
+router.post('/timewall', handleTimewallCallback);
 
 export default router;
