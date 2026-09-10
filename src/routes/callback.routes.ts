@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { handleCpxCallback, handleAdmobSsvCallback } from '../controllers/callback.controller';
 import { handleTapjoyCallback } from '../controllers/tapjoy.controller';
 import { handleTimewallCallback } from '../controllers/timewall.controller';
+import { handleCpaleadCallback } from '../controllers/cpalead.controller';
 
 const router = Router();
 
@@ -19,5 +20,8 @@ router.get('/tapjoy', handleTapjoyCallback);
 // Public webhook route called by TimeWall Offerwall
 router.get('/timewall', handleTimewallCallback);
 router.post('/timewall', handleTimewallCallback);
+
+// Public webhook route called by CPAlead Offerwall
+router.get('/cpalead', handleCpaleadCallback);
 
 export default router;
