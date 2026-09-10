@@ -236,6 +236,9 @@ model AppConfig {
   referralWithdrawalNotice   String   @default("")
   showWithdrawalPackages     Boolean  @default(true)
 
+  // Tapjoy Offerwall Config
+  isTapjoyOfferwallEnabled Boolean @default(false)
+
   updatedAt           DateTime @updatedAt
 }
 
