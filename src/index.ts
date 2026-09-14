@@ -54,8 +54,19 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ 
+  limit: '5mb',
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+app.use(express.urlencoded({ 
+  limit: '50mb', 
+  extended: true,
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // API Request/Response Logger
