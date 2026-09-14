@@ -190,7 +190,7 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
           amount: rewardAmount,
           type: 'earning',
           status: 'success',
-          description: `Completed AdScaleX offer${campaignId ? ` (${campaignId})` : ''} (Event: ${eventId})`,
+          description: 'Completed AdScaleX offer',
           externalTransactionId: externalTxId,
           createdAt: occurredAt,
         },
