@@ -4,6 +4,7 @@ import { handleTapjoyCallback } from '../controllers/tapjoy.controller';
 import { handleTimewallCallback } from '../controllers/timewall.controller';
 import { handleCpaleadCallback } from '../controllers/cpalead.controller';
 import { handleAdgemCallback } from '../controllers/adgem.controller';
+import { handleAdscalexCallback } from '../controllers/adscalex.controller';
 
 const router = Router();
 
@@ -27,5 +28,9 @@ router.get('/cpalead', handleCpaleadCallback);
 
 // Public webhook route called by AdGem GET server postback (v2)
 router.get('/adgem', handleAdgemCallback);
+
+// Public webhook route called by AdScaleX postback
+router.post('/adscalex', handleAdscalexCallback);
+router.get('/adscalex', handleAdscalexCallback);
 
 export default router;
