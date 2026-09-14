@@ -29,8 +29,8 @@ router.get('/cpalead', handleCpaleadCallback);
 // Public webhook route called by AdGem GET server postback (v2)
 router.get('/adgem', handleAdgemCallback);
 
-// Public webhook route called by AdScaleX postback
+// Public webhook route called by AdScaleX signed S2S callback.
+// The handler verifies the raw JSON body, timestamp and HMAC signature.
 router.post('/adscalex', handleAdscalexCallback);
-router.get('/adscalex', handleAdscalexCallback);
 
 export default router;
