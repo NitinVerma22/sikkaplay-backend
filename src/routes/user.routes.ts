@@ -19,6 +19,7 @@ import { earnLimiter, withdrawLimiter } from '../middleware/rateLimiter.middlewa
 import { claimDailyCode, getTodayDailyCodeInfo } from '../controllers/dailyCode.controller';
 import { getVisitLinks, claimVisitLinkReward } from '../controllers/visitLink.controller';
 import { claimSocialTaskUser } from '../controllers/socialTask.controller';
+import { incrementGullak, claimGullakReward } from '../controllers/gullak.controller';
 
 const router = Router();
 
@@ -97,4 +98,10 @@ router.post('/ad-impression', recordAdImpression);
 // DELETE /api/user/me
 router.delete('/me', deleteAccount);
 
+
+// Gullak
+router.post('/gullak/increment', incrementGullak);
+router.post('/gullak/claim', claimGullakReward);
+
 export default router;
+
