@@ -13,6 +13,7 @@ const rateLimiter_middleware_1 = require("../middleware/rateLimiter.middleware")
 const dailyCode_controller_1 = require("../controllers/dailyCode.controller");
 const visitLink_controller_1 = require("../controllers/visitLink.controller");
 const socialTask_controller_1 = require("../controllers/socialTask.controller");
+const gullak_controller_1 = require("../controllers/gullak.controller");
 const router = (0, express_1.Router)();
 // Protect all user routes with JWT validation
 router.use(auth_middleware_1.requireJwt);
@@ -68,4 +69,7 @@ router.post('/visit-links/claim', vpn_middleware_1.vpnGuard, rateLimiter_middlew
 router.post('/ad-impression', user_controller_1.recordAdImpression);
 // DELETE /api/user/me
 router.delete('/me', user_controller_1.deleteAccount);
+// Gullak
+router.post('/gullak/increment', gullak_controller_1.incrementGullak);
+router.post('/gullak/claim', gullak_controller_1.claimGullakReward);
 exports.default = router;

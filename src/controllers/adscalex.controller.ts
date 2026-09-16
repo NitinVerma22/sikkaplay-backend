@@ -4,6 +4,7 @@ import { prisma } from '../config/db';
 
 const ADSCALEX_SIGNING_SECRET = process.env.ADSCALEX_SIGNING_SECRET || '';
 const ADSCALEX_POINTS_PER_USD = Number(process.env.ADSCALEX_POINTS_PER_USD || '85000');
+const ADSCALEX_PUBLISHER_APP_ID = process.env.ADSCALEX_PUBLISHER_APP_ID || '';
 
 const safeTimingEqual = (left: string, right: string): boolean => {
   const leftBuffer = Buffer.from(left, 'utf8');
@@ -49,6 +50,7 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
     const signature = getHeader(req, 'x-adscalex-signature') || getHeader(req, 'x-signature');
 
     if (!timestamp || !signature) {
+      console.error('AdScaleX callback: missing signature headers');
       res.status(400).send('Missing signature headers');
       return;
     }
@@ -56,16 +58,6 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
     const timestampNumber = Number(timestamp);
     if (!Number.isFinite(timestampNumber)) {
       res.status(400).send('Invalid timestamp');
-      return;
-    }
-
-    // Reject stale/future callbacks while allowing a small amount of clock skew.
-    const timestampMs = timestamp.length >= 13 ? timestampNumber : timestampNumber * 1000;
-    const ageMs = Math.abs(Date.now() - timestampMs);
-    const maxAgeMs = 5 * 60 * 1000;
-    if (!Number.isFinite(timestampMs) || ageMs > maxAgeMs) {
-      console.error(`AdScaleX callback: stale timestamp ${timestamp}`);
-      res.status(403).send('Stale timestamp');
       return;
     }
 
@@ -104,6 +96,12 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
 
     if (!eventId || !publisherAppId || !publisherUserId || !amountRaw || !currency || !occurredAtRaw) {
       res.status(400).send('Missing required parameters');
+      return;
+    }
+
+    if (ADSCALEX_PUBLISHER_APP_ID && publisherAppId !== ADSCALEX_PUBLISHER_APP_ID) {
+      console.error(`AdScaleX callback: unexpected publisher_app_id ${publisherAppId}`);
+      res.status(403).send('Invalid publisher app');
       return;
     }
 
@@ -152,8 +150,9 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
       return;
     }
 
-    // Test deliveries from the dashboard are not credited. They use a zero
-    // amount in the documented example; zero-value live credits are harmless too.
+    // Dashboard test deliveries must not be credited. Keep this callback
+    // handler neutral here because the provider's test marker is provider-specific.
+    // A zero-value event is always safe to acknowledge without credit.
     if (amountUsd === 0) {
       console.log(`AdScaleX callback: zero-value event ${eventId} acknowledged without credit`);
       res.status(200).send('OK');

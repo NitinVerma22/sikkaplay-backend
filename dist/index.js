@@ -55,8 +55,19 @@ app.use((0, cors_1.default)({
     },
     credentials: true
 }));
-app.use(express_1.default.json({ limit: '5mb' }));
-app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
+app.use(express_1.default.json({
+    limit: '5mb',
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
+app.use(express_1.default.urlencoded({
+    limit: '50mb',
+    extended: true,
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../public/uploads')));
 // API Request/Response Logger
 app.use((req, res, next) => {
