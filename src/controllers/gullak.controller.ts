@@ -40,7 +40,7 @@ export const claimGullakReward = async (req: AuthRequest, res: Response) => {
     }
 
     // Reset gullaks to 0 and give 600 coins
-    const rewardAmount = 600;
+    const rewardAmount = 150;
     const updatedUser = await prisma.$transaction(async (tx: any) => {
       const u = await tx.user.update({
         where: { id: userId },
