@@ -41,8 +41,10 @@ import {
   getWithdrawalOptionsAdmin,
   createWithdrawalOptionAdmin,
   updateWithdrawalOptionAdmin,
-  deleteWithdrawalOptionAdmin
-} from '../controllers/admin.controller';
+  deleteWithdrawalOptionAdmin,
+  getCoinDistribution,
+  getUpcomingWithdrawals
+} from \'../controllers/admin.controller\';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
 import { createVisitLink, getVisitLinks, updateVisitLink, deleteVisitLink } from '../controllers/visitLink.controller';
@@ -70,6 +72,8 @@ router.use(requireAdminJwt);
 
 // Stats & Dashboard Overview
 router.get('/stats', getDashboardStats);
+router.get(\'/coin-distribution\', getCoinDistribution);
+router.get(\'/upcoming-withdrawals\', getUpcomingWithdrawals);
 router.get('/manager-stats', getManagerStats);
 router.get('/ad-stats', getAdAnalysisStats);
 router.post('/referrals/distribute', triggerReferralDistribution);
