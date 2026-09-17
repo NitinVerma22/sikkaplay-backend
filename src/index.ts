@@ -26,6 +26,7 @@ import Redis from 'ioredis';
 import { MatchmakingService } from './services/matchmaking.service';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 startCronJobs();
