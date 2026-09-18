@@ -37,6 +37,9 @@ app.use(compression());
 
 const allowedOrigins = [
   'http://localhost:5173', // Admin local dev
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
   'http://localhost:3000', // API local dev
   'https://sikkaplay-admin.web.app', // Admin production web app
   'https://sikkaplay.web.app' // Frontend production web app
