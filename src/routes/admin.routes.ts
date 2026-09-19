@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   loginAdmin,
   getDashboardStats,
+  getAdscalexStats,
   getConfigs,
   updateConfigs,
   getUsers,
@@ -72,6 +73,7 @@ router.use(requireAdminJwt);
 
 // Stats & Dashboard Overview
 router.get('/stats', getDashboardStats);
+router.get('/adscalex-stats', getAdscalexStats);
 router.get('/coin-distribution', getCoinDistribution);
 router.get('/upcoming-withdrawals', getUpcomingWithdrawals);
 router.get('/manager-stats', getManagerStats);

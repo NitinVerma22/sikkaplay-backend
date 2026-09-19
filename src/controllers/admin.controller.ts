@@ -2145,6 +2145,72 @@ export const deleteWithdrawalOptionAdmin = async (req: Request, res: Response): 
 
 
 
+export const getAdscalexStats = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const txs = await prisma.transaction.findMany({
+      where: {
+        description: { contains: 'AdScaleX', mode: 'insensitive' },
+        status: 'success'
+      },
+      include: {
+        user: { select: { name: true, username: true, phoneNumber: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let totalCoins = 0;
+    const uniqueUsers = new Set<string>();
+
+    const dailyStatsMap: Record<string, { date: string; coins: number; offers: number; uniqueUsers: Set<string> }> = {};
+
+    const recentLogs = txs.map(tx => {
+      totalCoins += tx.amount;
+      uniqueUsers.add(tx.userId);
+
+      // IST conversion for grouping
+      const uDate = new Date(tx.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
+      const dateStr = uDate.toISOString().split('T')[0];
+
+      if (!dailyStatsMap[dateStr]) {
+        dailyStatsMap[dateStr] = { date: dateStr, coins: 0, offers: 0, uniqueUsers: new Set() };
+      }
+      dailyStatsMap[dateStr].coins += tx.amount;
+      dailyStatsMap[dateStr].offers += 1;
+      dailyStatsMap[dateStr].uniqueUsers.add(tx.userId);
+
+      return {
+        id: tx.id,
+        userId: tx.userId,
+        user: tx.user,
+        amount: tx.amount,
+        createdAt: tx.createdAt
+      };
+    });
+
+    const dailyStats = Object.values(dailyStatsMap).map(d => ({
+      date: d.date,
+      coins: d.coins,
+      offers: d.offers,
+      uniqueUsers: d.uniqueUsers.size
+    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    res.json({
+      success: true,
+      summary: {
+        totalCoins,
+        totalOffers: txs.length,
+        uniqueUsers: uniqueUsers.size
+      },
+      dailyStats,
+      recentLogs
+    });
+
+  } catch (error) {
+    console.error('Error fetching adscalex stats:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
 export const getCoinDistribution = async (req: Request, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
