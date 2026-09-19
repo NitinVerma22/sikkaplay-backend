@@ -187,7 +187,8 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       select: {
         amount: true,
         description: true,
-        type: true
+        type: true,
+        userId: true
       }
     });
 
@@ -197,13 +198,18 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     let totalDailyStreakCheckin = 0;
     let totalDirectReferrals = 0;
     let totalReferralCommissions = 0;
+    let totalAdscalexCoins = 0;
+    const adscalexUsers = new Set<string>();
 
     for (const tx of allEarningTxs) {
       const type = (tx.type || '').toLowerCase();
       const desc = (tx.description || '').toLowerCase();
       const amt = Math.abs(tx.amount);
 
-      if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
+      if (desc.includes('adscalex')) {
+        totalAdscalexCoins += amt;
+        if (tx.userId) adscalexUsers.add(tx.userId);
+      } else if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
         if (desc.includes('commission summary') || desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
           totalReferralCommissions += amt;
         } else {
@@ -222,7 +228,7 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       }
     }
 
-    const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin;
+    const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin + totalAdscalexCoins;
     const referralEarningsTotal = totalDirectReferrals + totalReferralCommissions;
     const totalDisbursedCoins = selfEarningsTotal + referralEarningsTotal;
 
@@ -234,7 +240,9 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
           games: totalGamesEarnings,
           visitAndEarn: totalVisitAndEarn,
           dailyCodes: totalDailyCodes,
-          dailyStreakCheckin: totalDailyStreakCheckin
+          dailyStreakCheckin: totalDailyStreakCheckin,
+          adscalexCoins: totalAdscalexCoins,
+          adscalexUsers: adscalexUsers.size
         }
       },
       referralEarnings: {
