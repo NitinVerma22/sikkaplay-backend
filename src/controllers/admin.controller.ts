@@ -2109,21 +2109,35 @@ export const getCoinDistribution = async (req: Request, res: Response) => {
     
     let dateFilter: any = {};
     if (startDate && endDate) {
+      // Inputs are YYYY-MM-DD strings
+      const startParts = (startDate as string).split('-');
+      const endParts = (endDate as string).split('-');
+      
+      const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]));
+      start.setHours(0, 0, 0, 0);
+      const startUtc = new Date(start.getTime() - (5.5 * 60 * 60 * 1000));
+      
+      const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]));
+      end.setHours(23, 59, 59, 999);
+      const endUtc = new Date(end.getTime() - (5.5 * 60 * 60 * 1000));
+      
       dateFilter = {
         createdAt: {
-          gte: new Date(startDate as string),
-          lte: new Date(endDate as string)
+          gte: startUtc,
+          lte: endUtc
         }
       };
     }
 
     const transactions = await prisma.transaction.findMany({
       where: {
-        type: { in: ['earning', 'bonus'] },
+        type: { not: 'withdrawal' },
         status: 'success',
         ...dateFilter
       },
       select: {
+        id: true,
+        type: true,
         amount: true,
         description: true,
         createdAt: true,
