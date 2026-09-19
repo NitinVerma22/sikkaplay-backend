@@ -246,6 +246,39 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       }
     };
 
+    // Calculate Daily Installs for the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    
+    const recentUsers = await prisma.user.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true }
+    });
+    
+    const dailyInstallsMap: Record<string, number> = {};
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(thirtyDaysAgo);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      dailyInstallsMap[dateStr] = 0;
+    }
+    
+    recentUsers.forEach(u => {
+      // Convert UTC createdAt to IST roughly or just use local
+      const uDate = new Date(u.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
+      const dateStr = uDate.toISOString().split('T')[0];
+      if (dailyInstallsMap[dateStr] !== undefined) {
+        dailyInstallsMap[dateStr]++;
+      }
+    });
+    
+    const dailyInstalls = Object.keys(dailyInstallsMap).map(date => ({
+      date: date.substring(5), // MM-DD
+      installs: dailyInstallsMap[date],
+      fullDate: date
+    }));
+
     res.status(200).json({
       success: true,
       stats: {
@@ -259,7 +292,8 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
       },
       earningsAnalytics,
       recentTransactions,
-      monthlyStats
+      monthlyStats,
+      dailyInstalls
     });
   } catch (error) {
     console.error('Get Stats Error:', error);
