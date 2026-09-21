@@ -6,7 +6,10 @@ import { encrypt, decrypt } from '../utils/crypto.utils';
 
 const connectionString = process.env.DATABASE_URL;
 
-const pool = new Pool({ connectionString });
+const pool = new Pool({ 
+  connectionString,
+  ssl: { rejectUnauthorized: false }
+});
 const adapter = new PrismaPg(pool);
 
 // Helper to encrypt query inputs for User model
