@@ -580,6 +580,69 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
       }
     }
 
+    // Also include anyone the user has chatted with recently, even if not friends
+    const recentMessages = await prisma.playgroundMessage.findMany({
+      where: {
+        channelName: { contains: userId }
+      },
+      select: { channelName: true },
+      distinct: ['channelName']
+    });
+
+    const processedIds = new Set(friendships.map(f => f.userOneId === userId ? f.userTwoId : f.userOneId));
+    processedIds.add(userId);
+
+    for (const msg of recentMessages) {
+      if (!msg.channelName.startsWith('private-chat-')) continue;
+      // UUID is 36 chars. 'private-chat-' is 13 chars.
+      const id1 = msg.channelName.substring(13, 49);
+      const id2 = msg.channelName.substring(50, 86);
+      const partnerId = id1 === userId ? id2 : (id2 === userId ? id1 : null);
+      
+      if (partnerId && !processedIds.has(partnerId)) {
+        processedIds.add(partnerId);
+        const friendUser = await prisma.user.findUnique({ where: { id: partnerId } });
+        if (friendUser) {
+          const hiddenChat = await prisma.hiddenChat.findUnique({
+            where: { userId_channelName: { userId, channelName: msg.channelName } }
+          });
+          
+          const lastMessage = await prisma.playgroundMessage.findFirst({
+            where: {
+              channelName: msg.channelName,
+              ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+
+          if (lastMessage) {
+            const unreadCount = await prisma.playgroundMessage.count({
+              where: {
+                channelName: msg.channelName,
+                senderId: friendUser.id,
+                isSeen: false,
+                ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+              }
+            });
+
+            friends.push({
+              friendshipId: 'chat-only-' + partnerId,
+              id: friendUser.id,
+              name: friendUser.name || 'User',
+              gender: friendUser.gender,
+              username: friendUser.username,
+              avatarUrl: friendUser.avatarUrl,
+              createdAt: lastMessage.createdAt,
+              isOnline: onlineUsersCache.has(friendUser.id),
+              lastMessageText: lastMessage.text,
+              lastMessageTime: lastMessage.createdAt,
+              unreadCount
+            });
+          }
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       friends,
