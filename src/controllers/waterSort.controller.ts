@@ -59,14 +59,15 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    // 1. Fetch Multiplier N from AppConfig
+    // 1. Fetch Multiplier N from AppConfig (No longer used for coins)
     let multiplier = 2;
     const config = await prisma.appConfig.findFirst();
     if (config && (config as any).waterSortMultiplier) {
       multiplier = (config as any).waterSortMultiplier;
     }
 
-    const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
+    // Coins are now exclusively awarded via AdMob SSV Checkpoints (milestones)
+    const coinsEarned = 0;
 
     if (userId) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { waterSortLevel: true } });
