@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -1873,3 +1873,67 @@ const deleteWithdrawalOptionAdmin = async (req, res) => {
     }
 };
 exports.deleteWithdrawalOptionAdmin = deleteWithdrawalOptionAdmin;
+const getCoinDistribution = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let dateFilter = {};
+        if (startDate && endDate) {
+            dateFilter = {
+                createdAt: {
+                    gte: new Date(startDate),
+                    lte: new Date(endDate)
+                }
+            };
+        }
+        const transactions = await db_1.prisma.transaction.findMany({
+            where: {
+                type: { in: ['earning', 'bonus'] },
+                status: 'success',
+                ...dateFilter
+            },
+            select: {
+                amount: true,
+                description: true,
+                createdAt: true,
+                userId: true,
+                user: { select: { username: true, phoneNumber: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json({ success: true, data: transactions });
+    }
+    catch (error) {
+        console.error('Error fetching coin distribution:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getCoinDistribution = getCoinDistribution;
+const getUpcomingWithdrawals = async (req, res) => {
+    try {
+        const users5k = await db_1.prisma.user.findMany({
+            where: { balance: { gte: 3500, lt: 12000 }, isBlocked: false },
+            select: { id: true, username: true, phoneNumber: true, balance: true, totalEarned: true }
+        });
+        const users15k = await db_1.prisma.user.findMany({
+            where: { balance: { gte: 12000, lt: 48000 }, isBlocked: false },
+            select: { id: true, username: true, phoneNumber: true, balance: true, totalEarned: true }
+        });
+        const users100k = await db_1.prisma.user.findMany({
+            where: { balance: { gte: 48000 }, isBlocked: false },
+            select: { id: true, username: true, phoneNumber: true, balance: true, totalEarned: true }
+        });
+        res.json({
+            success: true,
+            data: {
+                category5k: users5k,
+                category15k: users15k,
+                category100k: users100k
+            }
+        });
+    }
+    catch (error) {
+        console.error('Error fetching upcoming withdrawals:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getUpcomingWithdrawals = getUpcomingWithdrawals;

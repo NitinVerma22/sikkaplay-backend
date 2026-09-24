@@ -55,7 +55,8 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
       multiplier = (config as any).bubbleShooterMultiplier;
     }
 
-    const coinsEarned = levelNumber <= 25 ? levelNumber * multiplier : levelNumber + 25;
+    // Coins are now exclusively awarded via AdMob SSV Checkpoints (milestones)
+    const coinsEarned = 0;
 
     if (userId) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { bubbleShooterLevel: true } });
