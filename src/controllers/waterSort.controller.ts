@@ -85,24 +85,11 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
           }
         });
 
-        // Credit user balance
+        // Update user's max unlocked level
         await tx.user.update({
           where: { id: userId },
           data: {
-            balance: { increment: coinsEarned },
-            totalEarned: { increment: coinsEarned },
             waterSortLevel: newMaxLevel
-          }
-        });
-
-        // Create transaction record
-        await tx.transaction.create({
-          data: {
-            userId,
-            amount: coinsEarned,
-            type: 'earning',
-            status: 'success',
-            description: `Water Sort Level ${levelNumber} Reward`
           }
         });
       });
@@ -110,7 +97,7 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
 
     res.status(200).json({
       success: true,
-      coinsEarned,
+      coinsEarned: 0,
       newUnlockedLevel: levelNumber + 1
     });
   } catch (error) {
