@@ -2,87 +2,67 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimGullakReward = exports.incrementGullak = void 0;
 const db_1 = require("../config/db");
-
-const MAX_WIN600_GULLAKS = 9;
-const FINAL_REWARD_COINS = 150;
-
-const getUserById = async (tx, userId) => tx.user.findUnique({ where: { id: userId } });
-
-/** Adds exactly one Win600 progress step after a successful normal game Gullak claim. */
 const incrementGullak = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-        const unlockedGullaks = await db_1.prisma.$transaction(async (tx) => {
-            const user = await getUserById(tx, userId);
-            if (!user) throw new Error('USER_NOT_FOUND');
-            const current = Math.max(0, Math.min(MAX_WIN600_GULLAKS, Number(user.win600UnlockedGullaks || 0)));
-            const next = Math.min(MAX_WIN600_GULLAKS, current + 1);
-            if (next !== current) {
-                await tx.user.update({ where: { id: userId }, data: { win600UnlockedGullaks: next } });
-            }
-            return next;
+        if (!userId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        if (!user)
+            return res.status(404).json({ error: 'User not found' });
+        // Assuming we stop at 9 and wait for claim to reset
+        if (user.win600UnlockedGullaks >= 9) {
+            return res.json({ success: true, count: user.win600UnlockedGullaks });
+        }
+        const updatedUser = await db_1.prisma.user.update({
+            where: { id: userId },
+            data: { win600UnlockedGullaks: { increment: 1 } },
         });
-
-        return res.status(200).json({ success: true, unlockedGullaks, maxGullaks: MAX_WIN600_GULLAKS });
+        return res.json({ success: true, count: updatedUser.win600UnlockedGullaks });
     }
     catch (error) {
-        console.error('Error incrementing Win600 Gullak:', error);
-        if (error?.message === 'USER_NOT_FOUND') return res.status(404).json({ error: 'User not found' });
+        console.error('Error incrementing gullak:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 };
 exports.incrementGullak = incrementGullak;
-
-/** Claims exactly one 150-coin Win600 gift and atomically resets progress to 0. */
 const claimGullakReward = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-        const result = await db_1.prisma.$transaction(async (tx) => {
-            const user = await getUserById(tx, userId);
-            if (!user) throw new Error('USER_NOT_FOUND');
-
-            const current = Math.max(0, Math.min(MAX_WIN600_GULLAKS, Number(user.win600UnlockedGullaks || 0)));
-            if (current < MAX_WIN600_GULLAKS) throw new Error('WIN600_NOT_READY');
-
-            const updatedUser = await tx.user.update({
+        if (!userId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const user = await db_1.prisma.user.findUnique({ where: { id: userId } });
+        if (!user)
+            return res.status(404).json({ error: 'User not found' });
+        if (user.win600UnlockedGullaks < 9) {
+            return res.status(400).json({ error: 'Not enough gullaks unlocked' });
+        }
+        // Reset gullaks to 0 and give 600 coins
+        const rewardAmount = 150;
+        const updatedUser = await db_1.prisma.$transaction(async (tx) => {
+            const u = await tx.user.update({
                 where: { id: userId },
                 data: {
-                    balance: { increment: FINAL_REWARD_COINS },
-                    totalEarned: { increment: FINAL_REWARD_COINS },
                     win600UnlockedGullaks: 0,
-                },
-                select: { balance: true, totalEarned: true, win600UnlockedGullaks: true },
+                    balance: { increment: rewardAmount },
+                    totalEarned: { increment: rewardAmount },
+                }
             });
-
             await tx.transaction.create({
                 data: {
                     userId,
-                    amount: FINAL_REWARD_COINS,
+                    amount: rewardAmount,
                     type: 'earning',
                     status: 'success',
-                    description: 'Win600 Gullak reward',
-                },
+                    description: 'Claimed Win 600 Coins Gullak Reward',
+                }
             });
-
-            return updatedUser;
+            return u;
         });
-
-        return res.status(200).json({
-            success: true,
-            coinsEarned: FINAL_REWARD_COINS,
-            balance: result.balance,
-            totalEarned: result.totalEarned,
-            unlockedGullaks: result.win600UnlockedGullaks,
-        });
+        return res.json({ success: true, balance: updatedUser.balance });
     }
     catch (error) {
-        console.error('Error claiming Win600 Gullak reward:', error);
-        if (error?.message === 'USER_NOT_FOUND') return res.status(404).json({ error: 'User not found' });
-        if (error?.message === 'WIN600_NOT_READY') return res.status(400).json({ error: 'Win600 reward is not ready yet' });
+        console.error('Error claiming gullak reward:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 };

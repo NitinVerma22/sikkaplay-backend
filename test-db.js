@@ -1,0 +1,1 @@
+﻿const { Client } = require("pg"); const c = new Client("postgresql://akinfra_sys:Akinfra2026Secure@66.116.248.133:5432/akinfra_core?sslmode=no-verify"); c.connect().then(()=>c.query("SELECT relrowsecurity FROM pg_class WHERE relname = 'User'")).then(r=>console.log("RLS:", r.rows[0])).catch(e=>console.error("Error:", e)).finally(()=>c.end());

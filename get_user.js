@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const users = await prisma.user.findMany({ where: { phoneNumber: { contains: '9305370277' } } }); console.log('User UUIDs:', users.map(u => u.id)); process.exit(0); } main();

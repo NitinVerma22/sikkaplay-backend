@@ -31,6 +31,7 @@ const redis_adapter_1 = require("@socket.io/redis-adapter");
 const ioredis_1 = __importDefault(require("ioredis"));
 const matchmaking_service_1 = require("./services/matchmaking.service");
 const app = (0, express_1.default)();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 (0, cron_service_1.startCronJobs)();
 // Middleware
