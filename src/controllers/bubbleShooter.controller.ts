@@ -73,22 +73,11 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
           }
         });
 
+        // Update max unlocked level
         await tx.user.update({
           where: { id: userId },
           data: {
-            balance: { increment: coinsEarned },
-            totalEarned: { increment: coinsEarned },
             bubbleShooterLevel: newMaxLevel
-          }
-        });
-
-        await tx.transaction.create({
-          data: {
-            userId,
-            amount: coinsEarned,
-            type: 'game',
-            status: 'success',
-            description: `Bubble Shooter Level ${levelNumber} Reward`
           }
         });
       });
@@ -96,7 +85,7 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
 
     res.status(200).json({
       success: true,
-      coinsEarned,
+      coinsEarned: 0,
       newUnlockedLevel: levelNumber + 1
     });
   } catch (error) {
