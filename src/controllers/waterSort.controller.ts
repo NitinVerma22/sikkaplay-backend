@@ -67,7 +67,13 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
     }
 
     // Coins are now exclusively awarded via AdMob SSV Checkpoints (milestones)
-    const coinsEarned = 0;
+    let coinsEarned = 0;
+    const { isMilestoneClaim } = req.body;
+    if (isMilestoneClaim) {
+      if (levelNumber === 5) coinsEarned = 40;
+      else if (levelNumber === 10) coinsEarned = 55;
+      else if (levelNumber === 15) coinsEarned = 105;
+    }
 
     if (userId) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { waterSortLevel: true } });
@@ -105,3 +111,4 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
     res.status(500).json({ success: false, error: 'Failed to record level completion' });
   }
 };
+
