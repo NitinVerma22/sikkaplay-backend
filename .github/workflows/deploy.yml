@@ -1,0 +1,23 @@
+﻿name: Deploy to WHM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          script: |
+            cd /var/www/sikkaplay-backend
+            git pull origin main
+            npm install
+            npm run build
+            pm2 restart sikkaplay-backend
