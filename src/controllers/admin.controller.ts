@@ -2293,3 +2293,140 @@ export const getUpcomingWithdrawals = async (req: Request, res: Response) => {
   }
 };
 
+
+export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    const now = new Date();
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const weekAgo = new Date();
+    weekAgo.setDate(now.getDate() - 7);
+
+    const monthAgo = new Date();
+    monthAgo.setDate(now.getDate() - 30);
+
+    // 1. User Retention & Growth
+    const totalRegisteredUsers = await prisma.user.count();
+    const newUsersToday = await prisma.user.count({ where: { createdAt: { gte: today } } });
+    const newUsersWeek = await prisma.user.count({ where: { createdAt: { gte: weekAgo } } });
+    const newUsersMonth = await prisma.user.count({ where: { createdAt: { gte: monthAgo } } });
+
+    // DAU (Users with transactions today)
+    const activeTodayTransactions = await prisma.transaction.findMany({
+      where: { createdAt: { gte: today } },
+      select: { userId: true },
+      distinct: ['userId']
+    });
+    const dau = activeTodayTransactions.length;
+
+    // MAU
+    const activeMonthTransactions = await prisma.transaction.findMany({
+      where: { createdAt: { gte: monthAgo } },
+      select: { userId: true },
+      distinct: ['userId']
+    });
+    const mau = activeMonthTransactions.length;
+
+    // Top Referrers
+    const topReferrers = await prisma.user.findMany({
+      orderBy: { referralBalance: 'desc' },
+      take: 5,
+      select: { username: true, referralBalance: true }
+    });
+
+    // 2. Economy & Finance
+    const userBalances = await prisma.user.aggregate({
+      _sum: { balance: true }
+    });
+    const totalCoinsInCirculation = userBalances._sum.balance || 0;
+
+    const coinsMintedToday = await prisma.transaction.aggregate({
+      where: { createdAt: { gte: today }, type: { notIn: ['withdrawal', 'gift_sent', 'gift_purchased'] }, amount: { gt: 0 } },
+      _sum: { amount: true }
+    });
+
+    const coinsBurnedToday = await prisma.transaction.aggregate({
+      where: { createdAt: { gte: today }, type: { in: ['gift_purchased'] }, amount: { lt: 0 } },
+      _sum: { amount: true }
+    });
+
+    const pendingWithdrawalsAmount = await prisma.transaction.aggregate({
+      where: { type: 'withdrawal', status: 'pending' },
+      _sum: { amount: true }
+    });
+    
+    const totalWithdrawalsAmount = await prisma.transaction.aggregate({
+      where: { type: 'withdrawal', status: 'success' },
+      _sum: { amount: true }
+    });
+
+    // 3. Gaming & Engagement
+    const dailyCodesClaimedToday = await prisma.dailyCodeClaim.count({
+      where: { createdAt: { gte: today } }
+    });
+
+    const socialTasksCompletedToday = await prisma.socialTaskClaim.count({
+      where: { claimedAt: { gte: today } }
+    });
+
+    const adImpressionsToday = await prisma.adImpression.count({
+      where: { createdAt: { gte: today }, coinsAwarded: { gt: 0 } }
+    });
+
+    // 4. Social / Playground
+    const totalFriendshipsCreated = await prisma.friendship.count({
+      where: { status: 'ACCEPTED' }
+    });
+
+    const pendingFriendRequests = await prisma.friendship.count({
+      where: { status: 'PENDING' }
+    });
+
+    const chatVolumeToday = await prisma.playgroundMessage.count({
+      where: { createdAt: { gte: today } }
+    });
+
+    const bannedUsersCount = await prisma.playgroundBan.count({
+      where: { expiresAt: { gt: now } }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        retention: {
+          totalRegisteredUsers,
+          newUsersToday,
+          newUsersWeek,
+          newUsersMonth,
+          dau,
+          mau,
+          topReferrers
+        },
+        economy: {
+          totalCoinsInCirculation,
+          coinsMintedToday: coinsMintedToday._sum.amount || 0,
+          coinsBurnedToday: Math.abs(coinsBurnedToday._sum.amount || 0),
+          pendingWithdrawalsAmount: Math.abs(pendingWithdrawalsAmount._sum.amount || 0),
+          totalWithdrawalsAmount: Math.abs(totalWithdrawalsAmount._sum.amount || 0)
+        },
+        engagement: {
+          dailyCodesClaimedToday,
+          socialTasksCompletedToday,
+          adImpressionsToday
+        },
+        social: {
+          totalFriendshipsCreated,
+          pendingFriendRequests,
+          chatVolumeToday,
+          bannedUsersCount
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching detailed analytics:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
