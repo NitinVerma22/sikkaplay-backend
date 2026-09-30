@@ -1,0 +1,1 @@
+const jwt = require('jsonwebtoken'); const token = jwt.sign({ userId: '051b67f0-ef3c-4207-acd0-6b17333178ab', phoneNumber: '+919999999999' }, 'super-secret-sikkaplay-key', { expiresIn: '30d' }); console.log(token);

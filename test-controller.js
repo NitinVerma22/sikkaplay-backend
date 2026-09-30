@@ -1,0 +1,1 @@
+const { getFriendsList } = require('./dist/controllers/playground.controller.js'); const req = { user: { userId: 'b301f1e1-6914-480e-8c32-e73746a598b8' } }; const res = { status: (code) => { console.log('Status:', code); return res; }, json: (data) => console.log('Response:', JSON.stringify(data, null, 2)) }; getFriendsList(req, res).catch(console.error);

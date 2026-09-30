@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const friendships = await prisma.friendship.groupBy({ by: ['status'], _count: { status: true } }); console.log(friendships); } main().catch(e => console.error(e)).finally(() => prisma.$disconnect());

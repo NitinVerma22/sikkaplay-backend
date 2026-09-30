@@ -167,17 +167,40 @@ const recordAdImpression = async (req, res) => {
             res.status(400).json({ error: 'adType and adNetwork are required' });
             return;
         }
-        const impression = await db_1.prisma.adImpression.create({
-            data: {
-                userId,
-                adType,
-                adNetwork,
-                coinsAwarded: coinsAwarded || 0,
-                externalTxId: externalTxId || null,
-                verifiedByServer: false
+        const coinsToAward = coinsAwarded ? parseInt(coinsAwarded.toString(), 10) : 0;
+        const result = await db_1.prisma.$transaction(async (tx) => {
+            const impression = await tx.adImpression.create({
+                data: {
+                    userId,
+                    adType,
+                    adNetwork,
+                    coinsAwarded: coinsToAward,
+                    externalTxId: externalTxId || null,
+                    verifiedByServer: false
+                }
+            });
+            if (coinsToAward > 0) {
+                await tx.user.update({
+                    where: { id: userId },
+                    data: {
+                        balance: { increment: coinsToAward },
+                        totalEarned: { increment: coinsToAward }
+                    }
+                });
+                await tx.transaction.create({
+                    data: {
+                        userId,
+                        amount: coinsToAward,
+                        type: 'earning',
+                        status: 'success',
+                        description: `Reward for watching ${adType} ad (${adNetwork})`,
+                        externalTransactionId: externalTxId || null
+                    }
+                });
             }
+            return impression;
         });
-        res.status(200).json({ success: true, impression });
+        res.status(200).json({ success: true, impression: result });
     }
     catch (error) {
         console.error('Error recording ad impression:', error);

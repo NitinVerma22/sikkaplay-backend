@@ -7,7 +7,10 @@ const adapter_pg_1 = require("@prisma/adapter-pg");
 const client_1 = require("@prisma/client");
 const crypto_utils_1 = require("../utils/crypto.utils");
 const connectionString = process.env.DATABASE_URL;
-const pool = new pg_1.Pool({ connectionString });
+const pool = new pg_1.Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false }
+});
 const adapter = new adapter_pg_1.PrismaPg(pool);
 // Helper to encrypt query inputs for User model
 const encryptUserInputs = (args) => {
