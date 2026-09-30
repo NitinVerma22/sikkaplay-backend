@@ -486,7 +486,7 @@ const getFriendsList = async (req, res) => {
         // Populate profiles of friends
         const friends = [];
         const pendingRequests = [];
-        for (const f of friendships) {
+        await Promise.all(friendships.map(async (f) => {
             const friendId = f.userOneId === userId ? f.userTwoId : f.userOneId;
             const friendUser = await db_1.prisma.user.findUnique({
                 where: { id: friendId }
@@ -535,15 +535,71 @@ const getFriendsList = async (req, res) => {
                     }
                 }
             }
-        }
-        res.status(200).json({
+        }));
+        // Also include anyone the user has chatted with recently, even if not friends
+        const recentMessages = await db_1.prisma.playgroundMessage.findMany({
+            where: {
+                channelName: { contains: userId }
+            },
+            select: { channelName: true },
+            distinct: ['channelName']
+        });
+        const processedIds = new Set(friendships.map(f => f.userOneId === userId ? f.userTwoId : f.userOneId));
+        processedIds.add(userId);
+        await Promise.all(recentMessages.map(async (msg) => {
+            if (!msg.channelName.startsWith('private-chat-'))
+                continue;
+            // UUID is 36 chars. 'private-chat-' is 13 chars.
+            const id1 = msg.channelName.substring(13, 49);
+            const id2 = msg.channelName.substring(50, 86);
+            const partnerId = id1 === userId ? id2 : (id2 === userId ? id1 : null);
+            if (partnerId && !processedIds.has(partnerId)) {
+                processedIds.add(partnerId);
+                const friendUser = await db_1.prisma.user.findUnique({ where: { id: partnerId } });
+                if (friendUser) {
+                    const hiddenChat = await db_1.prisma.hiddenChat.findUnique({
+                        where: { userId_channelName: { userId, channelName: msg.channelName } }
+                    });
+                    const lastMessage = await db_1.prisma.playgroundMessage.findFirst({
+                        where: {
+                            channelName: msg.channelName,
+                            ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    if (lastMessage) {
+                        const unreadCount = await db_1.prisma.playgroundMessage.count({
+                            where: {
+                                channelName: msg.channelName,
+                                senderId: friendUser.id,
+                                isSeen: false,
+                                ...(hiddenChat ? { createdAt: { gt: hiddenChat.hiddenAt } } : {})
+                            }
+                        });
+                        friends.push({
+                            friendshipId: 'chat-only-' + partnerId,
+                            id: friendUser.id,
+                            name: friendUser.name || 'User',
+                            gender: friendUser.gender,
+                            username: friendUser.username,
+                            avatarUrl: friendUser.avatarUrl,
+                            createdAt: lastMessage.createdAt,
+                            isOnline: auth_middleware_1.onlineUsersCache.has(friendUser.id),
+                            lastMessageText: lastMessage.text,
+                            lastMessageTime: lastMessage.createdAt,
+                            unreadCount
+                        });
+                    }
+                }
+            }
+        }, res.status(200).json({
             success: true,
             friends,
             pendingRequests,
             isSuspended: !!activeBan,
             suspendedReason: activeBan ? activeBan.reason : null,
             suspendedUntil: activeBan ? activeBan.expiresAt : null
-        });
+        })));
     }
     catch (error) {
         console.error('Error fetching friends:', error);

@@ -14,6 +14,7 @@ router.post('/login', admin_controller_1.loginAdmin);
 router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
 router.get('/stats', admin_controller_1.getDashboardStats);
+router.get('/adscalex-stats', admin_controller_1.getAdscalexStats);
 router.get('/coin-distribution', admin_controller_1.getCoinDistribution);
 router.get('/upcoming-withdrawals', admin_controller_1.getUpcomingWithdrawals);
 router.get('/manager-stats', admin_controller_1.getManagerStats);
