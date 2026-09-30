@@ -524,7 +524,7 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
     const friends = [];
     const pendingRequests = [];
 
-    for (const f of friendships) {
+    await Promise.all(friendships.map(async (f) => {
       const friendId = f.userOneId === userId ? f.userTwoId : f.userOneId;
       const friendUser = await prisma.user.findUnique({
         where: { id: friendId }
@@ -592,7 +592,7 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
     const processedIds = new Set(friendships.map(f => f.userOneId === userId ? f.userTwoId : f.userOneId));
     processedIds.add(userId);
 
-    for (const msg of recentMessages) {
+    await Promise.all(recentMessages.map(async (msg) => {
       if (!msg.channelName.startsWith('private-chat-')) continue;
       // UUID is 36 chars. 'private-chat-' is 13 chars.
       const id1 = msg.channelName.substring(13, 49);
