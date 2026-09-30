@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.getAdscalexStats = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -165,8 +165,7 @@ const getDashboardStats = async (req, res) => {
             select: {
                 amount: true,
                 description: true,
-                type: true,
-                userId: true
+                type: true
             }
         });
         let totalGamesEarnings = 0;
@@ -175,18 +174,11 @@ const getDashboardStats = async (req, res) => {
         let totalDailyStreakCheckin = 0;
         let totalDirectReferrals = 0;
         let totalReferralCommissions = 0;
-        let totalAdscalexCoins = 0;
-        const adscalexUsers = new Set();
         for (const tx of allEarningTxs) {
             const type = (tx.type || '').toLowerCase();
             const desc = (tx.description || '').toLowerCase();
             const amt = Math.abs(tx.amount);
-            if (desc.includes('adscalex')) {
-                totalAdscalexCoins += amt;
-                if (tx.userId)
-                    adscalexUsers.add(tx.userId);
-            }
-            else if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
+            if (type === 'network_income' || desc.includes('referral') || desc.includes('referred')) {
                 if (desc.includes('commission summary') || desc.includes('commission') || desc.includes('mlm') || desc.includes('level')) {
                     totalReferralCommissions += amt;
                 }
@@ -210,7 +202,7 @@ const getDashboardStats = async (req, res) => {
                 totalGamesEarnings += amt;
             }
         }
-        const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin + totalAdscalexCoins;
+        const selfEarningsTotal = totalGamesEarnings + totalVisitAndEarn + totalDailyCodes + totalDailyStreakCheckin;
         const referralEarningsTotal = totalDirectReferrals + totalReferralCommissions;
         const totalDisbursedCoins = selfEarningsTotal + referralEarningsTotal;
         const earningsAnalytics = {
@@ -221,9 +213,7 @@ const getDashboardStats = async (req, res) => {
                     games: totalGamesEarnings,
                     visitAndEarn: totalVisitAndEarn,
                     dailyCodes: totalDailyCodes,
-                    dailyStreakCheckin: totalDailyStreakCheckin,
-                    adscalexCoins: totalAdscalexCoins,
-                    adscalexUsers: adscalexUsers.size
+                    dailyStreakCheckin: totalDailyStreakCheckin
                 }
             },
             referralEarnings: {
@@ -234,34 +224,6 @@ const getDashboardStats = async (req, res) => {
                 }
             }
         };
-        // Calculate Daily Installs for the last 30 days
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-        thirtyDaysAgo.setHours(0, 0, 0, 0);
-        const recentUsers = await db_1.prisma.user.findMany({
-            where: { createdAt: { gte: thirtyDaysAgo } },
-            select: { createdAt: true }
-        });
-        const dailyInstallsMap = {};
-        for (let i = 0; i < 30; i++) {
-            const d = new Date(thirtyDaysAgo);
-            d.setDate(d.getDate() + i);
-            const dateStr = d.toISOString().split('T')[0];
-            dailyInstallsMap[dateStr] = 0;
-        }
-        recentUsers.forEach(u => {
-            // Convert UTC createdAt to IST roughly or just use local
-            const uDate = new Date(u.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-            const dateStr = uDate.toISOString().split('T')[0];
-            if (dailyInstallsMap[dateStr] !== undefined) {
-                dailyInstallsMap[dateStr]++;
-            }
-        });
-        const dailyInstalls = Object.keys(dailyInstallsMap).map(date => ({
-            date: date.substring(5), // MM-DD
-            installs: dailyInstallsMap[date],
-            fullDate: date
-        }));
         res.status(200).json({
             success: true,
             stats: {
@@ -275,8 +237,7 @@ const getDashboardStats = async (req, res) => {
             },
             earningsAnalytics,
             recentTransactions,
-            monthlyStats,
-            dailyInstalls
+            monthlyStats
         });
     }
     catch (error) {
@@ -1912,94 +1873,25 @@ const deleteWithdrawalOptionAdmin = async (req, res) => {
     }
 };
 exports.deleteWithdrawalOptionAdmin = deleteWithdrawalOptionAdmin;
-const getAdscalexStats = async (req, res) => {
-    try {
-        const txs = await db_1.prisma.transaction.findMany({
-            where: {
-                description: { contains: 'AdScaleX', mode: 'insensitive' },
-                status: 'success'
-            },
-            include: {
-                user: { select: { name: true, username: true, phoneNumber: true } }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        let totalCoins = 0;
-        const uniqueUsers = new Set();
-        const dailyStatsMap = {};
-        const recentLogs = txs.map(tx => {
-            totalCoins += tx.amount;
-            uniqueUsers.add(tx.userId);
-            // IST conversion for grouping
-            const uDate = new Date(tx.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-            const dateStr = uDate.toISOString().split('T')[0];
-            if (!dailyStatsMap[dateStr]) {
-                dailyStatsMap[dateStr] = { date: dateStr, coins: 0, offers: 0, uniqueUsers: new Set() };
-            }
-            dailyStatsMap[dateStr].coins += tx.amount;
-            dailyStatsMap[dateStr].offers += 1;
-            dailyStatsMap[dateStr].uniqueUsers.add(tx.userId);
-            return {
-                id: tx.id,
-                userId: tx.userId,
-                user: tx.user,
-                amount: tx.amount,
-                createdAt: tx.createdAt
-            };
-        });
-        const dailyStats = Object.values(dailyStatsMap).map(d => ({
-            date: d.date,
-            coins: d.coins,
-            offers: d.offers,
-            uniqueUsers: d.uniqueUsers.size
-        })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        res.json({
-            success: true,
-            summary: {
-                totalCoins,
-                totalOffers: txs.length,
-                uniqueUsers: uniqueUsers.size
-            },
-            dailyStats,
-            recentLogs
-        });
-    }
-    catch (error) {
-        console.error('Error fetching adscalex stats:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-};
-exports.getAdscalexStats = getAdscalexStats;
 const getCoinDistribution = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         let dateFilter = {};
         if (startDate && endDate) {
-            // Inputs are YYYY-MM-DD strings
-            const startParts = startDate.split('-');
-            const endParts = endDate.split('-');
-            const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]));
-            start.setHours(0, 0, 0, 0);
-            const startUtc = new Date(start.getTime() - (5.5 * 60 * 60 * 1000));
-            const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]));
-            end.setHours(23, 59, 59, 999);
-            const endUtc = new Date(end.getTime() - (5.5 * 60 * 60 * 1000));
             dateFilter = {
                 createdAt: {
-                    gte: startUtc,
-                    lte: endUtc
+                    gte: new Date(startDate),
+                    lte: new Date(endDate)
                 }
             };
         }
         const transactions = await db_1.prisma.transaction.findMany({
             where: {
-                type: { not: 'withdrawal' },
+                type: { in: ['earning', 'bonus'] },
                 status: 'success',
                 ...dateFilter
             },
             select: {
-                id: true,
-                type: true,
                 amount: true,
                 description: true,
                 createdAt: true,
