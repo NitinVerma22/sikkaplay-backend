@@ -2416,9 +2416,13 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
       coinsEarned: stats.coinsEarned
     })).sort((a, b) => b.playCount - a.playCount);
 
+    const config = await prisma.appConfig.findFirst();
+    const coinsPerRupee = config?.coinsPerRupee || 600;
+
     res.status(200).json({
       success: true,
       data: {
+        config: { coinsPerRupee },
         retention: {
           totalRegisteredUsers,
           newUsersToday,
