@@ -594,10 +594,13 @@ export const getFriendsList = async (req: AuthRequest, res: Response): Promise<v
 
     for (const msg of recentMessages) {
       if (!msg.channelName.startsWith('private-chat-')) continue;
-      // UUID is 36 chars. 'private-chat-' is 13 chars.
-      const id1 = msg.channelName.substring(13, 49);
-      const id2 = msg.channelName.substring(50, 86);
-      const partnerId = id1 === userId ? id2 : (id2 === userId ? id1 : null);
+      let partnerId = null;
+      const channelStr = msg.channelName.substring('private-chat-'.length);
+      if (channelStr.startsWith(userId + '-')) {
+        partnerId = channelStr.substring(userId.length + 1);
+      } else if (channelStr.endsWith('-' + userId)) {
+        partnerId = channelStr.substring(0, channelStr.length - userId.length - 1);
+      }
       
       if (partnerId && !processedIds.has(partnerId)) {
         processedIds.add(partnerId);
