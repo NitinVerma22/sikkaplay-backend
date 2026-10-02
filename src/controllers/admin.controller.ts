@@ -2393,6 +2393,29 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
       where: { expiresAt: { gt: now } }
     });
 
+    // 5. Game Analytics (Today)
+    const gameSessionsToday = await prisma.gameSession.findMany({
+      where: { startTime: { gte: today } },
+      select: { gameType: true, userId: true, coinsEarned: true }
+    });
+
+    const gameStatsMap: Record<string, { playCount: number, uniqueUsers: Set<string>, coinsEarned: number }> = {};
+    for (const session of gameSessionsToday) {
+      if (!gameStatsMap[session.gameType]) {
+        gameStatsMap[session.gameType] = { playCount: 0, uniqueUsers: new Set(), coinsEarned: 0 };
+      }
+      gameStatsMap[session.gameType].playCount++;
+      gameStatsMap[session.gameType].uniqueUsers.add(session.userId);
+      gameStatsMap[session.gameType].coinsEarned += session.coinsEarned;
+    }
+
+    const gameAnalytics = Object.entries(gameStatsMap).map(([gameType, stats]) => ({
+      gameType,
+      playCount: stats.playCount,
+      uniqueUsers: stats.uniqueUsers.size,
+      coinsEarned: stats.coinsEarned
+    })).sort((a, b) => b.playCount - a.playCount);
+
     res.status(200).json({
       success: true,
       data: {
@@ -2422,7 +2445,8 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
           pendingFriendRequests,
           chatVolumeToday,
           bannedUsersCount
-        }
+        },
+        gameAnalytics
       }
     });
   } catch (error) {
