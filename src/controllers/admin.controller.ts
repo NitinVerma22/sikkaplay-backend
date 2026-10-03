@@ -11,6 +11,21 @@ import { auth as firebaseAuth } from '../config/firebase';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
+// Helper to get Midnight IST in UTC for accurate daily filtering
+const getISTMidnightUTC = (date: Date = new Date()): Date => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
+  istTime.setUTCHours(0, 0, 0, 0);
+  return new Date(istTime.getTime() - istOffset);
+};
+
+// Helper to get IST date string (YYYY-MM-DD)
+const getISTDateString = (date: Date = new Date()): string => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
+  return istTime.toISOString().split('T')[0];
+};
+
 // 1. Admin Login
 export const loginAdmin = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -95,10 +110,10 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     });
 
     // --- REAL-TIME TIME-SERIES STATS FOR CHARTS ---
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // Go back 5 months + current month = 6 months
-    sixMonthsAgo.setDate(1);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgoLocal = new Date();
+    sixMonthsAgoLocal.setMonth(sixMonthsAgoLocal.getMonth() - 5); // Go back 5 months + current month = 6 months
+    sixMonthsAgoLocal.setDate(1);
+    const sixMonthsAgo = getISTMidnightUTC(sixMonthsAgoLocal);
 
     const financeTxs = await prisma.transaction.findMany({
       where: {
@@ -255,9 +270,9 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     };
 
     // Calculate Daily Installs for the last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysAgoLocal = new Date();
+    thirtyDaysAgoLocal.setDate(thirtyDaysAgoLocal.getDate() - 29);
+    const thirtyDaysAgo = getISTMidnightUTC(thirtyDaysAgoLocal);
     
     const recentUsers = await prisma.user.findMany({
       where: { createdAt: { gte: thirtyDaysAgo } },
@@ -268,14 +283,13 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     for (let i = 0; i < 30; i++) {
       const d = new Date(thirtyDaysAgo);
       d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = getISTDateString(d);
       dailyInstallsMap[dateStr] = 0;
     }
     
     recentUsers.forEach(u => {
-      // Convert UTC createdAt to IST roughly or just use local
-      const uDate = new Date(u.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-      const dateStr = uDate.toISOString().split('T')[0];
+      // Use helper for safe IST date string conversion
+      const dateStr = getISTDateString(u.createdAt);
       if (dailyInstallsMap[dateStr] !== undefined) {
         dailyInstallsMap[dateStr]++;
       }
@@ -1250,11 +1264,12 @@ export const getAdAnalysisStats = async (req: AdminAuthRequest, res: Response): 
     const uniqueUsersInterstitialCount = distinctUsersInterstitial.length;
 
     // 3. Time series stats (daily stats)
-    const defaultStart = new Date();
-    defaultStart.setDate(defaultStart.getDate() - 14);
-    defaultStart.setHours(0, 0, 0, 0);
+    // 3. Time series stats (daily stats)
+    const defaultStartLocal = new Date();
+    defaultStartLocal.setDate(defaultStartLocal.getDate() - 14);
+    const defaultStart = getISTMidnightUTC(defaultStartLocal);
 
-    const timeSeriesStart = startDate ? new Date(startDate as string) : defaultStart;
+    const timeSeriesStart = startDate ? getISTMidnightUTC(new Date(startDate as string)) : defaultStart;
     const timeSeriesEnd = endDate ? new Date(endDate as string) : new Date();
 
     const impressionsForChart = await prisma.adImpression.findMany({
@@ -1276,18 +1291,18 @@ export const getAdAnalysisStats = async (req: AdminAuthRequest, res: Response): 
     // Initialize dates in range
     const temp = new Date(timeSeriesStart);
     while (temp <= timeSeriesEnd) {
-      const dateStr = temp.toISOString().split('T')[0];
+      const dateStr = getISTDateString(temp);
       dailyDataMap[dateStr] = { date: dateStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
       temp.setDate(temp.getDate() + 1);
     }
     // Also make sure today is added if not there
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getISTDateString();
     if (!dailyDataMap[todayStr]) {
       dailyDataMap[todayStr] = { date: todayStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
     }
 
     for (const imp of impressionsForChart) {
-      const dateStr = imp.createdAt.toISOString().split('T')[0];
+      const dateStr = getISTDateString(imp.createdAt);
       if (dailyDataMap[dateStr]) {
         dailyDataMap[dateStr].total++;
         const type = imp.adType.toLowerCase();
@@ -2182,8 +2197,7 @@ export const getAdscalexStats = async (req: AdminAuthRequest, res: Response): Pr
       uniqueUsers.add(tx.userId);
 
       // IST conversion for grouping
-      const uDate = new Date(tx.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-      const dateStr = uDate.toISOString().split('T')[0];
+      const dateStr = getISTDateString(tx.createdAt);
 
       if (!dailyStatsMap[dateStr]) {
         dailyStatsMap[dateStr] = { date: dateStr, coins: 0, offers: 0, uniqueUsers: new Set() };
@@ -2235,13 +2249,14 @@ export const getCoinDistribution = async (req: Request, res: Response) => {
       const startParts = (startDate as string).split('-');
       const endParts = (endDate as string).split('-');
       
-      const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]));
-      start.setHours(0, 0, 0, 0);
-      const startUtc = new Date(start.getTime() - (5.5 * 60 * 60 * 1000));
+      // Parse as YYYY-MM-DD UTC just to get an absolute time to feed into getISTMidnightUTC
+      const startBase = new Date(Date.UTC(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]), 5, 30, 0)); 
+      // ^ 5:30 UTC is exactly noon in IST, feeding it to getISTMidnightUTC will round it down to Midnight IST exactly.
+      const startUtc = getISTMidnightUTC(startBase);
       
-      const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]));
-      end.setHours(23, 59, 59, 999);
-      const endUtc = new Date(end.getTime() - (5.5 * 60 * 60 * 1000));
+      const endBase = new Date(Date.UTC(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]), 5, 30, 0));
+      let endUtc = getISTMidnightUTC(endBase);
+      endUtc = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000); // Make it end of day (exclusive)
       
       dateFilter = {
         createdAt: {
@@ -2313,14 +2328,15 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     const now = new Date();
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getISTMidnightUTC();
 
-    const weekAgo = new Date();
-    weekAgo.setDate(now.getDate() - 7);
+    const weekAgoLocal = new Date();
+    weekAgoLocal.setDate(now.getDate() - 7);
+    const weekAgo = getISTMidnightUTC(weekAgoLocal);
 
-    const monthAgo = new Date();
-    monthAgo.setDate(now.getDate() - 30);
+    const monthAgoLocal = new Date();
+    monthAgoLocal.setDate(now.getDate() - 30);
+    const monthAgo = getISTMidnightUTC(monthAgoLocal);
 
     // 1. User Retention & Growth
     const totalRegisteredUsers = await prisma.user.count();
