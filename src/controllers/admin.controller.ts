@@ -628,12 +628,26 @@ export const getWithdrawals = async (req: AdminAuthRequest, res: Response): Prom
 
     const total = await prisma.transaction.count({ where });
 
+    const pendingAgg = await prisma.transaction.aggregate({
+      where: { type: 'withdrawal', status: 'pending' },
+      _sum: { amount: true }
+    });
+    
+    const successAgg = await prisma.transaction.aggregate({
+      where: { type: 'withdrawal', status: 'success' },
+      _sum: { amount: true }
+    });
+
     res.status(200).json({
       success: true,
       withdrawals,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      globalStats: {
+        totalPendingCoins: Math.abs(pendingAgg._sum.amount || 0),
+        totalSuccessCoins: Math.abs(successAgg._sum.amount || 0)
+      }
     });
   } catch (error) {
     console.error('Get Withdrawals Error:', error);
