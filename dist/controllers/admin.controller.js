@@ -13,6 +13,19 @@ const audit_service_1 = require("../services/audit.service");
 const config_service_1 = require("../services/config.service");
 const firebase_1 = require("../config/firebase");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+// Helper to get Midnight IST in UTC for accurate daily filtering
+const getISTMidnightUTC = (date = new Date()) => {
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(date.getTime() + istOffset);
+    istTime.setUTCHours(0, 0, 0, 0);
+    return new Date(istTime.getTime() - istOffset);
+};
+// Helper to get IST date string (YYYY-MM-DD)
+const getISTDateString = (date = new Date()) => {
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(date.getTime() + istOffset);
+    return istTime.toISOString().split('T')[0];
+};
 // 1. Admin Login
 const loginAdmin = async (req, res) => {
     try {
@@ -83,10 +96,10 @@ const getDashboardStats = async (req, res) => {
             }
         });
         // --- REAL-TIME TIME-SERIES STATS FOR CHARTS ---
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // Go back 5 months + current month = 6 months
-        sixMonthsAgo.setDate(1);
-        sixMonthsAgo.setHours(0, 0, 0, 0);
+        const sixMonthsAgoLocal = new Date();
+        sixMonthsAgoLocal.setMonth(sixMonthsAgoLocal.getMonth() - 5); // Go back 5 months + current month = 6 months
+        sixMonthsAgoLocal.setDate(1);
+        const sixMonthsAgo = getISTMidnightUTC(sixMonthsAgoLocal);
         const financeTxs = await db_1.prisma.transaction.findMany({
             where: {
                 createdAt: { gte: sixMonthsAgo },
@@ -235,9 +248,9 @@ const getDashboardStats = async (req, res) => {
             }
         };
         // Calculate Daily Installs for the last 30 days
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-        thirtyDaysAgo.setHours(0, 0, 0, 0);
+        const thirtyDaysAgoLocal = new Date();
+        thirtyDaysAgoLocal.setDate(thirtyDaysAgoLocal.getDate() - 29);
+        const thirtyDaysAgo = getISTMidnightUTC(thirtyDaysAgoLocal);
         const recentUsers = await db_1.prisma.user.findMany({
             where: { createdAt: { gte: thirtyDaysAgo } },
             select: { createdAt: true }
@@ -246,13 +259,12 @@ const getDashboardStats = async (req, res) => {
         for (let i = 0; i < 30; i++) {
             const d = new Date(thirtyDaysAgo);
             d.setDate(d.getDate() + i);
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = getISTDateString(d);
             dailyInstallsMap[dateStr] = 0;
         }
         recentUsers.forEach(u => {
-            // Convert UTC createdAt to IST roughly or just use local
-            const uDate = new Date(u.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-            const dateStr = uDate.toISOString().split('T')[0];
+            // Use helper for safe IST date string conversion
+            const dateStr = getISTDateString(u.createdAt);
             if (dailyInstallsMap[dateStr] !== undefined) {
                 dailyInstallsMap[dateStr]++;
             }
@@ -576,12 +588,24 @@ const getWithdrawals = async (req, res) => {
             }
         });
         const total = await db_1.prisma.transaction.count({ where });
+        const pendingAgg = await db_1.prisma.transaction.aggregate({
+            where: { type: 'withdrawal', status: 'pending' },
+            _sum: { amount: true }
+        });
+        const successAgg = await db_1.prisma.transaction.aggregate({
+            where: { type: 'withdrawal', status: 'success' },
+            _sum: { amount: true }
+        });
         res.status(200).json({
             success: true,
             withdrawals,
             total,
             page,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(total / limit),
+            globalStats: {
+                totalPendingCoins: Math.abs(pendingAgg._sum.amount || 0),
+                totalSuccessCoins: Math.abs(successAgg._sum.amount || 0)
+            }
         });
     }
     catch (error) {
@@ -1098,10 +1122,11 @@ const getAdAnalysisStats = async (req, res) => {
         });
         const uniqueUsersInterstitialCount = distinctUsersInterstitial.length;
         // 3. Time series stats (daily stats)
-        const defaultStart = new Date();
-        defaultStart.setDate(defaultStart.getDate() - 14);
-        defaultStart.setHours(0, 0, 0, 0);
-        const timeSeriesStart = startDate ? new Date(startDate) : defaultStart;
+        // 3. Time series stats (daily stats)
+        const defaultStartLocal = new Date();
+        defaultStartLocal.setDate(defaultStartLocal.getDate() - 14);
+        const defaultStart = getISTMidnightUTC(defaultStartLocal);
+        const timeSeriesStart = startDate ? getISTMidnightUTC(new Date(startDate)) : defaultStart;
         const timeSeriesEnd = endDate ? new Date(endDate) : new Date();
         const impressionsForChart = await db_1.prisma.adImpression.findMany({
             where: {
@@ -1120,17 +1145,17 @@ const getAdAnalysisStats = async (req, res) => {
         // Initialize dates in range
         const temp = new Date(timeSeriesStart);
         while (temp <= timeSeriesEnd) {
-            const dateStr = temp.toISOString().split('T')[0];
+            const dateStr = getISTDateString(temp);
             dailyDataMap[dateStr] = { date: dateStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
             temp.setDate(temp.getDate() + 1);
         }
         // Also make sure today is added if not there
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getISTDateString();
         if (!dailyDataMap[todayStr]) {
             dailyDataMap[todayStr] = { date: todayStr, rewarded: 0, banner: 0, interstitial: 0, total: 0 };
         }
         for (const imp of impressionsForChart) {
-            const dateStr = imp.createdAt.toISOString().split('T')[0];
+            const dateStr = getISTDateString(imp.createdAt);
             if (dailyDataMap[dateStr]) {
                 dailyDataMap[dateStr].total++;
                 const type = imp.adType.toLowerCase();
@@ -1931,8 +1956,7 @@ const getAdscalexStats = async (req, res) => {
             totalCoins += tx.amount;
             uniqueUsers.add(tx.userId);
             // IST conversion for grouping
-            const uDate = new Date(tx.createdAt.getTime() + (5.5 * 60 * 60 * 1000));
-            const dateStr = uDate.toISOString().split('T')[0];
+            const dateStr = getISTDateString(tx.createdAt);
             if (!dailyStatsMap[dateStr]) {
                 dailyStatsMap[dateStr] = { date: dateStr, coins: 0, offers: 0, uniqueUsers: new Set() };
             }
@@ -1978,12 +2002,13 @@ const getCoinDistribution = async (req, res) => {
             // Inputs are YYYY-MM-DD strings
             const startParts = startDate.split('-');
             const endParts = endDate.split('-');
-            const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]));
-            start.setHours(0, 0, 0, 0);
-            const startUtc = new Date(start.getTime() - (5.5 * 60 * 60 * 1000));
-            const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]));
-            end.setHours(23, 59, 59, 999);
-            const endUtc = new Date(end.getTime() - (5.5 * 60 * 60 * 1000));
+            // Parse as YYYY-MM-DD UTC just to get an absolute time to feed into getISTMidnightUTC
+            const startBase = new Date(Date.UTC(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]), 5, 30, 0));
+            // ^ 5:30 UTC is exactly noon in IST, feeding it to getISTMidnightUTC will round it down to Midnight IST exactly.
+            const startUtc = getISTMidnightUTC(startBase);
+            const endBase = new Date(Date.UTC(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]), 5, 30, 0));
+            let endUtc = getISTMidnightUTC(endBase);
+            endUtc = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000); // Make it end of day (exclusive)
             dateFilter = {
                 createdAt: {
                     gte: startUtc,
@@ -2049,12 +2074,13 @@ const getDetailedAnalytics = async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         const now = new Date();
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const weekAgo = new Date();
-        weekAgo.setDate(now.getDate() - 7);
-        const monthAgo = new Date();
-        monthAgo.setDate(now.getDate() - 30);
+        const today = getISTMidnightUTC();
+        const weekAgoLocal = new Date();
+        weekAgoLocal.setDate(now.getDate() - 7);
+        const weekAgo = getISTMidnightUTC(weekAgoLocal);
+        const monthAgoLocal = new Date();
+        monthAgoLocal.setDate(now.getDate() - 30);
+        const monthAgo = getISTMidnightUTC(monthAgoLocal);
         // 1. User Retention & Growth
         const totalRegisteredUsers = await db_1.prisma.user.count();
         const newUsersToday = await db_1.prisma.user.count({ where: { createdAt: { gte: today } } });
@@ -2124,9 +2150,32 @@ const getDetailedAnalytics = async (req, res) => {
         const bannedUsersCount = await db_1.prisma.playgroundBan.count({
             where: { expiresAt: { gt: now } }
         });
+        // 5. Game Analytics (Today)
+        const gameSessionsToday = await db_1.prisma.gameSession.findMany({
+            where: { startTime: { gte: today } },
+            select: { gameType: true, userId: true, coinsEarned: true }
+        });
+        const gameStatsMap = {};
+        for (const session of gameSessionsToday) {
+            if (!gameStatsMap[session.gameType]) {
+                gameStatsMap[session.gameType] = { playCount: 0, uniqueUsers: new Set(), coinsEarned: 0 };
+            }
+            gameStatsMap[session.gameType].playCount++;
+            gameStatsMap[session.gameType].uniqueUsers.add(session.userId);
+            gameStatsMap[session.gameType].coinsEarned += session.coinsEarned;
+        }
+        const gameAnalytics = Object.entries(gameStatsMap).map(([gameType, stats]) => ({
+            gameType,
+            playCount: stats.playCount,
+            uniqueUsers: stats.uniqueUsers.size,
+            coinsEarned: stats.coinsEarned
+        })).sort((a, b) => b.playCount - a.playCount);
+        const config = await db_1.prisma.appConfig.findFirst();
+        const coinsPerRupee = config?.coinsPerRupee || 600;
         res.status(200).json({
             success: true,
             data: {
+                config: { coinsPerRupee },
                 retention: {
                     totalRegisteredUsers,
                     newUsersToday,
@@ -2153,7 +2202,8 @@ const getDetailedAnalytics = async (req, res) => {
                     pendingFriendRequests,
                     chatVolumeToday,
                     bannedUsersCount
-                }
+                },
+                gameAnalytics
             }
         });
     }

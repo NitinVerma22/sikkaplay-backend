@@ -1,8 +1,48 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.recordSpinAd = exports.endGame = exports.spinWheel = exports.startGame = void 0;
+exports.calculateSpinAdCooldown = calculateSpinAdCooldown;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+function calculateSpinAdCooldown(adTimestamps) {
+    const sorted = [...adTimestamps].sort((a, b) => a.getTime() - b.getTime());
+    const COOLDOWN_MS = 8 * 60 * 1000; // 8 minutes
+    const now = Date.now();
+    let currentBatchCount = 0;
+    let currentCooldownUntil = null;
+    for (const adDate of sorted) {
+        const adTime = adDate.getTime();
+        if (currentCooldownUntil !== null) {
+            if (adTime >= currentCooldownUntil) {
+                currentBatchCount = 0;
+                currentCooldownUntil = null;
+            }
+        }
+        currentBatchCount++;
+        if (currentBatchCount >= 2) {
+            currentCooldownUntil = adTime + COOLDOWN_MS;
+        }
+    }
+    if (currentCooldownUntil !== null && now < currentCooldownUntil) {
+        const remainingSec = Math.ceil((currentCooldownUntil - now) / 1000);
+        return {
+            canWatchAd: false,
+            adsInCurrentBatch: 2,
+            cooldownRemainingSeconds: remainingSec,
+            nextAdAvailableAt: new Date(currentCooldownUntil)
+        };
+    }
+    if (currentCooldownUntil !== null && now >= currentCooldownUntil) {
+        currentBatchCount = 0;
+        currentCooldownUntil = null;
+    }
+    return {
+        canWatchAd: currentBatchCount < 2,
+        adsInCurrentBatch: currentBatchCount,
+        cooldownRemainingSeconds: 0,
+        nextAdAvailableAt: null
+    };
+}
 const startGame = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -35,14 +75,22 @@ const startGame = async (req, res) => {
             }
         });
         let spinsLeft = 3;
+        let cooldownRemainingSeconds = 0;
+        let adsInCurrentBatch = 0;
+        let canWatchAd = true;
         if (gameType === 'spin') {
             const today = new Date();
             const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
-            const adsToday = await db_1.prisma.adImpression.count({
+            const ads = await db_1.prisma.adImpression.findMany({
                 where: {
                     userId,
-                    adType: 'rewarded_spin',
-                    createdAt: { gte: startOfToday }
+                    adType: 'rewarded_spin'
+                },
+                select: {
+                    createdAt: true
+                },
+                orderBy: {
+                    createdAt: 'asc'
                 }
             });
             const spinsToday = await db_1.prisma.transaction.count({
@@ -53,12 +101,20 @@ const startGame = async (req, res) => {
                     createdAt: { gte: startOfToday }
                 }
             });
-            spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+            const totalAdsCountToday = ads.filter(a => a.createdAt >= startOfToday).length;
+            spinsLeft = Math.max(0, 3 + totalAdsCountToday * 3 - spinsToday);
+            const cooldownStatus = calculateSpinAdCooldown(ads.map(a => a.createdAt));
+            cooldownRemainingSeconds = cooldownStatus.cooldownRemainingSeconds;
+            adsInCurrentBatch = cooldownStatus.adsInCurrentBatch;
+            canWatchAd = cooldownStatus.canWatchAd;
         }
         res.status(200).json({
             success: true,
             sessionId: session.id,
             spinsLeft,
+            cooldownRemainingSeconds,
+            adsInCurrentBatch,
+            canWatchAd,
             message: 'Game session started successfully'
         });
     }
@@ -91,11 +147,16 @@ const spinWheel = async (req, res) => {
             // Calculate remaining spins
             const today = new Date();
             const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
-            const adsToday = await tx.adImpression.count({
+            const ads = await tx.adImpression.findMany({
                 where: {
                     userId,
-                    adType: 'rewarded_spin',
-                    createdAt: { gte: startOfToday }
+                    adType: 'rewarded_spin'
+                },
+                select: {
+                    createdAt: true
+                },
+                orderBy: {
+                    createdAt: 'asc'
                 }
             });
             const spinsToday = await tx.transaction.count({
@@ -106,10 +167,12 @@ const spinWheel = async (req, res) => {
                     createdAt: { gte: startOfToday }
                 }
             });
-            const spinsLeft = 3 + adsToday * 3 - spinsToday;
+            const totalAdsCountToday = ads.filter(a => a.createdAt >= startOfToday).length;
+            const spinsLeft = 3 + totalAdsCountToday * 3 - spinsToday;
             if (spinsLeft <= 0) {
                 throw new Error('No spins remaining today');
             }
+            const cooldownStatus = calculateSpinAdCooldown(ads.map(a => a.createdAt));
             // Lock the user row to prevent balance race conditions
             const users = await tx.$queryRawUnsafe('SELECT balance, "totalEarned" FROM "User" WHERE id = $1 FOR UPDATE', userId);
             if (!users || users.length === 0) {
@@ -159,13 +222,23 @@ const spinWheel = async (req, res) => {
                     }
                 });
             }
-            return { reward, balance: updatedUser.balance, spinsLeft: spinsLeft - 1 };
+            return {
+                reward,
+                balance: updatedUser.balance,
+                spinsLeft: spinsLeft - 1,
+                cooldownRemainingSeconds: cooldownStatus.cooldownRemainingSeconds,
+                adsInCurrentBatch: cooldownStatus.adsInCurrentBatch,
+                canWatchAd: cooldownStatus.canWatchAd
+            };
         });
         res.status(200).json({
             success: true,
             reward: result.reward,
             balance: result.balance,
             spinsLeft: result.spinsLeft,
+            cooldownRemainingSeconds: result.cooldownRemainingSeconds,
+            adsInCurrentBatch: result.adsInCurrentBatch,
+            canWatchAd: result.canWatchAd,
             message: 'Wheel spun successfully'
         });
     }
@@ -318,8 +391,28 @@ const recordSpinAd = async (req, res) => {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        const today = new Date();
-        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
+        const existingAds = await db_1.prisma.adImpression.findMany({
+            where: {
+                userId,
+                adType: 'rewarded_spin'
+            },
+            select: {
+                createdAt: true
+            },
+            orderBy: {
+                createdAt: 'asc'
+            }
+        });
+        const checkCooldown = calculateSpinAdCooldown(existingAds.map(a => a.createdAt));
+        if (!checkCooldown.canWatchAd) {
+            res.status(400).json({
+                error: `Cooldown active. Please wait ${Math.ceil(checkCooldown.cooldownRemainingSeconds / 60)} minutes.`,
+                cooldownRemainingSeconds: checkCooldown.cooldownRemainingSeconds,
+                adsInCurrentBatch: checkCooldown.adsInCurrentBatch,
+                canWatchAd: false
+            });
+            return;
+        }
         // Create an ad impression record
         await db_1.prisma.adImpression.create({
             data: {
@@ -330,14 +423,20 @@ const recordSpinAd = async (req, res) => {
                 externalTxId: `spin-ad-${userId}-${Date.now()}`
             }
         });
-        // Calculate updated spinsLeft
-        const adsToday = await db_1.prisma.adImpression.count({
+        const updatedAds = await db_1.prisma.adImpression.findMany({
             where: {
                 userId,
-                adType: 'rewarded_spin',
-                createdAt: { gte: startOfToday }
+                adType: 'rewarded_spin'
+            },
+            select: {
+                createdAt: true
+            },
+            orderBy: {
+                createdAt: 'asc'
             }
         });
+        const today = new Date();
+        const startOfToday = (0, date_utils_1.getStartOfTodayIST)(today);
         const spinsToday = await db_1.prisma.transaction.count({
             where: {
                 userId,
@@ -346,10 +445,15 @@ const recordSpinAd = async (req, res) => {
                 createdAt: { gte: startOfToday }
             }
         });
-        const spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+        const totalAdsCountToday = updatedAds.filter(a => a.createdAt >= startOfToday).length;
+        const spinsLeft = Math.max(0, 3 + totalAdsCountToday * 3 - spinsToday);
+        const cooldownStatus = calculateSpinAdCooldown(updatedAds.map(a => a.createdAt));
         res.status(200).json({
             success: true,
             spinsLeft,
+            cooldownRemainingSeconds: cooldownStatus.cooldownRemainingSeconds,
+            adsInCurrentBatch: cooldownStatus.adsInCurrentBatch,
+            canWatchAd: cooldownStatus.canWatchAd,
             message: 'Ad watch recorded successfully. 3 spins added.'
         });
     }

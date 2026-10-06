@@ -3,6 +3,61 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { getStartOfTodayIST } from '../utils/date.utils';
 
+export interface SpinAdCooldownStatus {
+  canWatchAd: boolean;
+  adsInCurrentBatch: number;
+  cooldownRemainingSeconds: number;
+  nextAdAvailableAt: Date | null;
+}
+
+export function calculateSpinAdCooldown(adTimestamps: Date[]): SpinAdCooldownStatus {
+  const sorted = [...adTimestamps].sort((a, b) => a.getTime() - b.getTime());
+  const COOLDOWN_MS = 8 * 60 * 1000; // 8 minutes
+  const now = Date.now();
+
+  let currentBatchCount = 0;
+  let currentCooldownUntil: number | null = null;
+
+  for (const adDate of sorted) {
+    const adTime = adDate.getTime();
+
+    if (currentCooldownUntil !== null) {
+      if (adTime >= currentCooldownUntil) {
+        currentBatchCount = 0;
+        currentCooldownUntil = null;
+      }
+    }
+
+    currentBatchCount++;
+
+    if (currentBatchCount >= 2) {
+      currentCooldownUntil = adTime + COOLDOWN_MS;
+    }
+  }
+
+  if (currentCooldownUntil !== null && now < currentCooldownUntil) {
+    const remainingSec = Math.ceil((currentCooldownUntil - now) / 1000);
+    return {
+      canWatchAd: false,
+      adsInCurrentBatch: 2,
+      cooldownRemainingSeconds: remainingSec,
+      nextAdAvailableAt: new Date(currentCooldownUntil)
+    };
+  }
+
+  if (currentCooldownUntil !== null && now >= currentCooldownUntil) {
+    currentBatchCount = 0;
+    currentCooldownUntil = null;
+  }
+
+  return {
+    canWatchAd: currentBatchCount < 2,
+    adsInCurrentBatch: currentBatchCount,
+    cooldownRemainingSeconds: 0,
+    nextAdAvailableAt: null
+  };
+}
+
 export const startGame = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId;
@@ -40,15 +95,24 @@ export const startGame = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     let spinsLeft = 3;
+    let cooldownRemainingSeconds = 0;
+    let adsInCurrentBatch = 0;
+    let canWatchAd = true;
+
     if (gameType === 'spin') {
       const today = new Date();
       const startOfToday = getStartOfTodayIST(today);
 
-      const adsToday = await prisma.adImpression.count({
+      const ads = await prisma.adImpression.findMany({
         where: {
           userId,
-          adType: 'rewarded_spin',
-          createdAt: { gte: startOfToday }
+          adType: 'rewarded_spin'
+        },
+        select: {
+          createdAt: true
+        },
+        orderBy: {
+          createdAt: 'asc'
         }
       });
 
@@ -61,13 +125,22 @@ export const startGame = async (req: AuthRequest, res: Response): Promise<void> 
         }
       });
 
-      spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+      const totalAdsCountToday = ads.filter(a => a.createdAt >= startOfToday).length;
+      spinsLeft = Math.max(0, 3 + totalAdsCountToday * 3 - spinsToday);
+
+      const cooldownStatus = calculateSpinAdCooldown(ads.map(a => a.createdAt));
+      cooldownRemainingSeconds = cooldownStatus.cooldownRemainingSeconds;
+      adsInCurrentBatch = cooldownStatus.adsInCurrentBatch;
+      canWatchAd = cooldownStatus.canWatchAd;
     }
 
     res.status(200).json({
       success: true,
       sessionId: session.id,
       spinsLeft,
+      cooldownRemainingSeconds,
+      adsInCurrentBatch,
+      canWatchAd,
       message: 'Game session started successfully'
     });
   } catch (error) {
@@ -105,11 +178,16 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
       const today = new Date();
       const startOfToday = getStartOfTodayIST(today);
 
-      const adsToday = await tx.adImpression.count({
+      const ads = await tx.adImpression.findMany({
         where: {
           userId,
-          adType: 'rewarded_spin',
-          createdAt: { gte: startOfToday }
+          adType: 'rewarded_spin'
+        },
+        select: {
+          createdAt: true
+        },
+        orderBy: {
+          createdAt: 'asc'
         }
       });
 
@@ -122,10 +200,13 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         }
       });
 
-      const spinsLeft = 3 + adsToday * 3 - spinsToday;
+      const totalAdsCountToday = ads.filter(a => a.createdAt >= startOfToday).length;
+      const spinsLeft = 3 + totalAdsCountToday * 3 - spinsToday;
       if (spinsLeft <= 0) {
         throw new Error('No spins remaining today');
       }
+
+      const cooldownStatus = calculateSpinAdCooldown(ads.map(a => a.createdAt));
 
       // Lock the user row to prevent balance race conditions
       const users = await tx.$queryRawUnsafe<any[]>(
@@ -182,7 +263,14 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
         });
       }
 
-      return { reward, balance: updatedUser.balance, spinsLeft: spinsLeft - 1 };
+      return {
+        reward,
+        balance: updatedUser.balance,
+        spinsLeft: spinsLeft - 1,
+        cooldownRemainingSeconds: cooldownStatus.cooldownRemainingSeconds,
+        adsInCurrentBatch: cooldownStatus.adsInCurrentBatch,
+        canWatchAd: cooldownStatus.canWatchAd
+      };
     });
 
     res.status(200).json({
@@ -190,6 +278,9 @@ export const spinWheel = async (req: AuthRequest, res: Response): Promise<void> 
       reward: result.reward,
       balance: result.balance,
       spinsLeft: result.spinsLeft,
+      cooldownRemainingSeconds: result.cooldownRemainingSeconds,
+      adsInCurrentBatch: result.adsInCurrentBatch,
+      canWatchAd: result.canWatchAd,
       message: 'Wheel spun successfully'
     });
   } catch (error: any) {
@@ -354,8 +445,29 @@ export const recordSpinAd = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const today = new Date();
-    const startOfToday = getStartOfTodayIST(today);
+    const existingAds = await prisma.adImpression.findMany({
+      where: {
+        userId,
+        adType: 'rewarded_spin'
+      },
+      select: {
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    const checkCooldown = calculateSpinAdCooldown(existingAds.map(a => a.createdAt));
+    if (!checkCooldown.canWatchAd) {
+      res.status(400).json({
+        error: `Cooldown active. Please wait ${Math.ceil(checkCooldown.cooldownRemainingSeconds / 60)} minutes.`,
+        cooldownRemainingSeconds: checkCooldown.cooldownRemainingSeconds,
+        adsInCurrentBatch: checkCooldown.adsInCurrentBatch,
+        canWatchAd: false
+      });
+      return;
+    }
 
     // Create an ad impression record
     await prisma.adImpression.create({
@@ -368,14 +480,21 @@ export const recordSpinAd = async (req: AuthRequest, res: Response): Promise<voi
       }
     });
 
-    // Calculate updated spinsLeft
-    const adsToday = await prisma.adImpression.count({
+    const updatedAds = await prisma.adImpression.findMany({
       where: {
         userId,
-        adType: 'rewarded_spin',
-        createdAt: { gte: startOfToday }
+        adType: 'rewarded_spin'
+      },
+      select: {
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'asc'
       }
     });
+
+    const today = new Date();
+    const startOfToday = getStartOfTodayIST(today);
 
     const spinsToday = await prisma.transaction.count({
       where: {
@@ -386,11 +505,17 @@ export const recordSpinAd = async (req: AuthRequest, res: Response): Promise<voi
       }
     });
 
-    const spinsLeft = Math.max(0, 3 + adsToday * 3 - spinsToday);
+    const totalAdsCountToday = updatedAds.filter(a => a.createdAt >= startOfToday).length;
+    const spinsLeft = Math.max(0, 3 + totalAdsCountToday * 3 - spinsToday);
+
+    const cooldownStatus = calculateSpinAdCooldown(updatedAds.map(a => a.createdAt));
 
     res.status(200).json({
       success: true,
       spinsLeft,
+      cooldownRemainingSeconds: cooldownStatus.cooldownRemainingSeconds,
+      adsInCurrentBatch: cooldownStatus.adsInCurrentBatch,
+      canWatchAd: cooldownStatus.canWatchAd,
       message: 'Ad watch recorded successfully. 3 spins added.'
     });
   } catch (error) {
