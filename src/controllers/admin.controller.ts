@@ -635,7 +635,7 @@ export const getWithdrawals = async (req: AdminAuthRequest, res: Response): Prom
       take: limit,
       include: {
         user: {
-          select: { name: true, phoneNumber: true, upiId: true }
+          select: { id: true, name: true, phoneNumber: true, upiId: true }
         }
       }
     });
