@@ -62,7 +62,7 @@ export const loginAdmin = async (req: Request, res: Response): Promise<void> => 
     });
   } catch (error) {
     console.error('Admin login error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -319,7 +319,7 @@ export const getDashboardStats = async (req: AdminAuthRequest, res: Response): P
     });
   } catch (error) {
     console.error('Get Stats Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -334,7 +334,7 @@ export const getConfigs = async (req: AdminAuthRequest, res: Response): Promise<
     res.status(200).json({ success: true, config });
   } catch (error) {
     console.error('Get Configs Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -363,7 +363,7 @@ export const updateConfigs = async (req: AdminAuthRequest, res: Response): Promi
     res.status(200).json({ success: true, message: 'Configuration updated successfully', config });
   } catch (error) {
     console.error('Update Configs Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -450,7 +450,7 @@ export const getUsers = async (req: AdminAuthRequest, res: Response): Promise<vo
     });
   } catch (error) {
     console.error('Get Users Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -515,7 +515,7 @@ export const updateUserBalance = async (req: AdminAuthRequest, res: Response): P
     res.status(200).json({ success: true, message: 'User balance updated', user: updatedUser });
   } catch (error) {
     console.error('Update Balance Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -665,7 +665,7 @@ export const getWithdrawals = async (req: AdminAuthRequest, res: Response): Prom
     });
   } catch (error) {
     console.error('Get Withdrawals Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -862,7 +862,7 @@ export const bulkUpdateWithdrawalStatus = async (req: AdminAuthRequest, res: Res
     });
   } catch (error: any) {
     console.error('Bulk Update Withdrawal Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -901,7 +901,7 @@ export const getSupportTickets = async (req: AdminAuthRequest, res: Response): P
     });
   } catch (error) {
     console.error('Get Support Tickets Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -957,7 +957,7 @@ export const replySupportTicket = async (req: AdminAuthRequest, res: Response): 
     res.status(200).json({ success: true, message: 'Reply sent and ticket resolved', ticket: updatedTicket });
   } catch (error) {
     console.error('Reply Ticket Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -990,7 +990,7 @@ export const toggleUserFreeze = async (req: AdminAuthRequest, res: Response): Pr
     res.status(200).json({ success: true, isBlocked: updatedUser.isBlocked });
   } catch (error) {
     console.error('Toggle User Freeze Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1097,7 +1097,7 @@ export const broadcastPushNotification = async (req: AdminAuthRequest, res: Resp
     res.status(200).json({ success: true, message: 'Notifications sent successfully' });
   } catch (error) {
     console.error('Broadcast Push Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1143,7 +1143,7 @@ export const changeUserPassword = async (req: AdminAuthRequest, res: Response): 
     res.status(200).json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change User Password Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1159,7 +1159,7 @@ export const triggerReferralDistribution = async (req: AdminAuthRequest, res: Re
     res.status(200).json({ success: true, message: 'Referral distribution processed successfully.' });
   } catch (error) {
     console.error('Trigger Referral Distribution Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1185,7 +1185,7 @@ export const getAuditLogs = async (req: AdminAuthRequest, res: Response): Promis
     });
   } catch (error) {
     console.error('Get Audit Logs Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1333,7 +1333,7 @@ export const getAdAnalysisStats = async (req: AdminAuthRequest, res: Response): 
     });
   } catch (error) {
     console.error('Get Ad Analysis Stats Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1351,7 +1351,7 @@ export const getModerators = async (req: AdminAuthRequest, res: Response): Promi
     res.status(200).json({ success: true, moderators });
   } catch (error) {
     console.error('Get Moderators Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1408,7 +1408,7 @@ export const createModerator = async (req: AdminAuthRequest, res: Response): Pro
     res.status(201).json({ success: true, moderator: newAdmin });
   } catch (error) {
     console.error('Create Moderator Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1444,7 +1444,7 @@ export const deleteModerator = async (req: AdminAuthRequest, res: Response): Pro
     res.status(200).json({ success: true, message: 'Moderator account deleted successfully' });
   } catch (error) {
     console.error('Delete Moderator Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1483,7 +1483,7 @@ export const getMultiAccountFraudGroups = async (req: AdminAuthRequest, res: Res
     res.status(200).json({ success: true, groups });
   } catch (error) {
     console.error('Get Multi-Account Fraud Groups Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1517,7 +1517,7 @@ export const bulkBlockUsers = async (req: AdminAuthRequest, res: Response): Prom
     res.status(200).json({ success: true, message: `Successfully updated block status for ${userIds.length} users.` });
   } catch (error) {
     console.error('Bulk Block Users Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1549,7 +1549,7 @@ export const getSuspiciousGames = async (req: AdminAuthRequest, res: Response): 
     res.status(200).json({ success: true, sessions: suspiciousSessions });
   } catch (error) {
     console.error('Get Suspicious Games Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1589,7 +1589,7 @@ export const getUserLedger = async (req: AdminAuthRequest, res: Response): Promi
     });
   } catch (error) {
     console.error('Get User Ledger Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1667,7 +1667,7 @@ export const getUserNetwork = async (req: AdminAuthRequest, res: Response): Prom
     });
   } catch (error) {
     console.error('Get User Network Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1677,7 +1677,7 @@ export const getAdminFaqs = async (req: AdminAuthRequest, res: Response): Promis
     res.status(200).json({ success: true, faqs });
   } catch (error) {
     console.error('Get Admin FAQs Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1702,7 +1702,7 @@ export const createAdminFaq = async (req: AdminAuthRequest, res: Response): Prom
     res.status(201).json({ success: true, faq });
   } catch (error) {
     console.error('Create Admin FAQ Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1730,7 +1730,7 @@ export const updateAdminFaq = async (req: AdminAuthRequest, res: Response): Prom
     res.status(200).json({ success: true, faq });
   } catch (error) {
     console.error('Update Admin FAQ Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1754,7 +1754,7 @@ export const deleteAdminFaq = async (req: AdminAuthRequest, res: Response): Prom
     res.status(200).json({ success: true, message: 'FAQ deleted successfully' });
   } catch (error) {
     console.error('Delete Admin FAQ Error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -1961,7 +1961,7 @@ export const getPlaygroundMessages = async (req: AdminAuthRequest, res: Response
     });
   } catch (error) {
     console.error('Error fetching playground messages:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2142,7 +2142,7 @@ export const getWithdrawalOptionsAdmin = async (req: Request, res: Response): Pr
     res.status(200).json({ success: true, options });
   } catch (error) {
     console.error('Get withdrawal options error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2169,7 +2169,7 @@ export const createWithdrawalOptionAdmin = async (req: Request, res: Response): 
     res.status(201).json({ success: true, option });
   } catch (error) {
     console.error('Create withdrawal option error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2198,7 +2198,7 @@ export const updateWithdrawalOptionAdmin = async (req: Request, res: Response): 
     res.status(200).json({ success: true, option });
   } catch (error) {
     console.error('Update withdrawal option error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2209,7 +2209,7 @@ export const deleteWithdrawalOptionAdmin = async (req: Request, res: Response): 
     res.status(200).json({ success: true, message: 'Withdrawal option deleted successfully' });
   } catch (error) {
     console.error('Delete withdrawal option error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2278,7 +2278,7 @@ export const getAdscalexStats = async (req: AdminAuthRequest, res: Response): Pr
 
   } catch (error) {
     console.error('Error fetching adscalex stats:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2330,7 +2330,7 @@ export const getCoinDistribution = async (req: Request, res: Response) => {
     res.json({ success: true, data: transactions });
   } catch (error) {
     console.error('Error fetching coin distribution:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2361,7 +2361,7 @@ export const getUpcomingWithdrawals = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching upcoming withdrawals:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
 
@@ -2534,6 +2534,6 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
     });
   } catch (error) {
     console.error('Error fetching detailed analytics:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', dbUrl: process.env.DATABASE_URL });
   }
 };
