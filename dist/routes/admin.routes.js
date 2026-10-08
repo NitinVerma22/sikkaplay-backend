@@ -30,6 +30,7 @@ router.delete('/moderators/:id', (0, adminAuth_middleware_1.requireRole)(['super
 router.get('/fraud/multi-accounts', admin_controller_1.getMultiAccountFraudGroups);
 router.post('/fraud/bulk-block', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.bulkBlockUsers);
 router.get('/fraud/suspicious-games', admin_controller_1.getSuspiciousGames);
+router.get('/playground/messages', admin_controller_1.getPlaygroundMessages);
 router.get('/playground/reports', admin_controller_1.getPlaygroundReports);
 router.get('/playground/bans', admin_controller_1.getPlaygroundBans);
 router.delete('/playground/bans/:id', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.liftPlaygroundBan);

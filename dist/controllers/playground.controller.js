@@ -1139,11 +1139,28 @@ const sendPlaygroundMessage = async (req, res) => {
                 }
             }
         }
+        const lowerText = text.toLowerCase();
+        let isFlagged = false;
+        let flagReason = undefined;
+        const bannedKeywords = ['telegram', 'whatsapp', 't.me/', 'wa.me/', 'number de', 'call me', 'scam', 'hack', 'gali'];
+        const hasBannedWord = bannedKeywords.some(keyword => lowerText.includes(keyword));
+        // Quick phone number regex check (7 to 15 digits)
+        const phoneRegex = /\b\d{7,15}\b/;
+        if (hasBannedWord) {
+            isFlagged = true;
+            flagReason = 'Contains restricted keywords';
+        }
+        else if (phoneRegex.test(lowerText)) {
+            isFlagged = true;
+            flagReason = 'Potential phone number detected';
+        }
         const msg = await db_1.prisma.playgroundMessage.create({
             data: {
                 channelName: finalChannelName,
                 senderId,
-                text
+                text,
+                isFlagged,
+                flagReason
             }
         });
         // Emit the message in real-time to the socket room

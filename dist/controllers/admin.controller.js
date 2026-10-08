@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDetailedAnalytics = exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.getAdscalexStats = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getDetailedAnalytics = exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.getAdscalexStats = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundMessages = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -54,7 +54,7 @@ const loginAdmin = async (req, res) => {
     }
     catch (error) {
         console.error('Admin login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.loginAdmin = loginAdmin;
@@ -293,7 +293,7 @@ const getDashboardStats = async (req, res) => {
     }
     catch (error) {
         console.error('Get Stats Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getDashboardStats = getDashboardStats;
@@ -309,7 +309,7 @@ const getConfigs = async (req, res) => {
     }
     catch (error) {
         console.error('Get Configs Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getConfigs = getConfigs;
@@ -336,7 +336,7 @@ const updateConfigs = async (req, res) => {
     }
     catch (error) {
         console.error('Update Configs Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.updateConfigs = updateConfigs;
@@ -420,7 +420,7 @@ const getUsers = async (req, res) => {
     }
     catch (error) {
         console.error('Get Users Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getUsers = getUsers;
@@ -473,7 +473,7 @@ const updateUserBalance = async (req, res) => {
     }
     catch (error) {
         console.error('Update Balance Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.updateUserBalance = updateUserBalance;
@@ -583,7 +583,7 @@ const getWithdrawals = async (req, res) => {
             take: limit,
             include: {
                 user: {
-                    select: { name: true, phoneNumber: true, upiId: true }
+                    select: { id: true, name: true, phoneNumber: true, upiId: true }
                 }
             }
         });
@@ -610,7 +610,7 @@ const getWithdrawals = async (req, res) => {
     }
     catch (error) {
         console.error('Get Withdrawals Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getWithdrawals = getWithdrawals;
@@ -777,7 +777,7 @@ const bulkUpdateWithdrawalStatus = async (req, res) => {
     }
     catch (error) {
         console.error('Bulk Update Withdrawal Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.bulkUpdateWithdrawalStatus = bulkUpdateWithdrawalStatus;
@@ -813,7 +813,7 @@ const getSupportTickets = async (req, res) => {
     }
     catch (error) {
         console.error('Get Support Tickets Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getSupportTickets = getSupportTickets;
@@ -864,7 +864,7 @@ const replySupportTicket = async (req, res) => {
     }
     catch (error) {
         console.error('Reply Ticket Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.replySupportTicket = replySupportTicket;
@@ -888,7 +888,7 @@ const toggleUserFreeze = async (req, res) => {
     }
     catch (error) {
         console.error('Toggle User Freeze Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.toggleUserFreeze = toggleUserFreeze;
@@ -979,7 +979,7 @@ const broadcastPushNotification = async (req, res) => {
     }
     catch (error) {
         console.error('Broadcast Push Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.broadcastPushNotification = broadcastPushNotification;
@@ -1013,7 +1013,7 @@ const changeUserPassword = async (req, res) => {
     }
     catch (error) {
         console.error('Change User Password Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.changeUserPassword = changeUserPassword;
@@ -1028,7 +1028,7 @@ const triggerReferralDistribution = async (req, res) => {
     }
     catch (error) {
         console.error('Trigger Referral Distribution Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.triggerReferralDistribution = triggerReferralDistribution;
@@ -1052,7 +1052,7 @@ const getAuditLogs = async (req, res) => {
     }
     catch (error) {
         console.error('Get Audit Logs Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getAuditLogs = getAuditLogs;
@@ -1187,7 +1187,7 @@ const getAdAnalysisStats = async (req, res) => {
     }
     catch (error) {
         console.error('Get Ad Analysis Stats Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getAdAnalysisStats = getAdAnalysisStats;
@@ -1206,7 +1206,7 @@ const getModerators = async (req, res) => {
     }
     catch (error) {
         console.error('Get Moderators Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getModerators = getModerators;
@@ -1250,7 +1250,7 @@ const createModerator = async (req, res) => {
     }
     catch (error) {
         console.error('Create Moderator Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.createModerator = createModerator;
@@ -1276,7 +1276,7 @@ const deleteModerator = async (req, res) => {
     }
     catch (error) {
         console.error('Delete Moderator Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.deleteModerator = deleteModerator;
@@ -1314,7 +1314,7 @@ const getMultiAccountFraudGroups = async (req, res) => {
     }
     catch (error) {
         console.error('Get Multi-Account Fraud Groups Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getMultiAccountFraudGroups = getMultiAccountFraudGroups;
@@ -1338,7 +1338,7 @@ const bulkBlockUsers = async (req, res) => {
     }
     catch (error) {
         console.error('Bulk Block Users Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.bulkBlockUsers = bulkBlockUsers;
@@ -1370,7 +1370,7 @@ const getSuspiciousGames = async (req, res) => {
     }
     catch (error) {
         console.error('Get Suspicious Games Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getSuspiciousGames = getSuspiciousGames;
@@ -1406,7 +1406,7 @@ const getUserLedger = async (req, res) => {
     }
     catch (error) {
         console.error('Get User Ledger Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getUserLedger = getUserLedger;
@@ -1474,7 +1474,7 @@ const getUserNetwork = async (req, res) => {
     }
     catch (error) {
         console.error('Get User Network Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getUserNetwork = getUserNetwork;
@@ -1485,7 +1485,7 @@ const getAdminFaqs = async (req, res) => {
     }
     catch (error) {
         console.error('Get Admin FAQs Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getAdminFaqs = getAdminFaqs;
@@ -1507,7 +1507,7 @@ const createAdminFaq = async (req, res) => {
     }
     catch (error) {
         console.error('Create Admin FAQ Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.createAdminFaq = createAdminFaq;
@@ -1532,7 +1532,7 @@ const updateAdminFaq = async (req, res) => {
     }
     catch (error) {
         console.error('Update Admin FAQ Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.updateAdminFaq = updateAdminFaq;
@@ -1553,7 +1553,7 @@ const deleteAdminFaq = async (req, res) => {
     }
     catch (error) {
         console.error('Delete Admin FAQ Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.deleteAdminFaq = deleteAdminFaq;
@@ -1705,6 +1705,48 @@ const getPlaygroundReports = async (req, res) => {
     }
 };
 exports.getPlaygroundReports = getPlaygroundReports;
+// 47b. Get Playground Messages
+const getPlaygroundMessages = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        const flaggedOnly = req.query.flaggedOnly === 'true';
+        const userId = req.query.userId;
+        const search = req.query.search;
+        const skip = (page - 1) * limit;
+        const whereClause = {};
+        if (flaggedOnly)
+            whereClause.isFlagged = true;
+        if (userId)
+            whereClause.senderId = userId;
+        if (search)
+            whereClause.text = { contains: search, mode: 'insensitive' };
+        const messages = await db_1.prisma.playgroundMessage.findMany({
+            where: whereClause,
+            include: {
+                sender: {
+                    select: { id: true, name: true, phoneNumber: true, isBlocked: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit
+        });
+        const totalCount = await db_1.prisma.playgroundMessage.count({ where: whereClause });
+        res.status(200).json({
+            success: true,
+            messages,
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+            currentPage: page
+        });
+    }
+    catch (error) {
+        console.error('Error fetching playground messages:', error);
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
+    }
+};
+exports.getPlaygroundMessages = getPlaygroundMessages;
 // 48. Get Playground Bans
 const getPlaygroundBans = async (req, res) => {
     try {
@@ -1863,7 +1905,7 @@ const getWithdrawalOptionsAdmin = async (req, res) => {
     }
     catch (error) {
         console.error('Get withdrawal options error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getWithdrawalOptionsAdmin = getWithdrawalOptionsAdmin;
@@ -1891,7 +1933,7 @@ const createWithdrawalOptionAdmin = async (req, res) => {
     }
     catch (error) {
         console.error('Create withdrawal option error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.createWithdrawalOptionAdmin = createWithdrawalOptionAdmin;
@@ -1921,7 +1963,7 @@ const updateWithdrawalOptionAdmin = async (req, res) => {
     }
     catch (error) {
         console.error('Update withdrawal option error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.updateWithdrawalOptionAdmin = updateWithdrawalOptionAdmin;
@@ -1933,7 +1975,7 @@ const deleteWithdrawalOptionAdmin = async (req, res) => {
     }
     catch (error) {
         console.error('Delete withdrawal option error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.deleteWithdrawalOptionAdmin = deleteWithdrawalOptionAdmin;
@@ -1990,7 +2032,7 @@ const getAdscalexStats = async (req, res) => {
     }
     catch (error) {
         console.error('Error fetching adscalex stats:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getAdscalexStats = getAdscalexStats;
@@ -2037,7 +2079,7 @@ const getCoinDistribution = async (req, res) => {
     }
     catch (error) {
         console.error('Error fetching coin distribution:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getCoinDistribution = getCoinDistribution;
@@ -2066,7 +2108,7 @@ const getUpcomingWithdrawals = async (req, res) => {
     }
     catch (error) {
         console.error('Error fetching upcoming withdrawals:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getUpcomingWithdrawals = getUpcomingWithdrawals;
@@ -2147,6 +2189,11 @@ const getDetailedAnalytics = async (req, res) => {
         const chatVolumeToday = await db_1.prisma.playgroundMessage.count({
             where: { createdAt: { gte: today } }
         });
+        const uniqueChattersResult = await db_1.prisma.playgroundMessage.groupBy({
+            by: ['senderId'],
+            where: { createdAt: { gte: today } }
+        });
+        const uniqueChattersToday = uniqueChattersResult.length;
         const bannedUsersCount = await db_1.prisma.playgroundBan.count({
             where: { expiresAt: { gt: now } }
         });
@@ -2200,7 +2247,7 @@ const getDetailedAnalytics = async (req, res) => {
                 social: {
                     totalFriendshipsCreated,
                     pendingFriendRequests,
-                    chatVolumeToday,
+                    chatVolumeToday, uniqueChattersToday,
                     bannedUsersCount
                 },
                 gameAnalytics
@@ -2209,7 +2256,7 @@ const getDetailedAnalytics = async (req, res) => {
     }
     catch (error) {
         console.error('Error fetching detailed analytics:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error', stack: error instanceof Error ? error.stack : undefined });
     }
 };
 exports.getDetailedAnalytics = getDetailedAnalytics;
