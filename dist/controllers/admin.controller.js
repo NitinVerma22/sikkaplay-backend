@@ -1713,6 +1713,8 @@ const getPlaygroundMessages = async (req, res) => {
         const flaggedOnly = req.query.flaggedOnly === 'true';
         const userId = req.query.userId;
         const search = req.query.search;
+        const channelName = req.query.channelName;
+        const sort = req.query.sort === 'asc' ? 'asc' : 'desc';
         const skip = (page - 1) * limit;
         const whereClause = {};
         if (flaggedOnly)
@@ -1721,6 +1723,8 @@ const getPlaygroundMessages = async (req, res) => {
             whereClause.senderId = userId;
         if (search)
             whereClause.text = { contains: search, mode: 'insensitive' };
+        if (channelName)
+            whereClause.channelName = channelName;
         const messages = await db_1.prisma.playgroundMessage.findMany({
             where: whereClause,
             include: {
@@ -1728,14 +1732,54 @@ const getPlaygroundMessages = async (req, res) => {
                     select: { id: true, name: true, phoneNumber: true, isBlocked: true }
                 }
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: sort },
             skip,
             take: limit
+        });
+        // Extract unique receiver IDs for private chats
+        const receiverIds = new Set();
+        messages.forEach(msg => {
+            if (msg.channelName.startsWith('private-chat-')) {
+                const parts = msg.channelName.replace('private-chat-', '').split('-');
+                // Extract the two UUIDs (UUIDs have 5 parts separated by dashes, so 5+5=10 parts total)
+                // private-chat-uuid1-uuid2
+                // It's safer to just regex out the two UUIDs
+                const uuids = msg.channelName.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g);
+                if (uuids && uuids.length === 2) {
+                    const receiverId = uuids[0] === msg.senderId ? uuids[1] : uuids[0];
+                    receiverIds.add(receiverId);
+                }
+            }
+        });
+        let receiversMap = {};
+        if (receiverIds.size > 0) {
+            const receivers = await db_1.prisma.user.findMany({
+                where: { id: { in: Array.from(receiverIds) } },
+                select: { id: true, name: true, phoneNumber: true, isBlocked: true }
+            });
+            receiversMap = receivers.reduce((acc, user) => {
+                acc[user.id] = user;
+                return acc;
+            }, {});
+        }
+        const messagesWithReceiver = messages.map(msg => {
+            let receiver = null;
+            if (msg.channelName.startsWith('private-chat-')) {
+                const uuids = msg.channelName.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g);
+                if (uuids && uuids.length === 2) {
+                    const receiverId = uuids[0] === msg.senderId ? uuids[1] : uuids[0];
+                    receiver = receiversMap[receiverId] || null;
+                }
+            }
+            return {
+                ...msg,
+                receiver
+            };
         });
         const totalCount = await db_1.prisma.playgroundMessage.count({ where: whereClause });
         res.status(200).json({
             success: true,
-            messages,
+            messages: messagesWithReceiver,
             totalCount,
             totalPages: Math.ceil(totalCount / limit),
             currentPage: page
