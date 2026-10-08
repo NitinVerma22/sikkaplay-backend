@@ -1,4 +1,4 @@
-﻿name: Deploy to WHM
+name: Deploy to WHM
 
 on:
   push:
@@ -19,5 +19,6 @@ jobs:
             cd /var/www/sikkaplay-backend
             git pull origin main
             npm install
+            npx prisma db push --accept-data-loss
             npm run build
             pm2 restart sikkaplay-backend
