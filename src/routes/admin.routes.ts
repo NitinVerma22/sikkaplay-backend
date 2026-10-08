@@ -39,6 +39,7 @@ import {
   getPlaygroundReports,
   getPlaygroundBans,
   liftPlaygroundBan,
+  getPlaygroundMessages,
   revertTransaction,
   getWithdrawalOptionsAdmin,
   createWithdrawalOptionAdmin,
@@ -92,6 +93,7 @@ router.delete('/moderators/:id', requireRole(['superadmin']), deleteModerator);
 router.get('/fraud/multi-accounts', getMultiAccountFraudGroups);
 router.post('/fraud/bulk-block', requireRole(['superadmin']), bulkBlockUsers);
 router.get('/fraud/suspicious-games', getSuspiciousGames);
+router.get('/playground/messages', getPlaygroundMessages);
 router.get('/playground/reports', getPlaygroundReports);
 router.get('/playground/bans', getPlaygroundBans);
 router.delete('/playground/bans/:id', requireRole(['superadmin']), liftPlaygroundBan);

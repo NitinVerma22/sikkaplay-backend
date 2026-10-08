@@ -1922,6 +1922,49 @@ export const getPlaygroundReports = async (req: AdminAuthRequest, res: Response)
   }
 };
 
+// 47b. Get Playground Messages
+export const getPlaygroundMessages = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 100;
+    const flaggedOnly = req.query.flaggedOnly === 'true';
+    const userId = req.query.userId as string;
+    const search = req.query.search as string;
+
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {};
+    if (flaggedOnly) whereClause.isFlagged = true;
+    if (userId) whereClause.senderId = userId;
+    if (search) whereClause.text = { contains: search, mode: 'insensitive' };
+
+    const messages = await prisma.playgroundMessage.findMany({
+      where: whereClause,
+      include: {
+        sender: {
+          select: { id: true, name: true, phoneNumber: true, isBlocked: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit
+    });
+
+    const totalCount = await prisma.playgroundMessage.count({ where: whereClause });
+
+    res.status(200).json({
+      success: true,
+      messages,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: page
+    });
+  } catch (error) {
+    console.error('Error fetching playground messages:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // 48. Get Playground Bans
 export const getPlaygroundBans = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
@@ -2419,6 +2462,12 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
       where: { createdAt: { gte: today } }
     });
 
+    const uniqueChattersResult = await prisma.playgroundMessage.groupBy({
+      by: ['senderId'],
+      where: { createdAt: { gte: today } }
+    });
+    const uniqueChattersToday = uniqueChattersResult.length;
+
     const bannedUsersCount = await prisma.playgroundBan.count({
       where: { expiresAt: { gt: now } }
     });
@@ -2477,7 +2526,7 @@ export const getDetailedAnalytics = async (req: AdminAuthRequest, res: Response)
         social: {
           totalFriendshipsCreated,
           pendingFriendRequests,
-          chatVolumeToday,
+          chatVolumeToday, uniqueChattersToday,
           bannedUsersCount
         },
         gameAnalytics

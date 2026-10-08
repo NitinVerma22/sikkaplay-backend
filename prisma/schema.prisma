@@ -10,50 +10,51 @@ datasource db {
 }
 
 model User {
-  id              String        @id @default(uuid())
-  phoneNumber     String        @unique
-  email           String?       // Stored for Google Login users
-  firebaseUid     String        @unique
-  passwordHash    String?
-  name            String?
-  avatarUrl       String?
-  city            String?
-  username        String?       @unique
-  bio             String?
-  referralCode    String        @unique
-  referredBy      String?
-  balance         Int           @default(0)
-  referralBalance Int           @default(0) // Earnings from MLM/Referrals
-  fcmToken        String?       // Firebase Cloud Messaging Token
-  deviceId        String?       // Unique Device ID to prevent fraud
-  upiId           String?       // User's preferred UPI ID for withdrawal
-  totalEarned     Int           @default(0)
-  withdrawalAmount Int          @default(0)
-  bubbleShooterLevel Int        @default(1)
-  waterSortLevel     Int        @default(1)
-  win600UnlockedGullaks Int       @default(0)
-  isBlocked       Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  transactions    Transaction[]
-  dailyUsages     DailyUsage[]
-  referralRewards ReferralReward[]
-  notifications   Notification[]
-  tickets         SupportTicket[]
-  dailyCodeClaims DailyCodeClaim[]
-  gameSessions    GameSession[]
-  adImpressions   AdImpression[]
-  socialTaskClaims SocialTaskClaim[]
-  adStats         AdStats[]
-  playgroundMinutes Int                 @default(0)
-  gender            String?
-  crateProgress     CrateProgress[]
-  friendshipsOne    Friendship[]        @relation("UserOneFriendships")
-  friendshipsTwo    Friendship[]        @relation("UserTwoFriendships")
-  giftInventory     UserGiftInventory[]
-  bans              PlaygroundBan[]
-  blocksInitiated   BlockedUser[]       @relation("BlocksInitiated")
-  blocksReceived    BlockedUser[]       @relation("BlocksReceived")
+  id                    String              @id @default(uuid())
+  phoneNumber           String              @unique
+  email                 String? // Stored for Google Login users
+  firebaseUid           String              @unique
+  passwordHash          String?
+  name                  String?
+  avatarUrl             String?
+  city                  String?
+  username              String?             @unique
+  bio                   String?
+  referralCode          String              @unique
+  referredBy            String?
+  balance               Int                 @default(0)
+  referralBalance       Int                 @default(0) // Earnings from MLM/Referrals
+  fcmToken              String? // Firebase Cloud Messaging Token
+  deviceId              String? // Unique Device ID to prevent fraud
+  upiId                 String? // User's preferred UPI ID for withdrawal
+  totalEarned           Int                 @default(0)
+  withdrawalAmount      Int                 @default(0)
+  bubbleShooterLevel    Int                 @default(1)
+  waterSortLevel        Int                 @default(1)
+  win600UnlockedGullaks Int                 @default(0)
+  isBlocked             Boolean             @default(false)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  transactions          Transaction[]
+  dailyUsages           DailyUsage[]
+  referralRewards       ReferralReward[]
+  notifications         Notification[]
+  tickets               SupportTicket[]
+  dailyCodeClaims       DailyCodeClaim[]
+  gameSessions          GameSession[]
+  adImpressions         AdImpression[]
+  socialTaskClaims      SocialTaskClaim[]
+  adStats               AdStats[]
+  playgroundMinutes     Int                 @default(0)
+  gender                String?
+  crateProgress         CrateProgress[]
+  friendshipsOne        Friendship[]        @relation("UserOneFriendships")
+  friendshipsTwo        Friendship[]        @relation("UserTwoFriendships")
+  giftInventory         UserGiftInventory[]
+  bans                  PlaygroundBan[]
+  blocksInitiated       BlockedUser[]       @relation("BlocksInitiated")
+  blocksReceived        BlockedUser[]       @relation("BlocksReceived")
+  playgroundMessages    PlaygroundMessage[]
 
   @@index([balance])
   @@index([totalEarned])
@@ -80,15 +81,15 @@ model GameSession {
 }
 
 model Transaction {
-  id                  String   @id @default(uuid())
-  amount              Int
-  type                String   // 'earning', 'withdrawal', 'bonus'
-  status              String   // 'success', 'pending', 'failed'
-  description         String
-  userId              String
-  user                User     @relation(fields: [userId], references: [id])
-  createdAt           DateTime @default(now())
-  isReferralProcessed Boolean  @default(false)
+  id                    String   @id @default(uuid())
+  amount                Int
+  type                  String // 'earning', 'withdrawal', 'bonus'
+  status                String // 'success', 'pending', 'failed'
+  description           String
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
+  createdAt             DateTime @default(now())
+  isReferralProcessed   Boolean  @default(false)
   externalTransactionId String?  @unique
   withdrawalOptionId    String?
 
@@ -100,25 +101,25 @@ model Transaction {
 }
 
 model DailyUsage {
-  id          String   @id @default(uuid())
-  userId      String
-  dateStr     String   // YYYY-MM-DD format for easy querying
+  id           String   @id @default(uuid())
+  userId       String
+  dateStr      String // YYYY-MM-DD format for easy querying
   gamesMinutes Int      @default(0)
-  user        User     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([userId, dateStr])
 }
 
 model ReferralReward {
-  id          String   @id @default(uuid())
-  userId      String   // The user who achieved the milestone
-  referrerId  String   // The user who received the reward
-  milestone   String   // 'signup_bonus', '1_hour', '10_hours', 'daily_50', '30_days_jackpot'
-  dateStr     String?  // YYYY-MM-DD for daily recurring rewards
-  user        User     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String // The user who achieved the milestone
+  referrerId String // The user who received the reward
+  milestone  String // 'signup_bonus', '1_hour', '10_hours', 'daily_50', '30_days_jackpot'
+  dateStr    String? // YYYY-MM-DD for daily recurring rewards
+  user       User     @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
 
   // Ensure a milestone is only rewarded once (or once per day if dateStr is set)
   @@unique([userId, milestone, dateStr])
@@ -128,11 +129,11 @@ model Notification {
   id        String   @id @default(uuid())
   title     String
   body      String
-  type      String   // e.g., 'referral', 'reward', 'withdrawal', 'alert'
+  type      String // e.g., 'referral', 'reward', 'withdrawal', 'alert'
   isRead    Boolean  @default(false)
   userId    String
-  user        User     @relation(fields: [userId], references: [id])
-  bannerUrl String?  // Optional banner image URL
+  user      User     @relation(fields: [userId], references: [id])
+  bannerUrl String? // Optional banner image URL
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -146,15 +147,15 @@ model FAQ {
 }
 
 model SupportTicket {
-  id          String   @id @default(uuid())
-  userId      String?
-  name        String
-  mobile      String
-  issue       String
-  status      String   @default("pending") // pending, in_progress, resolved
-  reply       String?  // Admin's reply
-  createdAt   DateTime @default(now())
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id        String   @id @default(uuid())
+  userId    String?
+  name      String
+  mobile    String
+  issue     String
+  status    String   @default("pending") // pending, in_progress, resolved
+  reply     String? // Admin's reply
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
@@ -163,94 +164,94 @@ model SupportTicket {
 model Admin {
   id        String   @id @default(uuid())
   username  String   @unique
-  password  String   // Hashed password
+  password  String // Hashed password
   role      String   @default("superadmin") // superadmin, moderator
   createdAt DateTime @default(now())
 }
 
 model AppConfig {
-  id                  String   @id @default(uuid())
-  gullakMaxSize       Int      @default(100) // Max coins Gullak can hold
-  dailyStreakCoins    Int      @default(50)  // Base coins for daily streak
-  referralBonus       Int      @default(500) // Coins rewarded for successful referral
-  commissionRate      Float    @default(0.10) // 10% commission on MLM network withdrawals
-  minWithdrawalLimit  Int      @default(1000) // Minimum coins required to withdraw
-    coinsPerRupee       Int      @default(600) // Coins to 1 Rupee conversion rate
-  apkDownloadUrl      String   @default("https://sikkaplay-apk.web.app/app-release.apk")
-  latestAppVersion    String   @default("1.0.9")
-  forceUpdate         Boolean  @default(false)
+  id                   String  @id @default(uuid())
+  gullakMaxSize        Int     @default(100) // Max coins Gullak can hold
+  dailyStreakCoins     Int     @default(50) // Base coins for daily streak
+  referralBonus        Int     @default(500) // Coins rewarded for successful referral
+  commissionRate       Float   @default(0.10) // 10% commission on MLM network withdrawals
+  minWithdrawalLimit   Int     @default(1000) // Minimum coins required to withdraw
+  coinsPerRupee        Int     @default(600) // Coins to 1 Rupee conversion rate
+  apkDownloadUrl       String  @default("https://sikkaplay-apk.web.app/app-release.apk")
+  latestAppVersion     String  @default("1.0.9")
+  forceUpdate          Boolean @default(false)
   showVideoTutorialBar Boolean @default(true)
-  telegramLink        String   @default("https://t.me/sikkaplay")
-  whatsappLink        String   @default("https://whatsapp.com/channel/sikkaplay")
-  groupLink           String   @default("https://t.me/sikkaplay_group")
-  
+  telegramLink         String  @default("https://t.me/sikkaplay")
+  whatsappLink         String  @default("https://whatsapp.com/channel/sikkaplay")
+  groupLink            String  @default("https://t.me/sikkaplay_group")
+
   // Watch & Earn Milestones
-  watchM1Mins         Int      @default(20)
-  watchM1Coins        Int      @default(50)
-  watchM2Mins         Int      @default(60)
-  watchM2Coins        Int      @default(200)
-  watchM3Mins         Int      @default(180)
-  watchM3Coins        Int      @default(600)
-  
+  watchM1Mins  Int @default(20)
+  watchM1Coins Int @default(50)
+  watchM2Mins  Int @default(60)
+  watchM2Coins Int @default(200)
+  watchM3Mins  Int @default(180)
+  watchM3Coins Int @default(600)
+
   // Play & Earn Milestones
-  playM1Mins          Int      @default(20)
-  playM1Coins         Int      @default(40)
-  playM2Mins          Int      @default(50)
-  playM2Coins         Int      @default(90)
-  playM3Mins          Int      @default(99)
-  playM3Coins         Int      @default(180)
+  playM1Mins  Int @default(20)
+  playM1Coins Int @default(40)
+  playM2Mins  Int @default(50)
+  playM2Coins Int @default(90)
+  playM3Mins  Int @default(99)
+  playM3Coins Int @default(180)
 
   // Daily Tasks Coins Configuration
-  dailyCodeTaskCoins  Int      @default(10)
-  visitAllTaskCoins   Int      @default(30)
+  dailyCodeTaskCoins Int @default(10)
+  visitAllTaskCoins  Int @default(30)
 
   // Ad Management Configurations
-  adsEnabled          Boolean  @default(true)
-  allowMultiAccounts  Boolean  @default(false) // Toggle to permit/deny multiple accounts per device
-  rewardedCapPerDay   Int      @default(15)
-  dailyCodeAdRequired Boolean  @default(true)
-  surveysAdRequired   Boolean  @default(true)
+  adsEnabled          Boolean @default(true)
+  allowMultiAccounts  Boolean @default(false) // Toggle to permit/deny multiple accounts per device
+  rewardedCapPerDay   Int     @default(15)
+  dailyCodeAdRequired Boolean @default(true)
+  surveysAdRequired   Boolean @default(true)
 
-  vpnDetectionEnabled Boolean  @default(false)
-  vpnApiKey           String   @default("")
-  maintenanceMode     Boolean  @default(false)
+  vpnDetectionEnabled Boolean @default(false)
+  vpnApiKey           String  @default("")
+  maintenanceMode     Boolean @default(false)
 
   // Referral Withdrawal eligibility conditions
-  refWithdrawMinPlaytimeMins  Int      @default(3000)
-  refWithdrawMinReferrals     Int      @default(2)
+  refWithdrawMinPlaytimeMins Int @default(3000)
+  refWithdrawMinReferrals    Int @default(2)
 
   // Dynamic Gullak Claim Ads Sequence
-  gullakAdSequence            String   @default("interstitial,rewarded,none")
+  gullakAdSequence String @default("interstitial,rewarded,none")
 
   // Database Retention Settings (in Days)
-  gameSessionRetentionDays    Int      @default(1)
-  adImpressionRetentionDays   Int      @default(7)
-  notificationRetentionDays   Int      @default(30)
-  dailyUsageRetentionDays     Int      @default(45)
-  visitEarnClaimRetentionDays Int      @default(1)
+  gameSessionRetentionDays    Int @default(1)
+  adImpressionRetentionDays   Int @default(7)
+  notificationRetentionDays   Int @default(30)
+  dailyUsageRetentionDays     Int @default(45)
+  visitEarnClaimRetentionDays Int @default(1)
 
   // Playground Configs
-  playgroundCoinsPerMinute   Int      @default(240) // 1200 coins = 5 mins -> 240 coins/min
-  playgroundMaleFilterCost   Int      @default(50)
-  playgroundFemaleFilterCost Int      @default(50)
-  giftCommissionRate         Float    @default(0.20) // 20% platform commission on virtual gifts
-  selfWithdrawalNotice       String   @default("")
-  referralWithdrawalNotice   String   @default("")
-  showWithdrawalPackages     Boolean  @default(true)
+  playgroundCoinsPerMinute   Int     @default(240) // 1200 coins = 5 mins -> 240 coins/min
+  playgroundMaleFilterCost   Int     @default(50)
+  playgroundFemaleFilterCost Int     @default(50)
+  giftCommissionRate         Float   @default(0.20) // 20% platform commission on virtual gifts
+  selfWithdrawalNotice       String  @default("")
+  referralWithdrawalNotice   String  @default("")
+  showWithdrawalPackages     Boolean @default(true)
 
   // Tapjoy Offerwall Config
   isTapjoyOfferwallEnabled Boolean @default(false)
 
-  updatedAt           DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model DailyCode {
-  id         String   @id @default(uuid())
-  code       String   @unique
-  coins      Int      @default(0)
-  maxClaims  Int      @default(1)
-  activeDate String?  // YYYY-MM-DD
-  createdAt  DateTime @default(now())
+  id         String           @id @default(uuid())
+  code       String           @unique
+  coins      Int              @default(0)
+  maxClaims  Int              @default(1)
+  activeDate String? // YYYY-MM-DD
+  createdAt  DateTime         @default(now())
   claims     DailyCodeClaim[]
 }
 
@@ -265,13 +266,13 @@ model DailyCodeClaim {
 }
 
 model SocialTask {
-  id          String   @id @default(uuid())
-  platform    String   // 'facebook', 'instagram', 'whatsapp', 'telegram', 'youtube', 'other'
+  id          String            @id @default(uuid())
+  platform    String // 'facebook', 'instagram', 'whatsapp', 'telegram', 'youtube', 'other'
   title       String
   link        String
-  coinsReward Int      @default(50)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  coinsReward Int               @default(50)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   claims      SocialTaskClaim[]
 }
 
@@ -307,13 +308,13 @@ model VisitEarnClaim {
 }
 
 model AdminAuditLog {
-  id         String   @id @default(uuid())
-  adminId    String
-  adminName  String
-  action     String
-  details    String
-  ipAddress  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  adminId   String
+  adminName String
+  action    String
+  details   String
+  ipAddress String?
+  createdAt DateTime @default(now())
 }
 
 model AdImpression {
@@ -341,7 +342,7 @@ model AdStats {
   coinsEarned     Int      @default(0)
   createdAt       DateTime @default(now())
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([userId])
@@ -361,28 +362,28 @@ enum FriendshipStatus {
 }
 
 model CrateProgress {
-  id              String       @id @default(uuid())
-  userId          String
-  dateStr         String       // YYYY-MM-DD
-  activeSeconds   Int          @default(0)
-  bronzeClaimed   Boolean      @default(false)
-  silverClaimed   Boolean      @default(false)
-  goldClaimed     Boolean      @default(false)
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String  @id @default(uuid())
+  userId        String
+  dateStr       String // YYYY-MM-DD
+  activeSeconds Int     @default(0)
+  bronzeClaimed Boolean @default(false)
+  silverClaimed Boolean @default(false)
+  goldClaimed   Boolean @default(false)
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dateStr])
 }
 
 model Friendship {
-  id            String           @id @default(uuid())
-  userOneId     String
-  userTwoId     String
-  status        FriendshipStatus @default(PENDING)
-  actionUserId  String           // Who sent the request
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  userOne       User             @relation("UserOneFriendships", fields: [userOneId], references: [id], onDelete: Cascade)
-  userTwo       User             @relation("UserTwoFriendships", fields: [userTwoId], references: [id], onDelete: Cascade)
+  id           String           @id @default(uuid())
+  userOneId    String
+  userTwoId    String
+  status       FriendshipStatus @default(PENDING)
+  actionUserId String // Who sent the request
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  userOne      User             @relation("UserOneFriendships", fields: [userOneId], references: [id], onDelete: Cascade)
+  userTwo      User             @relation("UserTwoFriendships", fields: [userTwoId], references: [id], onDelete: Cascade)
 
   @@unique([userOneId, userTwoId])
 }
@@ -411,60 +412,60 @@ model HiddenChat {
 }
 
 model PlaygroundSession {
-  id            String         @id @default(uuid())
-  channelName   String         @unique
-  userOneId     String
-  userTwoId     String
-  startTime     DateTime       @default(now())
-  endTime       DateTime?
-  status        String         @default("active") // "active", "completed"
+  id          String    @id @default(uuid())
+  channelName String    @unique
+  userOneId   String
+  userTwoId   String
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  status      String    @default("active") // "active", "completed"
 }
 
 model Gift {
-  id           String          @id @default(uuid())
-  name         String          // Rose, Chocolate, Ring
-  coinsPrice   Int
-  imageUrl     String
-  txs          GiftTransaction[]
-  userGifts    UserGiftInventory[]
+  id         String              @id @default(uuid())
+  name       String // Rose, Chocolate, Ring
+  coinsPrice Int
+  imageUrl   String
+  txs        GiftTransaction[]
+  userGifts  UserGiftInventory[]
 }
 
 model UserGiftInventory {
-  id         String   @id @default(uuid())
-  userId     String
-  giftId     String
-  count      Int      @default(1)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gift       Gift     @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  giftId String
+  count  Int    @default(1)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gift   Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
 
   @@unique([userId, giftId])
 }
 
 model GiftTransaction {
-  id            String            @id @default(uuid())
-  senderId      String
-  receiverId    String
-  giftId        String
-  gift          Gift              @relation(fields: [giftId], references: [id])
-  coinsSpent    Int
-  createdAt     DateTime          @default(now())
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  giftId     String
+  gift       Gift     @relation(fields: [giftId], references: [id])
+  coinsSpent Int
+  createdAt  DateTime @default(now())
 }
 
 model PlaygroundReport {
-  id            String         @id @default(uuid())
-  reporterId    String
-  reportedId    String
-  reason        String
-  createdAt     DateTime       @default(now())
+  id         String   @id @default(uuid())
+  reporterId String
+  reportedId String
+  reason     String
+  createdAt  DateTime @default(now())
 }
 
 model PlaygroundBan {
-  id            String         @id @default(uuid())
-  userId        String
-  expiresAt     DateTime
-  reason        String
-  createdAt     DateTime       @default(now())
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  reason    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -476,9 +477,15 @@ model PlaygroundMessage {
   text        String
   isSeen      Boolean  @default(false)
   reaction    String?
+  isFlagged   Boolean  @default(false)
+  flagReason  String?
   createdAt   DateTime @default(now())
 
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
   @@index([channelName, isSeen])
+  @@index([isFlagged])
+  @@index([createdAt])
 }
 
 model AppOffer {
@@ -497,10 +504,10 @@ model AppOffer {
 }
 
 model AppOfferClaim {
-  id         String   @id @default(uuid())
-  userId     String
-  offerId    String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  offerId   String
+  createdAt DateTime @default(now())
 
   @@unique([userId, offerId])
 }
@@ -524,7 +531,7 @@ model WithdrawalOption {
   enabled       Boolean  @default(true)
   claimCount    Int      @default(0)
   createdAt     DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt     DateTime @updatedAt
 }
 
 model VideoTutorial {
