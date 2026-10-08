@@ -70,6 +70,8 @@ const router = Router();
 // Public route for Admin login
 router.post('/login', loginAdmin);
 
+router.get('/debug-env', (req, res) => res.json({ db: process.env.DATABASE_URL?.substring(0, 40) }));
+
 // Protect all other routes with admin JWT validation
 router.use(requireAdminJwt);
 

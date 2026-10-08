@@ -10,6 +10,7 @@ const maintenance_controller_1 = require("../controllers/maintenance.controller"
 const router = (0, express_1.Router)();
 // Public route for Admin login
 router.post('/login', admin_controller_1.loginAdmin);
+router.get('/debug-env', (req, res) => res.json({ db: process.env.DATABASE_URL?.substring(0, 40) }));
 // Protect all other routes with admin JWT validation
 router.use(adminAuth_middleware_1.requireAdminJwt);
 // Stats & Dashboard Overview
