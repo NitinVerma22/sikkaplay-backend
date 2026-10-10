@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { TournamentService } from '../services/tournament.service';
 
 export const getBubbleShooterProgress = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -42,7 +43,7 @@ export const getBubbleShooterProgress = async (req: AuthRequest, res: Response):
 export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || req.user?.uid || req.user?.id;
-    const { levelNumber, stars, score } = req.body;
+    const { levelNumber, stars, score, isMilestoneClaim, tournamentId } = req.body;
 
     if (!levelNumber || levelNumber < 1) {
       res.status(400).json({ success: false, error: 'Invalid level number' });
@@ -57,12 +58,13 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
 
     // Coins are now exclusively awarded via AdMob SSV Checkpoints (milestones)
     let coinsEarned = 0;
-    const { isMilestoneClaim } = req.body;
     if (isMilestoneClaim) {
       if (levelNumber === 5) coinsEarned = 40;
       else if (levelNumber === 10) coinsEarned = 55;
       else if (levelNumber === 15) coinsEarned = 105;
     }
+
+    let tournamentScoreResult: any = null;
 
     if (userId) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { bubbleShooterLevel: true } });
@@ -74,25 +76,54 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
           data: {
             userId,
             gameType: 'bubble_shooter',
+            tournamentId: typeof tournamentId === 'string' ? tournamentId : null,
             coinsEarned,
             status: 'completed'
           }
         });
 
-        // Update max unlocked level
+        // Update max unlocked level and balance if milestone
         await tx.user.update({
           where: { id: userId },
           data: {
-            bubbleShooterLevel: newMaxLevel
+            bubbleShooterLevel: newMaxLevel,
+            ...(coinsEarned > 0 && {
+              balance: { increment: coinsEarned },
+              totalEarned: { increment: coinsEarned }
+            })
           }
         });
+
+        if (coinsEarned > 0) {
+          await tx.transaction.create({
+            data: {
+              userId,
+              amount: coinsEarned,
+              type: 'game',
+              status: 'success',
+              description: `Bubble Shooter Level ${levelNumber} Milestone Reward`
+            }
+          });
+
+          if (tournamentId && typeof tournamentId === 'string') {
+            tournamentScoreResult = await TournamentService.recordTournamentScore({
+              userId,
+              tournamentId,
+              coinsEarned,
+              gameType: 'bubble_shooter',
+              tx
+            });
+          }
+        }
       });
     }
 
     res.status(200).json({
       success: true,
-      coinsEarned: 0,
-      newUnlockedLevel: levelNumber + 1
+      coinsEarned,
+      newUnlockedLevel: levelNumber + 1,
+      tournamentScore: tournamentScoreResult?.newScore,
+      tournamentPointsAwarded: tournamentScoreResult?.pointsAwarded || 0
     });
   } catch (error) {
     console.error('Error completing bubble shooter level:', error);

@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { TournamentService } from '../services/tournament.service';
 
 /**
  * GET /api/v1/water-sort/progress
@@ -52,7 +53,7 @@ export const getWaterSortProgress = async (req: AuthRequest, res: Response): Pro
 export const completeWaterSortLevel = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || req.user?.uid || req.user?.id;
-    const { levelNumber, stars, movesCount } = req.body;
+    const { levelNumber, stars, movesCount, isMilestoneClaim, tournamentId } = req.body;
 
     if (!levelNumber || levelNumber < 1) {
       res.status(400).json({ success: false, error: 'Invalid level number' });
@@ -68,12 +69,13 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
 
     // Coins are now exclusively awarded via AdMob SSV Checkpoints (milestones)
     let coinsEarned = 0;
-    const { isMilestoneClaim } = req.body;
     if (isMilestoneClaim) {
       if (levelNumber === 5) coinsEarned = 40;
       else if (levelNumber === 10) coinsEarned = 55;
       else if (levelNumber === 15) coinsEarned = 105;
     }
+
+    let tournamentScoreResult: any = null;
 
     if (userId) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { waterSortLevel: true } });
@@ -86,6 +88,7 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
           data: {
             userId,
             gameType: 'water_sort',
+            tournamentId: typeof tournamentId === 'string' ? tournamentId : null,
             coinsEarned,
             status: 'completed'
           }
@@ -95,16 +98,44 @@ export const completeWaterSortLevel = async (req: AuthRequest, res: Response): P
         await tx.user.update({
           where: { id: userId },
           data: {
-            waterSortLevel: newMaxLevel
+            waterSortLevel: newMaxLevel,
+            ...(coinsEarned > 0 && {
+              balance: { increment: coinsEarned },
+              totalEarned: { increment: coinsEarned }
+            })
           }
         });
+
+        if (coinsEarned > 0) {
+          await tx.transaction.create({
+            data: {
+              userId,
+              amount: coinsEarned,
+              type: 'game',
+              status: 'success',
+              description: `Water Sort Level ${levelNumber} Milestone Reward`
+            }
+          });
+
+          if (tournamentId && typeof tournamentId === 'string') {
+            tournamentScoreResult = await TournamentService.recordTournamentScore({
+              userId,
+              tournamentId,
+              coinsEarned,
+              gameType: 'water_sort',
+              tx
+            });
+          }
+        }
       });
     }
 
     res.status(200).json({
       success: true,
-      coinsEarned: 0,
-      newUnlockedLevel: levelNumber + 1
+      coinsEarned,
+      newUnlockedLevel: levelNumber + 1,
+      tournamentScore: tournamentScoreResult?.newScore,
+      tournamentPointsAwarded: tournamentScoreResult?.pointsAwarded || 0
     });
   } catch (error) {
     console.error('Error completing water sort level:', error);

@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../config/db';
 import { sendPushNotification } from './push.service';
 import { distributePendingReferralCommissions } from './network.service';
+import { initTournamentCron } from '../cron/tournament.cron';
 
 export const pruneOldGameSessions = async () => {
   try {
@@ -116,6 +117,9 @@ export const pruneOldAdStats = async () => {
 };
 
 export const startCronJobs = () => {
+  // Initialize Tournaments Cron (1-minute lifecycle transitions and recurring schedules)
+  initTournamentCron();
+
   // Process any pending commissions immediately on startup
   distributePendingReferralCommissions().catch(e => console.error('Error processing startup commissions:', e));
   

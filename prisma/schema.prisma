@@ -55,6 +55,8 @@ model User {
   blocksInitiated       BlockedUser[]       @relation("BlocksInitiated")
   blocksReceived        BlockedUser[]       @relation("BlocksReceived")
   playgroundMessages    PlaygroundMessage[]
+  tournamentParticipants TournamentParticipant[]
+  tournamentPrizes       TournamentPrizeWinner[]
 
   @@index([balance])
   @@index([totalEarned])
@@ -70,13 +72,15 @@ model GameSession {
   startTime   DateTime  @default(now())
   endTime     DateTime?
   status      String    @default("active") // "active", "completed", "invalidated"
-  coinsEarned Int       @default(0)
-  user        User      @relation(fields: [userId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  coinsEarned  Int       @default(0)
+  tournamentId String?
+  user         User      @relation(fields: [userId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([userId])
   @@index([status])
+  @@index([tournamentId])
   @@index([createdAt])
 }
 
@@ -215,6 +219,7 @@ model AppConfig {
   vpnDetectionEnabled Boolean @default(false)
   vpnApiKey           String  @default("")
   maintenanceMode     Boolean @default(false)
+  isTournamentsEnabled Boolean @default(false)
 
   // Referral Withdrawal eligibility conditions
   refWithdrawMinPlaytimeMins Int @default(3000)
@@ -541,3 +546,74 @@ model VideoTutorial {
   order     Int      @default(0)
   createdAt DateTime @default(now())
 }
+
+enum TournamentStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentEntryType {
+  FREE
+  COINS
+}
+
+model Tournament {
+  id                  String               @id @default(uuid())
+  title               String
+  description         String?
+  bannerUrl           String?
+  tag                 String?
+  entryType           TournamentEntryType  @default(FREE)
+  entryFee            Int                  @default(0)
+  maxParticipants     Int?
+  allowedGames        String[]             @default(["treasure_grid", "emoji_memory", "math_rush", "water_sort", "bubble_shooter", "arrow_escape"])
+  scoreMultiplier     Float                @default(1.0)
+  prizePool           Int                  @default(0)
+  prizeStructure      Json
+  startTime           DateTime
+  endTime             DateTime
+  status              TournamentStatus     @default(UPCOMING)
+  isPrizesDistributed Boolean              @default(false)
+  isRecurring         Boolean              @default(false)
+  recurringCron       String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  participants        TournamentParticipant[]
+  prizesAwarded       TournamentPrizeWinner[]
+
+  @@index([status, startTime, endTime])
+}
+
+model TournamentParticipant {
+  id                 String      @id @default(uuid())
+  tournamentId       String
+  userId             String
+  score              Int         @default(0)
+  joinedAt           DateTime    @default(now())
+  lastScoreUpdatedAt DateTime    @default(now())
+
+  tournament         Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId, score(sort: Desc), lastScoreUpdatedAt(sort: Asc)])
+}
+
+model TournamentPrizeWinner {
+  id            String      @id @default(uuid())
+  tournamentId  String
+  userId        String
+  rank          Int
+  score         Int
+  prizeCoins    Int
+  distributedAt DateTime    @default(now())
+
+  tournament    Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+}
+

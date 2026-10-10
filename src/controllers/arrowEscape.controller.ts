@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { TournamentService } from '../services/tournament.service';
 
 export const getArrowEscapeProgress = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -30,7 +31,7 @@ export const getArrowEscapeProgress = async (req: AuthRequest, res: Response): P
 export const completeArrowEscapeLevel = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || req.user?.uid || req.user?.id;
-    const { levelNumber, isMilestoneClaim } = req.body;
+    const { levelNumber, isMilestoneClaim, tournamentId } = req.body;
 
     if (!levelNumber || levelNumber < 1 || levelNumber > 15) {
       res.status(400).json({ success: false, error: 'Invalid level number' });
@@ -60,11 +61,13 @@ export const completeArrowEscapeLevel = async (req: AuthRequest, res: Response):
          return;
       }
 
+      let tournamentScoreResult: any = null;
       await prisma.$transaction(async (tx) => {
         await tx.gameSession.create({
           data: {
             userId,
             gameType: 'arrow_escape',
+            tournamentId: typeof tournamentId === 'string' ? tournamentId : null,
             coinsEarned,
             status: 'completed'
           }
@@ -88,13 +91,25 @@ export const completeArrowEscapeLevel = async (req: AuthRequest, res: Response):
               description: `Arrow Escape Level ${levelNumber} Milestone Reward`
             }
           });
+
+          if (tournamentId && typeof tournamentId === 'string') {
+            tournamentScoreResult = await TournamentService.recordTournamentScore({
+              userId,
+              tournamentId,
+              coinsEarned,
+              gameType: 'arrow_escape',
+              tx
+            });
+          }
         }
       });
       
       res.status(200).json({
         success: true,
         coinsEarned,
-        newUnlockedLevel: ((sessionsCount + 1) % 15) + 1
+        newUnlockedLevel: ((sessionsCount + 1) % 15) + 1,
+        tournamentScore: tournamentScoreResult?.newScore,
+        tournamentPointsAwarded: tournamentScoreResult?.pointsAwarded || 0
       });
     } else {
        res.status(401).json({ success: false, error: 'Unauthorized' });
