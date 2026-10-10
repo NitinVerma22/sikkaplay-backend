@@ -3,15 +3,16 @@ import { prisma } from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { TournamentService } from '../services/tournament.service';
+import { invalidateConfigCache } from '../services/config.service';
 
 /**
  * GET /api/v1/tournaments
- * Lists tournaments filtered by tab: 'live' | 'upcoming' | 'my' | 'history'
+ * Lists tournaments filtered by tab: 'live' | 'upcoming' | 'completed' | 'history' | 'my'
  */
 export const getTournaments = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || req.user?.id;
-    const { tab } = req.query;
+    const { tab, status } = req.query;
 
     // Feature flag check: If tournaments disabled and requester is not admin, hide them
     const config = await prisma.appConfig.findFirst({
@@ -31,23 +32,35 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
     const now = new Date();
     let whereClause: any = {};
 
-    if (tab === 'live') {
+    if (tab === 'live' || status === 'LIVE') {
       whereClause = {
-        status: 'LIVE',
-        startTime: { lte: now },
-        endTime: { gt: now }
+        status: 'LIVE'
       };
-    } else if (tab === 'upcoming') {
+    } else if (tab === 'upcoming' || status === 'UPCOMING') {
       whereClause = {
-        status: 'UPCOMING',
-        startTime: { gt: now }
+        status: 'UPCOMING'
+      };
+    } else if (tab === 'completed' || status === 'COMPLETED') {
+      whereClause = {
+        status: 'COMPLETED'
       };
     } else if (tab === 'history') {
-      whereClause = {
-        status: { in: ['COMPLETED', 'CANCELLED'] }
-      };
+      if (userId) {
+        // User history: all tournaments user participated in (live or completed)
+        whereClause = {
+          participants: {
+            some: { userId }
+          }
+        };
+      } else {
+        whereClause = {
+          status: { in: ['COMPLETED', 'CANCELLED'] }
+        };
+      }
     } else if (tab === 'my' && userId) {
+      // Current active tournaments user joined
       whereClause = {
+        status: 'LIVE',
         participants: {
           some: { userId }
         }
@@ -71,13 +84,14 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         },
         participants: userId ? {
           where: { userId },
-          select: { score: true, joinedAt: true }
+          select: { id: true, score: true, joinedAt: true }
         } : false
       }
     });
 
     const formatted = tournaments.map((t) => {
       const userParticipant = (t as any).participants?.[0];
+      const pCount = (t as any)._count?.participants || 0;
       return {
         id: t.id,
         title: t.title,
@@ -86,6 +100,7 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         tag: t.tag,
         entryType: t.entryType,
         entryFee: t.entryFee,
+        entryFeeCoins: t.entryFee,
         prizePool: t.prizePool,
         prizeStructure: t.prizeStructure,
         maxParticipants: t.maxParticipants,
@@ -95,9 +110,15 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         endTime: t.endTime,
         status: t.status,
         isPrizesDistributed: t.isPrizesDistributed,
-        participantCount: (t as any)._count?.participants || 0,
+        participantCount: pCount,
+        currentParticipants: pCount,
         isJoined: !!userParticipant,
-        myScore: userParticipant?.score || 0
+        myScore: userParticipant?.score || 0,
+        userParticipation: userParticipant ? {
+          id: userParticipant.id || t.id,
+          score: userParticipant.score || 0,
+          joinedAt: userParticipant.joinedAt || new Date()
+        } : null
       };
     });
 
@@ -189,11 +210,21 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
       }
     });
 
+    const pCount = (tournament as any)._count?.participants || 0;
     res.status(200).json({
       success: true,
       tournament: {
         ...tournament,
-        participantCount: (tournament as any)._count?.participants || 0,
+        entryFeeCoins: tournament.entryFee,
+        participantCount: pCount,
+        currentParticipants: pCount,
+        isJoined: !!userStanding?.isJoined,
+        userParticipation: userStanding ? {
+          id: tournament.id,
+          score: userStanding.score || 0,
+          rank: userStanding.rank,
+          joinedAt: userStanding.joinedAt || new Date()
+        } : null,
         userStanding: userStanding || { isJoined: false, score: 0, rank: null },
         podium: (topThree as any[]).map((p, idx) => ({
           rank: idx + 1,
@@ -263,7 +294,16 @@ export const joinTournament = async (req: AuthRequest, res: Response): Promise<v
     });
 
     if (existing) {
-      res.status(200).json({ success: true, message: 'Already joined', isJoined: true });
+      res.status(200).json({
+        success: true,
+        message: 'Already joined',
+        isJoined: true,
+        participant: {
+          id: existing.id,
+          score: existing.score,
+          joinedAt: existing.joinedAt
+        }
+      });
       return;
     }
 
@@ -324,7 +364,12 @@ export const joinTournament = async (req: AuthRequest, res: Response): Promise<v
     res.status(200).json({
       success: true,
       message: 'Successfully joined tournament',
-      isJoined: true
+      isJoined: true,
+      participant: {
+        id: id,
+        score: 0,
+        joinedAt: new Date()
+      }
     });
   } catch (error: any) {
     console.error('Error joining tournament:', error);
@@ -420,7 +465,8 @@ export const adminCreateTournament = async (req: AdminAuthRequest, res: Response
       startTime,
       endTime,
       isRecurring,
-      recurringCron
+      recurringCron,
+      status
     } = req.body;
 
     if (!title || !startTime || !endTime) {
@@ -438,7 +484,9 @@ export const adminCreateTournament = async (req: AdminAuthRequest, res: Response
 
     const now = new Date();
     let initialStatus: 'UPCOMING' | 'LIVE' = 'UPCOMING';
-    if (now >= start && now < end) {
+    if (status === 'LIVE' || status === 'UPCOMING') {
+      initialStatus = status;
+    } else if (now >= start && now < end) {
       initialStatus = 'LIVE';
     }
 
@@ -666,6 +714,8 @@ export const adminToggleFeatureFlag = async (req: AdminAuthRequest, res: Respons
       where: { id: config.id },
       data: { isTournamentsEnabled: !!isEnabled }
     });
+
+    invalidateConfigCache();
 
     res.status(200).json({
       success: true,

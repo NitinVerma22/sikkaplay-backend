@@ -19,6 +19,10 @@ const router = Router();
 
 // ==================== PLAYER ROUTES ====================
 router.get('/', requireJwt, getTournaments);
+router.get('/my', requireJwt, (req, res) => {
+  req.query.tab = 'my';
+  return getTournaments(req as any, res);
+});
 router.get('/:id', requireJwt, getTournamentDetails);
 router.post('/:id/join', requireJwt, joinTournament);
 router.get('/:id/leaderboard', requireJwt, getLeaderboard);
