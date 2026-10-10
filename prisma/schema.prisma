@@ -571,6 +571,7 @@ model Tournament {
   allowedGames        String[]             @default(["treasure_grid", "emoji_memory", "math_rush", "water_sort", "bubble_shooter", "arrow_escape"])
   scoreMultiplier     Float                @default(1.0)
   prizePool           Int                  @default(0)
+  prizePoolRupees     Int                  @default(0)
   prizeStructure      Json
   startTime           DateTime
   endTime             DateTime
