@@ -5,6 +5,23 @@ import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { TournamentService } from '../services/tournament.service';
 import { invalidateConfigCache } from '../services/config.service';
 
+export const parseThemeAndOrder = (tag?: string | null): { theme: string; order: number } => {
+  if (!tag) return { theme: 'purple', order: 999 };
+  const str = tag.trim();
+  if (str.includes(':')) {
+    const parts = str.split(':');
+    const theme = parts[0].trim().toLowerCase() || 'purple';
+    const order = parseInt(parts[1]) || 999;
+    return { theme, order };
+  }
+  const knownThemes = ['purple', 'blue', 'green', 'amber', 'rose', 'cyan'];
+  const matched = knownThemes.find(t => str.toLowerCase().includes(t));
+  if (matched) {
+    return { theme: matched, order: 999 };
+  }
+  return { theme: 'purple', order: 999 };
+};
+
 /**
  * GET /api/v1/tournaments
  * Lists tournaments filtered by tab: 'live' | 'upcoming' | 'completed' | 'history' | 'my'
@@ -89,15 +106,27 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       }
     });
 
+    // Sort tournaments by admin arrangement order first
+    tournaments.sort((a, b) => {
+      const orderA = parseThemeAndOrder(a.tag).order;
+      const orderB = parseThemeAndOrder(b.tag).order;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+
     const formatted = tournaments.map((t) => {
       const userParticipant = (t as any).participants?.[0];
       const pCount = (t as any)._count?.participants || 0;
+      const { theme, order } = parseThemeAndOrder(t.tag);
       return {
         id: t.id,
         title: t.title,
         description: t.description,
         bannerUrl: t.bannerUrl,
         tag: t.tag,
+        gradientTheme: theme,
+        order: order,
+        displayOrder: order,
         entryType: t.entryType,
         entryFee: t.entryFee,
         entryFeeCoins: t.entryFee,
@@ -431,13 +460,27 @@ export const adminListTournaments = async (req: AdminAuthRequest, res: Response)
       }
     });
 
+    // Sort tournaments by admin arrangement order first
+    tournaments.sort((a, b) => {
+      const orderA = parseThemeAndOrder(a.tag).order;
+      const orderB = parseThemeAndOrder(b.tag).order;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
     res.status(200).json({
       success: true,
-      tournaments: tournaments.map((t) => ({
-        ...t,
-        participantCount: t._count.participants,
-        winnersCount: t._count.prizesAwarded
-      }))
+      tournaments: tournaments.map((t) => {
+        const { theme, order } = parseThemeAndOrder(t.tag);
+        return {
+          ...t,
+          order,
+          displayOrder: order,
+          gradientTheme: theme,
+          participantCount: t._count.participants,
+          winnersCount: t._count.prizesAwarded
+        };
+      })
     });
   } catch (error) {
     console.error('Error in adminListTournaments:', error);
@@ -730,5 +773,43 @@ export const adminToggleFeatureFlag = async (req: AdminAuthRequest, res: Respons
   } catch (error: any) {
     console.error('Error toggling feature flag:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to toggle feature flag' });
+  }
+};
+
+/**
+ * POST /api/v1/tournaments/admin/reorder
+ * Admin: Update arrangement order of tournaments
+ */
+export const adminReorderTournaments = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { tournamentIds } = req.body;
+    if (!Array.isArray(tournamentIds) || tournamentIds.length === 0) {
+      res.status(400).json({ success: false, error: 'tournamentIds array is required' });
+      return;
+    }
+
+    for (let i = 0; i < tournamentIds.length; i++) {
+      const id = tournamentIds[i];
+      const existing = await prisma.tournament.findUnique({
+        where: { id },
+        select: { id: true, tag: true }
+      });
+      if (existing) {
+        const { theme } = parseThemeAndOrder(existing.tag);
+        const newTag = `${theme}:${i + 1}`;
+        await prisma.tournament.update({
+          where: { id },
+          data: { tag: newTag }
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Tournament arrangement updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Error reordering tournaments:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to reorder tournaments' });
   }
 };

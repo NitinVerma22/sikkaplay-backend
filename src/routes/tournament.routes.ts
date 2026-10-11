@@ -12,7 +12,8 @@ import {
   adminDuplicateTournament,
   adminCancelTournament,
   adminTriggerPayout,
-  adminToggleFeatureFlag
+  adminToggleFeatureFlag,
+  adminReorderTournaments
 } from '../controllers/tournament.controller';
 
 const router = Router();
@@ -31,6 +32,7 @@ router.get('/:id/leaderboard', requireJwt, getLeaderboard);
 router.get('/admin/all', requireAdminJwt, adminListTournaments);
 router.post('/admin/create', requireAdminJwt, adminCreateTournament);
 router.put('/admin/:id', requireAdminJwt, adminUpdateTournament);
+router.post('/admin/reorder', requireAdminJwt, adminReorderTournaments);
 router.post('/admin/:id/duplicate', requireAdminJwt, adminDuplicateTournament);
 router.post('/admin/:id/cancel', requireAdminJwt, adminCancelTournament);
 router.post('/admin/:id/payout', requireAdminJwt, adminTriggerPayout);
