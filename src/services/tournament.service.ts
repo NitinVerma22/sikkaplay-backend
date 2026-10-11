@@ -96,6 +96,13 @@ export class TournamentService {
         }
       });
 
+      // Invalidate leaderboard in-memory cache for this tournament
+      for (const key of leaderboardCache.keys()) {
+        if (key.startsWith(`lb_${tournamentId}_`)) {
+          leaderboardCache.delete(key);
+        }
+      }
+
       return { scored: true, pointsAwarded: points, newScore: updated.score };
     } catch (error) {
       console.error(`[TournamentService.recordTournamentScore] Error recording score for user ${userId} in tournament ${tournamentId}:`, error);
@@ -128,7 +135,21 @@ export class TournamentService {
       // Cache miss or expired: fetch from DB using covering composite index
       const skip = (page - 1) * limit;
 
-      const [participants, totalCount] = await Promise.all([
+      const [tournament, participants, totalCount] = await Promise.all([
+        prisma.tournament.findUnique({
+          where: { id: params.tournamentId },
+          select: {
+            id: true,
+            title: true,
+            prizePool: true,
+            prizePoolRupees: true,
+            status: true,
+            startTime: true,
+            endTime: true,
+            allowedGames: true,
+            prizeStructure: true,
+          }
+        }),
         prisma.tournamentParticipant.findMany({
           where: { tournamentId: params.tournamentId },
           orderBy: [
@@ -155,21 +176,48 @@ export class TournamentService {
         })
       ]);
 
-      // Format clean, lean JSON response
-      const rankings = participants.map((p, idx) => ({
-        rank: skip + idx + 1,
-        userId: p.userId,
-        name: p.user.name || p.user.username || `Player_${p.userId.substring(0, 4)}`,
-        avatarUrl: p.user.avatarUrl || null,
-        score: p.score
-      }));
+      const prizeStructure = Array.isArray(tournament?.prizeStructure)
+        ? (tournament!.prizeStructure as Array<{ rankMin: number; rankMax: number; prize: number }>)
+        : [];
+
+      // Format clean, comprehensive JSON response
+      const rankings = participants.map((p, idx) => {
+        const rank = skip + idx + 1;
+        const matchingTier = prizeStructure.find((t) => rank >= t.rankMin && rank <= t.rankMax);
+        const name = p.user?.name || p.user?.username || `Player_${p.userId.substring(0, 4)}`;
+        const avatar = p.user?.avatarUrl || null;
+
+        return {
+          rank,
+          userId: p.userId,
+          name,
+          userName: name,
+          avatarUrl: avatar,
+          userAvatar: avatar,
+          score: p.score,
+          prize: matchingTier ? matchingTier.prize : 0
+        };
+      });
 
       const payload = {
+        tournament: tournament ? {
+          id: tournament.id,
+          title: tournament.title,
+          prizePool: tournament.prizePool,
+          prizePoolRupees: tournament.prizePoolRupees || 0,
+          status: tournament.status,
+          startTime: tournament.startTime,
+          endTime: tournament.endTime,
+          allowedGames: tournament.allowedGames,
+          prizeStructure: tournament.prizeStructure,
+        } : null,
         rankings,
+        leaderboard: rankings,
         totalParticipants: totalCount,
         page,
         limit,
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages: Math.ceil(totalCount / limit),
+        isLive: tournament?.status === 'LIVE'
       };
 
       const etag = crypto.createHash('md5').update(JSON.stringify(payload)).digest('hex');
@@ -193,13 +241,22 @@ export class TournamentService {
     }
 
     // Also get requesting user's live rank & score if authenticated
-    let userStanding = null;
+    let userStanding: any = null;
     if (params.userId) {
       const myParticipant = await prisma.tournamentParticipant.findUnique({
         where: {
           tournamentId_userId: {
             tournamentId: params.tournamentId,
             userId: params.userId
+          }
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              username: true,
+              avatarUrl: true
+            }
           }
         }
       });
@@ -219,9 +276,23 @@ export class TournamentService {
           }
         });
 
+        const rank = higherRankedCount + 1;
+        const prizeStructure = Array.isArray(cached?.data?.tournament?.prizeStructure)
+          ? (cached!.data.tournament.prizeStructure as Array<{ rankMin: number; rankMax: number; prize: number }>)
+          : [];
+        const matchingTier = prizeStructure.find((t) => rank >= t.rankMin && rank <= t.rankMax);
+        const name = myParticipant.user?.name || myParticipant.user?.username || 'You';
+        const avatar = myParticipant.user?.avatarUrl || null;
+
         userStanding = {
-          rank: higherRankedCount + 1,
+          rank,
+          userId: params.userId,
+          name,
+          userName: name,
+          avatarUrl: avatar,
+          userAvatar: avatar,
           score: myParticipant.score,
+          prize: matchingTier ? matchingTier.prize : 0,
           lastScoreUpdatedAt: myParticipant.lastScoreUpdatedAt
         };
       }
@@ -230,7 +301,8 @@ export class TournamentService {
     return {
       data: {
         ...cached.data,
-        userStanding
+        userStanding,
+        userRank: userStanding
       },
       etag: cached.etag,
       isNotModified: false
