@@ -181,8 +181,8 @@ export const startCronJobs = () => {
         if (user.fcmToken) {
           sendPushNotification(
             user.fcmToken, 
-            'Aao khelo Sikka!', 
-            `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`,
+            'Aao khelo Sikka Games! 🎮', 
+            `${user.name || 'Champion'}, Sikka Games aapka wait kar raha hai. Abhi khel ke coins jeeto!`,
             'alert',
             null,
             user.id
