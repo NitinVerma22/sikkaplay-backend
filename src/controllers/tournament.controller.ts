@@ -813,3 +813,163 @@ export const adminReorderTournaments = async (req: AdminAuthRequest, res: Respon
     res.status(500).json({ success: false, error: error.message || 'Failed to reorder tournaments' });
   }
 };
+
+/**
+ * DELETE /api/v1/tournaments/admin/:id
+ * Admin: Permanently delete tournament and its participant records
+ */
+export const adminDeleteTournament = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const tournament = await prisma.tournament.findUnique({
+      where: { id }
+    });
+
+    if (!tournament) {
+      res.status(404).json({ success: false, error: 'Tournament not found' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.tournamentPrizeWinner.deleteMany({
+        where: { tournamentId: id }
+      });
+
+      await tx.tournamentParticipant.deleteMany({
+        where: { tournamentId: id }
+      });
+
+      await tx.tournament.delete({
+        where: { id }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Tournament "${tournament.title}" deleted successfully`
+    });
+  } catch (error: any) {
+    console.error('Error deleting tournament:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete tournament' });
+  }
+};
+
+/**
+ * GET /api/v1/tournaments/admin/:id/details
+ * Admin: View comprehensive tournament analytics, entry fees, liability & participant statuses
+ */
+export const adminGetTournamentDetails = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                phoneNumber: true,
+                email: true,
+                balance: true
+              }
+            }
+          },
+          orderBy: [
+            { score: 'desc' },
+            { lastScoreUpdatedAt: 'asc' }
+          ]
+        },
+        prizesAwarded: true
+      }
+    });
+
+    if (!tournament) {
+      res.status(404).json({ success: false, error: 'Tournament not found' });
+      return;
+    }
+
+    const participants = tournament.participants || [];
+    const totalParticipants = participants.length;
+    const isPaid = tournament.entryType === 'COINS' && tournament.entryFee > 0;
+    const entryFeePerUser = tournament.entryFee || 0;
+    const totalFeesCollectedCoins = isPaid ? totalParticipants * entryFeePerUser : 0;
+
+    const prizeLiabilityCoins = tournament.prizePool || 0;
+    const prizeLiabilityRupees = tournament.prizePoolRupees || 0;
+    const netCoinMargin = totalFeesCollectedCoins - prizeLiabilityCoins;
+
+    const winnersMap = new Map<string, number>();
+    for (const w of tournament.prizesAwarded || []) {
+      winnersMap.set(w.userId, w.prizeCoins);
+    }
+
+    const prizeTiers = Array.isArray(tournament.prizeStructure) ? (tournament.prizeStructure as any[]) : [];
+    const detailedParticipants = participants.map((p, idx) => {
+      const rank = idx + 1;
+      const awardedCoins = winnersMap.get(p.userId);
+
+      let eligibleCoins = 0;
+      let eligibleRupees = 0;
+      if (tournament.isPrizesDistributed && awardedCoins !== undefined) {
+        eligibleCoins = awardedCoins;
+      } else {
+        const tier = prizeTiers.find(t => rank >= t.rankMin && rank <= t.rankMax);
+        if (tier) {
+          eligibleCoins = tier.prize || 0;
+          eligibleRupees = tier.prizeRupees || 0;
+        }
+      }
+
+      return {
+        userId: p.userId,
+        name: p.user?.name || 'Player',
+        phone: p.user?.phoneNumber || null,
+        email: p.user?.email || null,
+        joinedAt: p.joinedAt,
+        score: p.score,
+        lastScoreUpdatedAt: p.lastScoreUpdatedAt,
+        rank,
+        awardedCoins: awardedCoins ?? null,
+        eligibleCoins,
+        eligibleRupees,
+        isPrizeDistributed: awardedCoins !== undefined,
+        status: tournament.isPrizesDistributed
+          ? (awardedCoins !== undefined && awardedCoins > 0 ? 'Prize Distributed' : 'Completed')
+          : (eligibleCoins > 0 ? `In Prize Zone (Rank #${rank})` : 'Active')
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      details: {
+        id: tournament.id,
+        title: tournament.title,
+        description: tournament.description,
+        status: tournament.status,
+        entryType: tournament.entryType,
+        entryFee: tournament.entryFee,
+        startTime: tournament.startTime,
+        endTime: tournament.endTime,
+        prizePool: tournament.prizePool,
+        prizePoolRupees: tournament.prizePoolRupees || 0,
+        isPrizesDistributed: tournament.isPrizesDistributed,
+        allowedGames: tournament.allowedGames,
+        maxParticipants: tournament.maxParticipants,
+        summary: {
+          totalParticipants,
+          entryFeesCollectedCoins: totalFeesCollectedCoins,
+          prizeLiabilityCoins,
+          prizeLiabilityRupees,
+          netCoinMargin,
+          distributionStatus: tournament.isPrizesDistributed ? 'COMPLETED' : 'PENDING'
+        },
+        participants: detailedParticipants
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching tournament details:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to fetch tournament details' });
+  }
+};
