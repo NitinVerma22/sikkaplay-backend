@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { TournamentService } from '../services/tournament.service';
 import { invalidateConfigCache } from '../services/config.service';
+import { DEFAULT_RECURRING_TEMPLATES, ensureRecurringDailyTournaments } from '../cron/tournament.cron';
 
 export const parseThemeAndOrder = (tag?: string | null): { theme: string; order: number } => {
   if (!tag) return { theme: 'purple', order: 999 };
@@ -777,6 +778,105 @@ export const adminToggleFeatureFlag = async (req: AdminAuthRequest, res: Respons
 };
 
 /**
+ * GET /api/v1/tournaments/admin/recurring-settings
+ * Admin: Get recurring tournament automation status and templates
+ */
+export const adminGetRecurringSettings = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const config = await prisma.appConfig.findFirst({
+      select: {
+        isTournamentsEnabled: true,
+        isRecurringTournamentsEnabled: true,
+        recurringTournamentTemplates: true
+      }
+    });
+
+    let templates = DEFAULT_RECURRING_TEMPLATES;
+    if (config?.recurringTournamentTemplates && Array.isArray(config.recurringTournamentTemplates) && config.recurringTournamentTemplates.length > 0) {
+      templates = config.recurringTournamentTemplates as any;
+    }
+
+    res.status(200).json({
+      success: true,
+      isTournamentsEnabled: config?.isTournamentsEnabled ?? false,
+      isRecurringTournamentsEnabled: config?.isRecurringTournamentsEnabled ?? true,
+      templates
+    });
+  } catch (error: any) {
+    console.error('Error fetching recurring tournament settings:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to fetch settings' });
+  }
+};
+
+/**
+ * POST /api/v1/tournaments/admin/recurring-settings
+ * Admin: Update recurring tournament toggle and templates
+ */
+export const adminUpdateRecurringSettings = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const { isRecurringTournamentsEnabled, templates } = req.body;
+    const config = await prisma.appConfig.findFirst();
+
+    if (!config) {
+      res.status(404).json({ success: false, error: 'AppConfig not found' });
+      return;
+    }
+
+    const dataToUpdate: any = {};
+    if (typeof isRecurringTournamentsEnabled === 'boolean') {
+      dataToUpdate.isRecurringTournamentsEnabled = isRecurringTournamentsEnabled;
+    }
+    if (Array.isArray(templates)) {
+      dataToUpdate.recurringTournamentTemplates = templates;
+    }
+
+    const updated = await prisma.appConfig.update({
+      where: { id: config.id },
+      data: dataToUpdate,
+      select: {
+        isTournamentsEnabled: true,
+        isRecurringTournamentsEnabled: true,
+        recurringTournamentTemplates: true
+      }
+    });
+
+    invalidateConfigCache();
+
+    let savedTemplates = DEFAULT_RECURRING_TEMPLATES;
+    if (updated.recurringTournamentTemplates && Array.isArray(updated.recurringTournamentTemplates) && updated.recurringTournamentTemplates.length > 0) {
+      savedTemplates = updated.recurringTournamentTemplates as any;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Recurring tournament settings saved successfully',
+      isRecurringTournamentsEnabled: updated.isRecurringTournamentsEnabled,
+      templates: savedTemplates
+    });
+  } catch (error: any) {
+    console.error('Error updating recurring tournament settings:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to update settings' });
+  }
+};
+
+/**
+ * POST /api/v1/tournaments/admin/trigger-recurring-creation
+ * Admin: Manually trigger recurring tournament auto-creation on demand
+ */
+export const adminTriggerRecurringCreation = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    await ensureRecurringDailyTournaments();
+    res.status(200).json({
+      success: true,
+      message: 'Recurring daily tournaments checked and created successfully'
+    });
+  } catch (error: any) {
+    console.error('Error triggering recurring creation:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to trigger creation' });
+  }
+};
+
+/**
  * POST /api/v1/tournaments/admin/reorder
  * Admin: Update arrangement order of tournaments
  */
@@ -971,5 +1071,69 @@ export const adminGetTournamentDetails = async (req: AdminAuthRequest, res: Resp
   } catch (error: any) {
     console.error('Error fetching tournament details:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to fetch tournament details' });
+  }
+};
+
+/**
+ * POST /api/v1/tournaments/admin/:tournamentId/participants/:userId/score
+ * Admin: Modify or increase a participant's score/points
+ */
+export const adminUpdateParticipantScore = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const tournamentId = String(req.params.tournamentId);
+    const userId = String(req.params.userId);
+    const { score, mode } = req.body;
+
+    const parsedScore = parseInt(score);
+    if (isNaN(parsedScore)) {
+      res.status(400).json({ success: false, error: 'Valid score number is required' });
+      return;
+    }
+
+    const participant = await prisma.tournamentParticipant.findUnique({
+      where: {
+        tournamentId_userId: { tournamentId, userId }
+      }
+    });
+
+    if (!participant) {
+      res.status(404).json({ success: false, error: 'Participant not found in this tournament' });
+      return;
+    }
+
+    const finalScore = mode === 'add' ? Math.max(0, participant.score + parsedScore) : Math.max(0, parsedScore);
+
+    const updated = await prisma.tournamentParticipant.update({
+      where: {
+        tournamentId_userId: { tournamentId, userId }
+      },
+      data: {
+        score: finalScore,
+        lastScoreUpdatedAt: new Date()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phoneNumber: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Score updated to ${finalScore} points successfully`,
+      participant: {
+        userId: updated.userId,
+        name: updated.user?.name || 'Player',
+        phone: updated.user?.phoneNumber || null,
+        score: updated.score
+      }
+    });
+  } catch (error: any) {
+    console.error('Error updating participant score:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to update score' });
   }
 };

@@ -15,7 +15,11 @@ import {
   adminToggleFeatureFlag,
   adminReorderTournaments,
   adminDeleteTournament,
-  adminGetTournamentDetails
+  adminGetTournamentDetails,
+  adminGetRecurringSettings,
+  adminUpdateRecurringSettings,
+  adminTriggerRecurringCreation,
+  adminUpdateParticipantScore
 } from '../controllers/tournament.controller';
 
 const router = Router();
@@ -32,10 +36,14 @@ router.get('/:id/leaderboard', requireJwt, getLeaderboard);
 
 // ==================== ADMIN ROUTES ====================
 router.get('/admin/all', requireAdminJwt, adminListTournaments);
+router.get('/admin/recurring-settings', requireAdminJwt, adminGetRecurringSettings);
+router.post('/admin/recurring-settings', requireAdminJwt, adminUpdateRecurringSettings);
+router.post('/admin/trigger-recurring-creation', requireAdminJwt, adminTriggerRecurringCreation);
 router.post('/admin/create', requireAdminJwt, adminCreateTournament);
 router.put('/admin/:id', requireAdminJwt, adminUpdateTournament);
 router.delete('/admin/:id', requireAdminJwt, adminDeleteTournament);
 router.get('/admin/:id/details', requireAdminJwt, adminGetTournamentDetails);
+router.post('/admin/:tournamentId/participants/:userId/score', requireAdminJwt, adminUpdateParticipantScore);
 router.post('/admin/reorder', requireAdminJwt, adminReorderTournaments);
 router.post('/admin/:id/duplicate', requireAdminJwt, adminDuplicateTournament);
 router.post('/admin/:id/cancel', requireAdminJwt, adminCancelTournament);

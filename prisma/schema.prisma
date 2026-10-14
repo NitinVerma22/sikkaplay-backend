@@ -220,6 +220,8 @@ model AppConfig {
   vpnApiKey           String  @default("")
   maintenanceMode     Boolean @default(false)
   isTournamentsEnabled Boolean @default(false)
+  isRecurringTournamentsEnabled Boolean @default(true)
+  recurringTournamentTemplates Json?
 
   // Referral Withdrawal eligibility conditions
   refWithdrawMinPlaytimeMins Int @default(3000)

@@ -2,22 +2,125 @@ import cron from 'node-cron';
 import { prisma } from '../config/db';
 import { TournamentService } from '../services/tournament.service';
 
+export interface RecurringTournamentTemplate {
+  id?: string;
+  enabled?: boolean;
+  title: string;
+  tag: string;
+  startHour: number;
+  startMin: number;
+  endHour: number;
+  endMin: number;
+  entryType: 'FREE' | 'COINS';
+  entryFee: number;
+  prizePool: number;
+  prizePoolRupees?: number;
+  prizeStructure: Array<{ rankMin: number; rankMax: number; prize: number; prizeRupees?: number }>;
+}
+
+export const DEFAULT_RECURRING_TEMPLATES: RecurringTournamentTemplate[] = [
+  {
+    id: 'tpl_morning_flash',
+    enabled: true,
+    title: '1-Hour Flash Rush (Morning)',
+    tag: 'FLASH ⚡',
+    startHour: 9,
+    startMin: 0,
+    endHour: 10,
+    endMin: 0,
+    entryType: 'FREE',
+    entryFee: 0,
+    prizePool: 1500,
+    prizePoolRupees: 0,
+    prizeStructure: [
+      { rankMin: 1, rankMax: 1, prize: 500 },
+      { rankMin: 2, rankMax: 2, prize: 300 },
+      { rankMin: 3, rankMax: 3, prize: 200 },
+      { rankMin: 4, rankMax: 10, prize: 50 },
+      { rankMin: 11, rankMax: 20, prize: 15 }
+    ]
+  },
+  {
+    id: 'tpl_evening_flash',
+    enabled: true,
+    title: '1-Hour Flash Rush (Evening)',
+    tag: 'FLASH ⚡',
+    startHour: 18,
+    startMin: 0,
+    endHour: 19,
+    endMin: 0,
+    entryType: 'FREE',
+    entryFee: 0,
+    prizePool: 2500,
+    prizePoolRupees: 0,
+    prizeStructure: [
+      { rankMin: 1, rankMax: 1, prize: 1000 },
+      { rankMin: 2, rankMax: 2, prize: 500 },
+      { rankMin: 3, rankMax: 3, prize: 250 },
+      { rankMin: 4, rankMax: 10, prize: 75 },
+      { rankMin: 11, rankMax: 25, prize: 15 }
+    ]
+  },
+  {
+    id: 'tpl_night_flash',
+    enabled: true,
+    title: '1-Hour Flash Rush (Night Peak)',
+    tag: 'HOT 🔥',
+    startHour: 22,
+    startMin: 0,
+    endHour: 23,
+    endMin: 0,
+    entryType: 'FREE',
+    entryFee: 0,
+    prizePool: 3000,
+    prizePoolRupees: 0,
+    prizeStructure: [
+      { rankMin: 1, rankMax: 1, prize: 1200 },
+      { rankMin: 2, rankMax: 2, prize: 600 },
+      { rankMin: 3, rankMax: 3, prize: 300 },
+      { rankMin: 4, rankMax: 10, prize: 100 },
+      { rankMin: 11, rankMax: 30, prize: 10 }
+    ]
+  },
+  {
+    id: 'tpl_daily_mega',
+    enabled: true,
+    title: 'Daily Mega Cup',
+    tag: 'MEGA 🏆',
+    startHour: 0,
+    startMin: 0,
+    endHour: 23,
+    endMin: 59,
+    entryType: 'COINS',
+    entryFee: 50,
+    prizePool: 10000,
+    prizePoolRupees: 0,
+    prizeStructure: [
+      { rankMin: 1, rankMax: 1, prize: 3500 },
+      { rankMin: 2, rankMax: 2, prize: 2000 },
+      { rankMin: 3, rankMax: 3, prize: 1000 },
+      { rankMin: 4, rankMax: 10, prize: 300 },
+      { rankMin: 11, rankMax: 50, prize: 35 }
+    ]
+  }
+];
+
 /**
  * Ensures today's recurring scheduled flash tournaments and daily cup exist in DB.
- * Default recurring templates:
- *  - 1-Hour Flash Morning: 09:00 - 10:00 IST
- *  - 1-Hour Flash Evening: 18:00 - 19:00 IST
- *  - 1-Hour Flash Night: 22:00 - 23:00 IST
- *  - Daily Mega Cup: 00:00 - 23:59 IST
  */
 export const ensureRecurringDailyTournaments = async (): Promise<void> => {
   try {
     const config = await prisma.appConfig.findFirst({
-      select: { isTournamentsEnabled: true }
+      select: { 
+        isTournamentsEnabled: true,
+        isRecurringTournamentsEnabled: true,
+        recurringTournamentTemplates: true
+      }
     });
 
-    // Don't auto-create if tournaments master switch is off
-    if (config && !config.isTournamentsEnabled) {
+    // Don't auto-create if tournaments master switch or recurring switch is off
+    if (config && (!config.isTournamentsEnabled || !config.isRecurringTournamentsEnabled)) {
+      console.log('[TournamentCron] Recurring tournaments auto-creation is paused or disabled.');
       return;
     }
 
@@ -37,82 +140,15 @@ export const ensureRecurringDailyTournaments = async (): Promise<void> => {
       return new Date(istMidnightUtc + (hours * 60 + minutes) * 60 * 1000);
     };
 
-    const templates = [
-      {
-        title: '1-Hour Flash Rush (Morning)',
-        tag: 'FLASH ⚡',
-        startHour: 9,
-        startMin: 0,
-        endHour: 10,
-        endMin: 0,
-        entryType: 'FREE' as const,
-        entryFee: 0,
-        prizePool: 1500,
-        prizeStructure: [
-          { rankMin: 1, rankMax: 1, prize: 500 },
-          { rankMin: 2, rankMax: 2, prize: 300 },
-          { rankMin: 3, rankMax: 3, prize: 200 },
-          { rankMin: 4, rankMax: 10, prize: 50 },
-          { rankMin: 11, rankMax: 20, prize: 15 }
-        ]
-      },
-      {
-        title: '1-Hour Flash Rush (Evening)',
-        tag: 'FLASH ⚡',
-        startHour: 18,
-        startMin: 0,
-        endHour: 19,
-        endMin: 0,
-        entryType: 'FREE' as const,
-        entryFee: 0,
-        prizePool: 2500,
-        prizeStructure: [
-          { rankMin: 1, rankMax: 1, prize: 1000 },
-          { rankMin: 2, rankMax: 2, prize: 500 },
-          { rankMin: 3, rankMax: 3, prize: 250 },
-          { rankMin: 4, rankMax: 10, prize: 75 },
-          { rankMin: 11, rankMax: 25, prize: 15 }
-        ]
-      },
-      {
-        title: '1-Hour Flash Rush (Night Peak)',
-        tag: 'HOT 🔥',
-        startHour: 22,
-        startMin: 0,
-        endHour: 23,
-        endMin: 0,
-        entryType: 'FREE' as const,
-        entryFee: 0,
-        prizePool: 3000,
-        prizeStructure: [
-          { rankMin: 1, rankMax: 1, prize: 1200 },
-          { rankMin: 2, rankMax: 2, prize: 600 },
-          { rankMin: 3, rankMax: 3, prize: 300 },
-          { rankMin: 4, rankMax: 10, prize: 100 },
-          { rankMin: 11, rankMax: 30, prize: 10 }
-        ]
-      },
-      {
-        title: 'Daily Mega Cup',
-        tag: 'MEGA 🏆',
-        startHour: 0,
-        startMin: 0,
-        endHour: 23,
-        endMin: 59,
-        entryType: 'COINS' as const,
-        entryFee: 50,
-        prizePool: 10000,
-        prizeStructure: [
-          { rankMin: 1, rankMax: 1, prize: 3500 },
-          { rankMin: 2, rankMax: 2, prize: 2000 },
-          { rankMin: 3, rankMax: 3, prize: 1000 },
-          { rankMin: 4, rankMax: 10, prize: 300 },
-          { rankMin: 11, rankMax: 50, prize: 35 }
-        ]
-      }
-    ];
+    let templates: RecurringTournamentTemplate[] = DEFAULT_RECURRING_TEMPLATES;
+    if (config?.recurringTournamentTemplates && Array.isArray(config.recurringTournamentTemplates) && config.recurringTournamentTemplates.length > 0) {
+      templates = config.recurringTournamentTemplates as any as RecurringTournamentTemplate[];
+    }
 
     for (const tpl of templates) {
+      if (tpl.enabled === false) {
+        continue;
+      }
       const startTime = createIstDateInUtc(tpl.startHour, tpl.startMin);
       const endTime = createIstDateInUtc(tpl.endHour, tpl.endMin);
 
@@ -142,6 +178,7 @@ export const ensureRecurringDailyTournaments = async (): Promise<void> => {
             entryType: tpl.entryType,
             entryFee: tpl.entryFee,
             prizePool: tpl.prizePool,
+            prizePoolRupees: tpl.prizePoolRupees || 0,
             prizeStructure: tpl.prizeStructure,
             startTime,
             endTime,

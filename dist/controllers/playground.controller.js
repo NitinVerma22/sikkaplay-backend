@@ -185,7 +185,7 @@ const getPlaygroundLobby = async (req, res) => {
             totalEarned: user.totalEarned,
             playgroundMinutes: user.playgroundMinutes,
             gender: user.gender,
-            name: user.name || 'SikkaPlay Player',
+            name: user.name || 'Sikka Games Player',
             username: user.username,
             avatarUrl: user.avatarUrl,
             giftInventory: user.giftInventory,
@@ -714,7 +714,7 @@ const searchFriends = async (req, res) => {
             success: true,
             users: matches.map(u => ({
                 id: u.id,
-                name: u.name || 'SikkaPlay Player',
+                name: u.name || 'Sikka Games Player',
                 gender: u.gender,
                 username: u.username,
                 avatarUrl: u.avatarUrl
@@ -778,7 +778,7 @@ const sendFriendRequest = async (req, res) => {
         });
         // Create In-App Notification in DB for target recipient
         const sender = await db_1.prisma.user.findUnique({ where: { id: userId } });
-        const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+        const senderName = sender?.name || sender?.username || 'Sikka Games User';
         try {
             await db_1.prisma.notification.create({
                 data: {
@@ -840,7 +840,7 @@ const acceptFriendRequest = async (req, res) => {
         // Send push & in-app notification to target user (the one who originally sent the request)
         const targetUserId = updated.userOneId === userId ? updated.userTwoId : updated.userOneId;
         const acceptor = await db_1.prisma.user.findUnique({ where: { id: userId } });
-        const acceptorName = acceptor?.name || acceptor?.username || 'SikkaPlay User';
+        const acceptorName = acceptor?.name || acceptor?.username || 'Sikka Games User';
         try {
             await db_1.prisma.notification.create({
                 data: {
@@ -1180,7 +1180,7 @@ const sendPlaygroundMessage = async (req, res) => {
             if (activeChannel !== finalChannelName) {
                 // Recipient is not viewing this channel - send push!
                 const sender = await db_1.prisma.user.findUnique({ where: { id: senderId }, select: { name: true, username: true } });
-                const senderName = sender?.name || sender?.username || 'SikkaPlay User';
+                const senderName = sender?.name || sender?.username || 'Sikka Games User';
                 const recipientUser = await db_1.prisma.user.findUnique({ where: { id: recipientId }, select: { fcmToken: true, id: true } });
                 if (recipientUser?.fcmToken) {
                     const isSignaling = text.startsWith('__');
@@ -1522,7 +1522,7 @@ const getPublicProfile = async (req, res) => {
             success: true,
             user: {
                 id: targetUser.id,
-                name: targetUser.name || 'SikkaPlay Player',
+                name: targetUser.name || 'Sikka Games Player',
                 username: targetUser.username,
                 gender: targetUser.gender || 'male',
                 avatarUrl: targetUser.avatarUrl,
@@ -1530,7 +1530,7 @@ const getPublicProfile = async (req, res) => {
                 currentLevelXp,
                 nextLevelXp,
                 totalEarned: targetUser.totalEarned,
-                bio: targetUser.bio || 'Hello! I am using SikkaPlay.',
+                bio: targetUser.bio || 'Hello! I am using Sikka Games.',
                 friendshipState,
                 friendshipId,
                 friendCount,

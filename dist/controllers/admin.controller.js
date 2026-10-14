@@ -569,24 +569,28 @@ exports.bulkDeleteUsers = bulkDeleteUsers;
 // 5. Withdrawal Requests Management
 const getWithdrawals = async (req, res) => {
     try {
-        const status = req.query.status || ''; // pending, success, failed
+        const isExportAll = req.query.all === 'true' || req.query.limit === 'all';
+        const status = req.query.status || ''; // pending, success, failed, all
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const where = { type: 'withdrawal' };
-        if (status) {
+        if (status && status !== 'all') {
             where.status = status;
         }
-        const withdrawals = await db_1.prisma.transaction.findMany({
+        const queryOptions = {
             where,
             orderBy: { createdAt: 'desc' },
-            skip: (page - 1) * limit,
-            take: limit,
             include: {
                 user: {
-                    select: { id: true, name: true, phoneNumber: true, upiId: true }
+                    select: { id: true, name: true, phoneNumber: true, upiId: true, email: true }
                 }
             }
-        });
+        };
+        if (!isExportAll) {
+            queryOptions.skip = (page - 1) * limit;
+            queryOptions.take = limit;
+        }
+        const withdrawals = await db_1.prisma.transaction.findMany(queryOptions);
         const total = await db_1.prisma.transaction.count({ where });
         const pendingAgg = await db_1.prisma.transaction.aggregate({
             where: { type: 'withdrawal', status: 'pending' },

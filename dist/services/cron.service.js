@@ -8,6 +8,7 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const db_1 = require("../config/db");
 const push_service_1 = require("./push.service");
 const network_service_1 = require("./network.service");
+const tournament_cron_1 = require("../cron/tournament.cron");
 const pruneOldGameSessions = async () => {
     try {
         const config = await db_1.prisma.appConfig.findFirst();
@@ -119,6 +120,8 @@ const pruneOldAdStats = async () => {
 };
 exports.pruneOldAdStats = pruneOldAdStats;
 const startCronJobs = () => {
+    // Initialize Tournaments Cron (1-minute lifecycle transitions and recurring schedules)
+    (0, tournament_cron_1.initTournamentCron)();
     // Process any pending commissions immediately on startup
     (0, network_service_1.distributePendingReferralCommissions)().catch(e => console.error('Error processing startup commissions:', e));
     // Run startup cleanups
@@ -171,7 +174,7 @@ const startCronJobs = () => {
             const userIdsToUpdate = usersToRemind.filter(u => u.fcmToken).map(u => u.id);
             for (const user of usersToRemind) {
                 if (user.fcmToken) {
-                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka!', `${user.name || 'Champion'}, Sikka aapka wait kar raha hai. Abhi khel ke coins jeeto!`, 'alert', null, user.id).catch(e => console.error(`Failed to send inactivity push to ${user.id}:`, e));
+                    (0, push_service_1.sendPushNotification)(user.fcmToken, 'Aao khelo Sikka Games! 🎮', `${user.name || 'Champion'}, Sikka Games aapka wait kar raha hai. Abhi khel ke coins jeeto!`, 'alert', null, user.id).catch(e => console.error(`Failed to send inactivity push to ${user.id}:`, e));
                 }
             }
             if (userIdsToUpdate.length > 0) {

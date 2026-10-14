@@ -192,6 +192,7 @@ export class TournamentService {
           userId: p.userId,
           name,
           userName: name,
+          username: p.user?.username || null,
           avatarUrl: avatar,
           userAvatar: avatar,
           score: p.score,
@@ -289,6 +290,7 @@ export class TournamentService {
           userId: params.userId,
           name,
           userName: name,
+          username: myParticipant.user?.username || null,
           avatarUrl: avatar,
           userAvatar: avatar,
           score: myParticipant.score,
@@ -444,21 +446,10 @@ export class TournamentService {
     const now = new Date();
 
     try {
-      // 1. UPCOMING -> LIVE
-      const toLive = await prisma.tournament.updateMany({
-        where: {
-          status: 'UPCOMING',
-          startTime: { lte: now },
-          endTime: { gt: now }
-        },
-        data: { status: 'LIVE' }
-      });
+      // 1. Note: UPCOMING tournaments do NOT auto-transition to LIVE.
+      // Admin manually activates tournaments to LIVE status from the admin panel.
 
-      if (toLive.count > 0) {
-        console.log(`[TournamentService] Transitioned ${toLive.count} tournaments from UPCOMING to LIVE.`);
-      }
-
-      // 2. LIVE -> COMPLETED
+      // 2. LIVE -> COMPLETED (Auto-transition when endTime has passed)
       const toComplete = await prisma.tournament.findMany({
         where: {
           status: 'LIVE',

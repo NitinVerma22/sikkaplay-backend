@@ -4,6 +4,7 @@ exports.recordSpinAd = exports.endGame = exports.spinWheel = exports.startGame =
 exports.calculateSpinAdCooldown = calculateSpinAdCooldown;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+const tournament_service_1 = require("../services/tournament.service");
 function calculateSpinAdCooldown(adTimestamps) {
     const sorted = [...adTimestamps].sort((a, b) => a.getTime() - b.getTime());
     const COOLDOWN_MS = 8 * 60 * 1000; // 8 minutes
@@ -46,7 +47,7 @@ function calculateSpinAdCooldown(adTimestamps) {
 const startGame = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { gameType } = req.body;
+        const { gameType, tournamentId } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -71,6 +72,7 @@ const startGame = async (req, res) => {
             data: {
                 userId,
                 gameType,
+                tournamentId: typeof tournamentId === 'string' ? tournamentId : null,
                 status: 'active'
             }
         });
@@ -251,7 +253,7 @@ exports.spinWheel = spinWheel;
 const endGame = async (req, res) => {
     try {
         const userId = req.user?.userId;
-        const { sessionId, coinsEarned: reqCoins, bypassFee } = req.body;
+        const { sessionId, coinsEarned: reqCoins, bypassFee, tournamentId: reqTournamentId } = req.body;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -364,17 +366,36 @@ const endGame = async (req, res) => {
                     coinsEarned: session.gameType !== 'spin' ? finalCoinsEarned : undefined
                 }
             });
+            // If tournament session, record tournament score
+            const effectiveTournamentId = (typeof reqTournamentId === 'string' && reqTournamentId.trim() !== '') ? reqTournamentId : session.tournamentId;
+            let tournamentScoreResult = null;
+            if (effectiveTournamentId && finalCoinsEarned > 0 && session.gameType !== 'spin') {
+                tournamentScoreResult = await tournament_service_1.TournamentService.recordTournamentScore({
+                    userId,
+                    tournamentId: effectiveTournamentId,
+                    coinsEarned: finalCoinsEarned,
+                    gameType: session.gameType,
+                    tx
+                });
+            }
             // Get final user balance
             const user = await tx.user.findUnique({
                 where: { id: userId },
                 select: { balance: true }
             });
-            return { coinsEarned: finalCoinsEarned, balance: user?.balance || 0, session: updatedSession };
+            return {
+                coinsEarned: finalCoinsEarned,
+                balance: user?.balance || 0,
+                session: updatedSession,
+                tournamentScoreResult
+            };
         });
         res.status(200).json({
             success: true,
             coinsEarned: result.coinsEarned,
             balance: result.balance,
+            tournamentScore: result.tournamentScoreResult?.newScore,
+            tournamentPointsAwarded: result.tournamentScoreResult?.pointsAwarded || 0,
             message: 'Game session ended successfully'
         });
     }

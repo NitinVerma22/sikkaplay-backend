@@ -24,6 +24,7 @@ const playground_routes_1 = __importDefault(require("./routes/playground.routes"
 const waterSort_routes_1 = __importDefault(require("./routes/waterSort.routes"));
 const bubbleShooter_routes_1 = __importDefault(require("./routes/bubbleShooter.routes"));
 const arrowEscape_routes_1 = __importDefault(require("./routes/arrowEscape.routes"));
+const tournament_routes_1 = __importDefault(require("./routes/tournament.routes"));
 const cron_service_1 = require("./services/cron.service");
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
@@ -103,6 +104,8 @@ app.use('/api/v1/bubble-shooter', bubbleShooter_routes_1.default);
 app.use('/api/bubble-shooter', bubbleShooter_routes_1.default);
 app.use('/api/v1/arrow-escape', arrowEscape_routes_1.default);
 app.use('/api/arrow-escape', arrowEscape_routes_1.default);
+app.use('/api/v1/tournaments', tournament_routes_1.default);
+app.use('/api/tournaments', tournament_routes_1.default);
 // Basic health check route
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'SikkaPlay API is running' });

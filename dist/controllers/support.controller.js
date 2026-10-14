@@ -13,8 +13,8 @@ const getFaqs = async (req, res) => {
         if (faqs.length === 0) {
             const defaultFaqs = [
                 {
-                    question: "What is SikkaPlay?",
-                    answer: "SikkaPlay is a premium reward-based gaming platform where you can play games, complete simple daily tasks, and refer friends to earn Sikka coins. These coins can be withdrawn directly via UPI."
+                    question: "What is Sikka Games?",
+                    answer: "Sikka Games is a premium reward-based gaming platform where you can play games, complete simple daily tasks, and refer friends to earn Sikka coins. These coins can be withdrawn directly via UPI."
                 },
                 {
                     question: "How do I earn Sikka coins?",
