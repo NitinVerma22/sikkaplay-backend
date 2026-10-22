@@ -90,12 +90,19 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       };
     }
 
+    const isCompletedQuery = tab === 'completed' || status === 'COMPLETED';
+
     const tournaments = await prisma.tournament.findMany({
       where: whereClause,
-      orderBy: [
-        { status: 'asc' }, // LIVE before UPCOMING
-        { startTime: 'asc' }
-      ],
+      orderBy: isCompletedQuery
+        ? [
+            { endTime: 'desc' },
+            { startTime: 'desc' }
+          ]
+        : [
+            { status: 'asc' }, // LIVE before UPCOMING
+            { startTime: 'asc' }
+          ],
       include: {
         _count: {
           select: { participants: true }
@@ -107,13 +114,34 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       }
     });
 
-    // Sort tournaments by admin arrangement order first
-    tournaments.sort((a, b) => {
-      const orderA = parseThemeAndOrder(a.tag).order;
-      const orderB = parseThemeAndOrder(b.tag).order;
-      if (orderA !== orderB) return orderA - orderB;
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-    });
+    if (isCompletedQuery) {
+      // Recent completed tournaments at top (descending by endTime)
+      tournaments.sort((a, b) => {
+        const timeB = new Date(b.endTime).getTime();
+        const timeA = new Date(a.endTime).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+      });
+    } else if (tab === 'history') {
+      tournaments.sort((a, b) => {
+        if (a.status !== b.status) {
+          if (a.status === 'LIVE') return -1;
+          if (b.status === 'LIVE') return 1;
+        }
+        const timeB = new Date(b.endTime).getTime();
+        const timeA = new Date(a.endTime).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+      });
+    } else {
+      // Sort tournaments by admin arrangement order first (for live and upcoming)
+      tournaments.sort((a, b) => {
+        const orderA = parseThemeAndOrder(a.tag).order;
+        const orderB = parseThemeAndOrder(b.tag).order;
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      });
+    }
 
     const formatted = tournaments.map((t) => {
       const userParticipant = (t as any).participants?.[0];
