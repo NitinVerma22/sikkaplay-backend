@@ -143,9 +143,15 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       const userParticipant = (t as any).participants?.[0];
       const pCount = (t as any)._count?.participants || 0;
       const { theme, order } = parseThemeAndOrder(t.tag);
+      const minPoints = (t as any).minPointsToWin ?? 1000;
+      const displayTitle = minPoints > 0 && !t.title.includes('pts to win')
+        ? `${t.title} (Min ${minPoints} pts to win)`
+        : t.title;
+
       return {
         id: t.id,
-        title: t.title,
+        title: displayTitle,
+        rawTitle: t.title,
         description: t.description,
         bannerUrl: t.bannerUrl,
         tag: t.tag,
@@ -158,6 +164,7 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         prizePool: t.prizePool,
         prizePoolRupees: (t as any).prizePoolRupees || 0,
         prizeStructure: t.prizeStructure,
+        minPointsToWin: minPoints,
         maxParticipants: t.maxParticipants,
         allowedGames: t.allowedGames,
         scoreMultiplier: t.scoreMultiplier,
@@ -280,10 +287,18 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
     });
 
     const pCount = (tournament as any)._count?.participants || 0;
+    const minPoints = (tournament as any).minPointsToWin ?? 1000;
+    const displayTitle = minPoints > 0 && !tournament.title.includes('pts to win')
+      ? `${tournament.title} (Min ${minPoints} pts to win)`
+      : tournament.title;
+
     res.status(200).json({
       success: true,
       tournament: {
         ...tournament,
+        title: displayTitle,
+        rawTitle: tournament.title,
+        minPointsToWin: minPoints,
         entryFeeCoins: tournament.entryFee,
         participantCount: pCount,
         currentParticipants: pCount,
@@ -560,6 +575,7 @@ export const adminCreateTournament = async (req: AdminAuthRequest, res: Response
       prizePool,
       prizePoolRupees,
       prizeStructure,
+      minPointsToWin,
       startTime,
       endTime,
       isRecurring,
@@ -604,6 +620,7 @@ export const adminCreateTournament = async (req: AdminAuthRequest, res: Response
         prizePool: parseInt(prizePool) || 0,
         prizePoolRupees: parseInt(prizePoolRupees) || 0,
         prizeStructure: Array.isArray(prizeStructure) ? prizeStructure : [],
+        minPointsToWin: minPointsToWin !== undefined ? Math.max(0, parseInt(minPointsToWin) || 0) : 1000,
         startTime: start,
         endTime: end,
         status: initialStatus,
@@ -642,6 +659,7 @@ export const adminUpdateTournament = async (req: AdminAuthRequest, res: Response
       prizePool,
       prizePoolRupees,
       prizeStructure,
+      minPointsToWin,
       startTime,
       endTime,
       status
@@ -662,6 +680,7 @@ export const adminUpdateTournament = async (req: AdminAuthRequest, res: Response
         ...(prizePool !== undefined && { prizePool: parseInt(prizePool) || 0 }),
         ...(prizePoolRupees !== undefined && { prizePoolRupees: parseInt(prizePoolRupees) || 0 }),
         ...(prizeStructure !== undefined && { prizeStructure }),
+        ...(minPointsToWin !== undefined && { minPointsToWin: Math.max(0, parseInt(minPointsToWin) || 0) }),
         ...(startTime && { startTime: new Date(startTime) }),
         ...(endTime && { endTime: new Date(endTime) }),
         ...(status && { status })
@@ -707,6 +726,7 @@ export const adminDuplicateTournament = async (req: AdminAuthRequest, res: Respo
         prizePool: original.prizePool,
         prizePoolRupees: original.prizePoolRupees || 0,
         prizeStructure: original.prizeStructure as any,
+        minPointsToWin: (original as any).minPointsToWin ?? 1000,
         startTime: newStart,
         endTime: newEnd,
         status: 'UPCOMING',

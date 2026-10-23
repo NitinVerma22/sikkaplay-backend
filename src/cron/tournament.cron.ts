@@ -16,6 +16,7 @@ export interface RecurringTournamentTemplate {
   prizePool: number;
   prizePoolRupees?: number;
   prizeStructure: Array<{ rankMin: number; rankMax: number; prize: number; prizeRupees?: number }>;
+  minPointsToWin?: number;
 }
 
 export const DEFAULT_RECURRING_TEMPLATES: RecurringTournamentTemplate[] = [
@@ -180,6 +181,7 @@ export const ensureRecurringDailyTournaments = async (): Promise<void> => {
             prizePool: tpl.prizePool,
             prizePoolRupees: tpl.prizePoolRupees || 0,
             prizeStructure: tpl.prizeStructure,
+            minPointsToWin: tpl.minPointsToWin ?? 1000,
             startTime,
             endTime,
             status,

@@ -148,6 +148,7 @@ export class TournamentService {
             endTime: true,
             allowedGames: true,
             prizeStructure: true,
+            minPointsToWin: true
           }
         }),
         prisma.tournamentParticipant.findMany({
@@ -179,6 +180,7 @@ export class TournamentService {
       const prizeStructure = Array.isArray(tournament?.prizeStructure)
         ? (tournament!.prizeStructure as Array<{ rankMin: number; rankMax: number; prize: number }>)
         : [];
+      const minRequired = (tournament as any)?.minPointsToWin ?? 1000;
 
       // Format clean, comprehensive JSON response
       const rankings = participants.map((p, idx) => {
@@ -186,6 +188,7 @@ export class TournamentService {
         const matchingTier = prizeStructure.find((t) => rank >= t.rankMin && rank <= t.rankMax);
         const name = p.user?.name || p.user?.username || `Player_${p.userId.substring(0, 4)}`;
         const avatar = p.user?.avatarUrl || null;
+        const meetsThreshold = p.score >= minRequired;
 
         return {
           rank,
@@ -196,7 +199,10 @@ export class TournamentService {
           avatarUrl: avatar,
           userAvatar: avatar,
           score: p.score,
-          prize: matchingTier ? matchingTier.prize : 0
+          prize: (matchingTier && meetsThreshold) ? matchingTier.prize : 0,
+          potentialPrize: matchingTier ? matchingTier.prize : 0,
+          isEligibleForPrize: meetsThreshold,
+          minPointsRequired: minRequired
         };
       });
 
@@ -211,6 +217,7 @@ export class TournamentService {
           endTime: tournament.endTime,
           allowedGames: tournament.allowedGames,
           prizeStructure: tournament.prizeStructure,
+          minPointsToWin: minRequired,
         } : null,
         rankings,
         leaderboard: rankings,
@@ -366,7 +373,11 @@ export class TournamentService {
           // Find if this rank falls into any prize tier
           const matchingTier = prizeStructure.find((tier) => rank >= tier.rankMin && rank <= tier.rankMax);
 
-          if (matchingTier && matchingTier.prize > 0) {
+          // Minimum points threshold check: User must score at least minPointsToWin (e.g. 1000) to receive reward
+          const minRequired = (tournament as any).minPointsToWin ?? 1000;
+          const meetsThreshold = participant.score >= minRequired;
+
+          if (matchingTier && matchingTier.prize > 0 && meetsThreshold) {
             const prizeAmount = matchingTier.prize;
 
             // 1. Credit wallet
