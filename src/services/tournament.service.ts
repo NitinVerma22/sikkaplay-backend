@@ -12,6 +12,20 @@ interface LeaderboardCacheEntry {
 const leaderboardCache = new Map<string, LeaderboardCacheEntry>();
 const CACHE_TTL_MS = 15 * 1000; // 15 seconds
 
+export const formatTournamentDisplayTitle = (title: string, minPoints: number): string => {
+  if (!title) return '';
+  if (!minPoints || minPoints <= 0) return title;
+
+  let clean = title
+    .replace(/\s*\(Min \d+ pts to win\)/gi, '')
+    .replace(/^🎯\s*Min \d+ Pts\s*[•|]\s*/gi, '')
+    .trim();
+
+  clean = clean.replace(/^1-Hour\s+/i, '');
+
+  return `🎯 Min ${minPoints} Pts • ${clean}`;
+};
+
 export class TournamentService {
   /**
    * Generates a cache key for a tournament's leaderboard request
@@ -211,7 +225,8 @@ export class TournamentService {
       const payload = {
         tournament: tournament ? {
           id: tournament.id,
-          title: tournament.title,
+          title: formatTournamentDisplayTitle(tournament.title, minRequired),
+          rawTitle: tournament.title,
           tag: tagBadge,
           prizePool: tournament.prizePool,
           prizePoolRupees: tournament.prizePoolRupees || 0,
