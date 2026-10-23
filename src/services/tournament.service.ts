@@ -148,7 +148,8 @@ export class TournamentService {
             endTime: true,
             allowedGames: true,
             prizeStructure: true,
-            minPointsToWin: true
+            minPointsToWin: true,
+            tag: true
           }
         }),
         prisma.tournamentParticipant.findMany({
@@ -206,10 +207,12 @@ export class TournamentService {
         };
       });
 
+      const tagBadge = minRequired > 0 ? `MIN ${minRequired} PTS` : (tournament?.tag || 'MEGA');
       const payload = {
         tournament: tournament ? {
           id: tournament.id,
           title: tournament.title,
+          tag: tagBadge,
           prizePool: tournament.prizePool,
           prizePoolRupees: tournament.prizePoolRupees || 0,
           status: tournament.status,

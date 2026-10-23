@@ -144,6 +144,7 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       const pCount = (t as any)._count?.participants || 0;
       const { theme, order } = parseThemeAndOrder(t.tag);
       const minPoints = (t as any).minPointsToWin ?? 1000;
+      const tagBadge = minPoints > 0 ? `MIN ${minPoints} PTS` : (t.tag || 'MEGA');
 
       return {
         id: t.id,
@@ -151,7 +152,7 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         rawTitle: t.title,
         description: t.description,
         bannerUrl: t.bannerUrl,
-        tag: t.tag,
+        tag: tagBadge,
         gradientTheme: theme,
         order: order,
         displayOrder: order,
@@ -285,11 +286,13 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
 
     const pCount = (tournament as any)._count?.participants || 0;
     const minPoints = (tournament as any).minPointsToWin ?? 1000;
+    const tagBadge = minPoints > 0 ? `MIN ${minPoints} PTS` : (tournament.tag || 'MEGA');
 
     res.status(200).json({
       success: true,
       tournament: {
         ...tournament,
+        tag: tagBadge,
         title: tournament.title,
         rawTitle: tournament.title,
         minPointsToWin: minPoints,
