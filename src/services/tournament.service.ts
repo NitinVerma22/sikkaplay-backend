@@ -446,8 +446,45 @@ export class TournamentService {
     const now = new Date();
 
     try {
-      // 1. Note: UPCOMING tournaments do NOT auto-transition to LIVE.
-      // Admin manually activates tournaments to LIVE status from the admin panel.
+      // 1. Auto-transition recurring tournaments from UPCOMING to LIVE when startTime arrives (if recurring enabled)
+      const config = await prisma.appConfig.findFirst({
+        select: { isRecurringTournamentsEnabled: true }
+      });
+      if (config?.isRecurringTournamentsEnabled) {
+        const toLive = await prisma.tournament.findMany({
+          where: {
+            isRecurring: true,
+            status: 'UPCOMING',
+            startTime: { lte: now },
+            endTime: { gt: now }
+          },
+          select: { id: true, title: true }
+        });
+
+        for (const t of toLive) {
+          await prisma.tournament.update({
+            where: { id: t.id },
+            data: { status: 'LIVE' }
+          });
+          console.log(`[TournamentService] Auto-recurring Tournament "${t.title}" (${t.id}) is now LIVE.`);
+        }
+      }
+
+      // Expire any UPCOMING tournaments whose endTime has already passed
+      const expiredUpcoming = await prisma.tournament.findMany({
+        where: {
+          status: 'UPCOMING',
+          endTime: { lte: now }
+        },
+        select: { id: true, title: true, isRecurring: true }
+      });
+      for (const t of expiredUpcoming) {
+        await prisma.tournament.update({
+          where: { id: t.id },
+          data: { status: t.isRecurring ? 'CANCELLED' : 'COMPLETED' }
+        });
+        console.log(`[TournamentService] Expired UPCOMING tournament "${t.title}" (${t.id}) marked as ${t.isRecurring ? 'CANCELLED' : 'COMPLETED'}.`);
+      }
 
       // 2. LIVE -> COMPLETED (Auto-transition when endTime has passed)
       const toComplete = await prisma.tournament.findMany({

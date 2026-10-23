@@ -34,7 +34,10 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
 
     // Feature flag check: If tournaments disabled and requester is not admin, hide them
     const config = await prisma.appConfig.findFirst({
-      select: { isTournamentsEnabled: true }
+      select: { 
+        isTournamentsEnabled: true,
+        isRecurringTournamentsEnabled: true
+      }
     });
 
     if (config && !config.isTournamentsEnabled) {
@@ -47,47 +50,40 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    const isRecurringEnabled = config?.isRecurringTournamentsEnabled ?? true;
+
     const now = new Date();
     let whereClause: any = {};
 
+    // When automatic recurring tournaments is disabled, do not show recurring tournaments in any tab
+    if (!isRecurringEnabled) {
+      whereClause.isRecurring = false;
+    }
+
     if (tab === 'live' || status === 'LIVE') {
-      whereClause = {
-        status: 'LIVE'
-      };
+      whereClause.status = 'LIVE';
     } else if (tab === 'upcoming' || status === 'UPCOMING') {
-      whereClause = {
-        status: 'UPCOMING'
-      };
+      whereClause.status = 'UPCOMING';
     } else if (tab === 'completed' || status === 'COMPLETED') {
-      whereClause = {
-        status: 'COMPLETED'
-      };
+      whereClause.status = 'COMPLETED';
     } else if (tab === 'history') {
       if (userId) {
         // User history: all tournaments user participated in (live or completed)
-        whereClause = {
-          participants: {
-            some: { userId }
-          }
+        whereClause.participants = {
+          some: { userId }
         };
       } else {
-        whereClause = {
-          status: { in: ['COMPLETED', 'CANCELLED'] }
-        };
+        whereClause.status = { in: ['COMPLETED', 'CANCELLED'] };
       }
     } else if (tab === 'my' && userId) {
       // Current active tournaments user joined
-      whereClause = {
-        status: 'LIVE',
-        participants: {
-          some: { userId }
-        }
+      whereClause.status = 'LIVE';
+      whereClause.participants = {
+        some: { userId }
       };
     } else {
       // Default: Live + Upcoming
-      whereClause = {
-        status: { in: ['LIVE', 'UPCOMING'] }
-      };
+      whereClause.status = { in: ['LIVE', 'UPCOMING'] };
     }
 
     const isCompletedQuery = tab === 'completed' || status === 'COMPLETED';
@@ -215,6 +211,20 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    const config = await prisma.appConfig.findFirst({
+      select: { isTournamentsEnabled: true, isRecurringTournamentsEnabled: true }
+    });
+
+    if (config && !config.isTournamentsEnabled) {
+      res.status(403).json({ success: false, error: 'Tournaments are currently unavailable' });
+      return;
+    }
+
+    if (tournament.isRecurring && config?.isRecurringTournamentsEnabled === false) {
+      res.status(404).json({ success: false, error: 'Tournament not found' });
+      return;
+    }
+
     // Get user's enrollment and standing if logged in
     let userStanding = null;
     if (userId) {
@@ -323,6 +333,20 @@ export const joinTournament = async (req: AuthRequest, res: Response): Promise<v
 
     if (!tournament) {
       res.status(404).json({ success: false, error: 'Tournament not found' });
+      return;
+    }
+
+    const config = await prisma.appConfig.findFirst({
+      select: { isTournamentsEnabled: true, isRecurringTournamentsEnabled: true }
+    });
+
+    if (config && !config.isTournamentsEnabled) {
+      res.status(403).json({ success: false, error: 'Tournaments are currently unavailable' });
+      return;
+    }
+
+    if (tournament.isRecurring && config?.isRecurringTournamentsEnabled === false) {
+      res.status(400).json({ success: false, error: 'Tournament is currently unavailable' });
       return;
     }
 
@@ -869,6 +893,19 @@ export const adminUpdateRecurringSettings = async (req: AdminAuthRequest, res: R
     });
 
     invalidateConfigCache();
+
+    if (isRecurringTournamentsEnabled === false) {
+      await prisma.tournament.updateMany({
+        where: {
+          isRecurring: true,
+          status: 'UPCOMING',
+          participants: { none: {} }
+        },
+        data: {
+          status: 'CANCELLED'
+        }
+      });
+    }
 
     let savedTemplates = DEFAULT_RECURRING_TEMPLATES;
     if (updated.recurringTournamentTemplates && Array.isArray(updated.recurringTournamentTemplates) && updated.recurringTournamentTemplates.length > 0) {
