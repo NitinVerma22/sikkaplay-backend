@@ -21,6 +21,8 @@ router.get('/coin-distribution', admin_controller_1.getCoinDistribution);
 router.get('/upcoming-withdrawals', admin_controller_1.getUpcomingWithdrawals);
 router.get('/manager-stats', admin_controller_1.getManagerStats);
 router.get('/ad-stats', admin_controller_1.getAdAnalysisStats);
+router.get('/promotions/ranking', admin_controller_1.getPromotionsRanking);
+router.get('/promotions/users/:id/referrals', admin_controller_1.getPromotionUserReferrals);
 router.post('/referrals/distribute', admin_controller_1.triggerReferralDistribution);
 router.get('/audit-logs', (0, adminAuth_middleware_1.requireRole)(['superadmin']), admin_controller_1.getAuditLogs);
 // Moderator/Admin Management

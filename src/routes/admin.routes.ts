@@ -46,7 +46,9 @@ import {
   updateWithdrawalOptionAdmin,
   deleteWithdrawalOptionAdmin,
   getCoinDistribution,
-  getUpcomingWithdrawals
+  getUpcomingWithdrawals,
+  getPromotionsRanking,
+  getPromotionUserReferrals
 } from '../controllers/admin.controller';
 import { requireAdminJwt, requireRole } from '../middleware/adminAuth.middleware';
 import { createDailyCode, getDailyCodes, deleteDailyCode, updateDailyCode } from '../controllers/dailyCode.controller';
@@ -83,6 +85,8 @@ router.get('/coin-distribution', getCoinDistribution);
 router.get('/upcoming-withdrawals', getUpcomingWithdrawals);
 router.get('/manager-stats', getManagerStats);
 router.get('/ad-stats', getAdAnalysisStats);
+router.get('/promotions/ranking', getPromotionsRanking);
+router.get('/promotions/users/:id/referrals', getPromotionUserReferrals);
 router.post('/referrals/distribute', triggerReferralDistribution);
 router.get('/audit-logs', requireRole(['superadmin']), getAuditLogs);
 

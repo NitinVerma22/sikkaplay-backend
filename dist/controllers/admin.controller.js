@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDetailedAnalytics = exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.getAdscalexStats = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundMessages = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
+exports.getPromotionUserReferrals = exports.getPromotionsRanking = exports.getDetailedAnalytics = exports.getUpcomingWithdrawals = exports.getCoinDistribution = exports.getAdscalexStats = exports.deleteWithdrawalOptionAdmin = exports.updateWithdrawalOptionAdmin = exports.createWithdrawalOptionAdmin = exports.getWithdrawalOptionsAdmin = exports.revertTransaction = exports.liftPlaygroundBan = exports.getPlaygroundBans = exports.getPlaygroundMessages = exports.getPlaygroundReports = exports.getManagerStats = exports.bulkClearAllDeviceData = exports.clearUserDevice = exports.deleteAdminFaq = exports.updateAdminFaq = exports.createAdminFaq = exports.getAdminFaqs = exports.getUserNetwork = exports.getUserLedger = exports.getSuspiciousGames = exports.bulkBlockUsers = exports.getMultiAccountFraudGroups = exports.deleteModerator = exports.createModerator = exports.getModerators = exports.getAdAnalysisStats = exports.getAuditLogs = exports.triggerReferralDistribution = exports.changeUserPassword = exports.broadcastPushNotification = exports.toggleUserFreeze = exports.replySupportTicket = exports.getSupportTickets = exports.bulkUpdateWithdrawalStatus = exports.updateWithdrawalStatus = exports.getWithdrawals = exports.bulkDeleteUsers = exports.deleteUser = exports.updateUserBalance = exports.getUsers = exports.updateConfigs = exports.getConfigs = exports.getDashboardStats = exports.loginAdmin = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
@@ -2308,3 +2308,299 @@ const getDetailedAnalytics = async (req, res) => {
     }
 };
 exports.getDetailedAnalytics = getDetailedAnalytics;
+// 48. Promotions & Top Referrals Ranking
+const getPromotionsRanking = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const search = (req.query.search || '').trim();
+        const sortBy = req.query.sortBy || 'referrals'; // 'referrals', 'teamEarned', 'selfPlaytime', 'totalEarned'
+        const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+        const offset = (page - 1) * limit;
+        // Direct SQL with raw query for blazing performance and aggregation
+        let searchCondition = `WHERE u."referralCode" IS NOT NULL AND rc."directReferrals" > 0`;
+        const params = [];
+        if (search) {
+            params.push(`%${search}%`);
+            searchCondition += ` AND (u.name ILIKE $1 OR u."phoneNumber" ILIKE $1 OR u."referralCode" ILIKE $1 OR u.email ILIKE $1)`;
+        }
+        let orderClause = `rc."directReferrals" ${sortOrder}`;
+        if (sortBy === 'teamEarned') {
+            orderClause = `COALESCE(rts."teamEarned", 0) ${sortOrder}`;
+        }
+        else if (sortBy === 'teamPlaytime') {
+            orderClause = `COALESCE(rts."teamPlaytime", 0) ${sortOrder}`;
+        }
+        else if (sortBy === 'selfPlaytime') {
+            orderClause = `COALESCE(up."selfPlaytime", 0) ${sortOrder}`;
+        }
+        else if (sortBy === 'totalEarned') {
+            orderClause = `u."totalEarned" ${sortOrder}`;
+        }
+        else if (sortBy === 'referralBalance') {
+            orderClause = `u."referralBalance" ${sortOrder}`;
+        }
+        const countQuery = `
+      WITH ref_counts AS (
+        SELECT "referredBy", COUNT(*)::int as "directReferrals"
+        FROM "User"
+        WHERE "referredBy" IS NOT NULL AND "referredBy" != ''
+        GROUP BY "referredBy"
+      )
+      SELECT COUNT(*)::int as total
+      FROM ref_counts rc
+      JOIN "User" u ON u."referralCode" = rc."referredBy"
+      ${searchCondition}
+    `;
+        const countRes = await db_1.prisma.$queryRawUnsafe(countQuery, ...params);
+        const totalCount = countRes[0]?.total || 0;
+        const dataQuery = `
+      WITH ref_counts AS (
+        SELECT "referredBy", COUNT(*)::int as "directReferrals"
+        FROM "User"
+        WHERE "referredBy" IS NOT NULL AND "referredBy" != ''
+        GROUP BY "referredBy"
+      ),
+      ref_team_stats AS (
+        SELECT 
+          u."referredBy",
+          COALESCE(SUM(u."totalEarned"), 0)::bigint as "teamEarned",
+          COALESCE(SUM(du_sum.minutes), 0)::bigint as "teamPlaytime"
+        FROM "User" u
+        LEFT JOIN (
+          SELECT "userId", SUM("gamesMinutes") as minutes
+          FROM "DailyUsage"
+          GROUP BY "userId"
+        ) du_sum ON du_sum."userId" = u.id
+        WHERE u."referredBy" IS NOT NULL AND u."referredBy" != ''
+        GROUP BY u."referredBy"
+      ),
+      user_playtime AS (
+        SELECT "userId", SUM("gamesMinutes")::bigint as "selfPlaytime"
+        FROM "DailyUsage"
+        GROUP BY "userId"
+      )
+      SELECT 
+        u.id,
+        u.name,
+        u."phoneNumber",
+        u.email,
+        u."referralCode",
+        u."totalEarned",
+        u."referralBalance",
+        u.balance,
+        u."createdAt",
+        u."isBlocked",
+        rc."directReferrals",
+        COALESCE(rts."teamEarned", 0)::text as "teamTotalEarned",
+        COALESCE(rts."teamPlaytime", 0)::text as "teamPlaytime",
+        COALESCE(up."selfPlaytime", 0)::text as "selfPlaytime"
+      FROM ref_counts rc
+      JOIN "User" u ON u."referralCode" = rc."referredBy"
+      LEFT JOIN ref_team_stats rts ON rts."referredBy" = u."referralCode"
+      LEFT JOIN user_playtime up ON up."userId" = u.id
+      ${searchCondition}
+      ORDER BY ${orderClause}
+      LIMIT ${limit} OFFSET ${offset};
+    `;
+        const rankingRows = await db_1.prisma.$queryRawUnsafe(dataQuery, ...params);
+        // Summary statistics for promotions overview
+        const summaryQuery = `
+      WITH ref_counts AS (
+        SELECT "referredBy", COUNT(*)::int as "directReferrals"
+        FROM "User"
+        WHERE "referredBy" IS NOT NULL AND "referredBy" != ''
+        GROUP BY "referredBy"
+      )
+      SELECT 
+        COUNT(*)::int as "totalPromoters",
+        COALESCE(SUM(rc."directReferrals"), 0)::int as "totalReferredUsers",
+        (SELECT COALESCE(SUM("referralBalance"), 0)::bigint FROM "User") as "totalReferralBalanceHeld"
+      FROM ref_counts rc
+    `;
+        const summaryRes = await db_1.prisma.$queryRawUnsafe(summaryQuery);
+        const summary = summaryRes[0] || { totalPromoters: 0, totalReferredUsers: 0, totalReferralBalanceHeld: 0 };
+        res.status(200).json({
+            success: true,
+            promoters: rankingRows.map((r, index) => ({
+                rank: offset + index + 1,
+                id: r.id,
+                name: r.name || 'Anonymous',
+                phoneNumber: r.phoneNumber,
+                email: r.email,
+                referralCode: r.referralCode,
+                directReferrals: Number(r.directReferrals),
+                teamTotalEarned: Number(r.teamTotalEarned),
+                teamPlaytime: Number(r.teamPlaytime),
+                selfPlaytime: Number(r.selfPlaytime),
+                totalEarned: Number(r.totalEarned),
+                referralBalance: Number(r.referralBalance),
+                balance: Number(r.balance),
+                isBlocked: r.isBlocked,
+                createdAt: r.createdAt
+            })),
+            summary: {
+                totalPromoters: Number(summary.totalPromoters || 0),
+                totalReferredUsers: Number(summary.totalReferredUsers || 0),
+                totalReferralBalanceHeld: Number(summary.totalReferralBalanceHeld || 0)
+            },
+            pagination: {
+                page,
+                limit,
+                totalCount,
+                totalPages: Math.ceil(totalCount / limit)
+            }
+        });
+    }
+    catch (error) {
+        console.error('Get Promotions Ranking Error:', error);
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' });
+    }
+};
+exports.getPromotionsRanking = getPromotionsRanking;
+// 49. Detailed Referral Downline for a Specific Promoter (with daily streak, playtime, earnings)
+const getPromotionUserReferrals = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        const skip = (page - 1) * limit;
+        const promoter = await db_1.prisma.user.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                name: true,
+                phoneNumber: true,
+                referralCode: true,
+                totalEarned: true,
+                referralBalance: true,
+                balance: true,
+                createdAt: true
+            }
+        });
+        if (!promoter) {
+            res.status(404).json({ error: 'Promoter user not found' });
+            return;
+        }
+        const totalCount = await db_1.prisma.user.count({
+            where: { referredBy: promoter.referralCode }
+        });
+        const directReferrals = await db_1.prisma.user.findMany({
+            where: { referredBy: promoter.referralCode },
+            select: {
+                id: true,
+                name: true,
+                phoneNumber: true,
+                email: true,
+                referralCode: true,
+                totalEarned: true,
+                balance: true,
+                withdrawalAmount: true,
+                isBlocked: true,
+                createdAt: true
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit
+        });
+        if (directReferrals.length === 0) {
+            res.status(200).json({
+                success: true,
+                promoter,
+                referrals: [],
+                totalCount: 0,
+                totalPages: 0,
+                page
+            });
+            return;
+        }
+        const refIds = directReferrals.map(u => u.id);
+        // 1. Playtime aggregation
+        const playtimes = await db_1.prisma.dailyUsage.groupBy({
+            by: ['userId'],
+            _sum: { gamesMinutes: true },
+            where: { userId: { in: refIds } }
+        });
+        const playtimeMap = new Map();
+        for (const pt of playtimes) {
+            playtimeMap.set(pt.userId, pt._sum.gamesMinutes || 0);
+        }
+        // 2. Daily Streak Calculation
+        const allStreaks = await db_1.prisma.transaction.findMany({
+            where: {
+                userId: { in: refIds },
+                type: 'daily_streak'
+            },
+            select: { userId: true, createdAt: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        const userStreakDates = new Map();
+        for (const s of allStreaks) {
+            if (!userStreakDates.has(s.userId))
+                userStreakDates.set(s.userId, []);
+            userStreakDates.get(s.userId).push(s.createdAt);
+        }
+        const today = new Date();
+        const todayStr = getISTDateString(today);
+        // 3. Sub-referral counts (how many users this referred user has further referred)
+        const refCodes = directReferrals.map(u => u.referralCode);
+        const subRefCounts = await db_1.prisma.user.groupBy({
+            by: ['referredBy'],
+            _count: { id: true },
+            where: { referredBy: { in: refCodes } }
+        });
+        const subRefMap = new Map();
+        for (const src of subRefCounts) {
+            if (src.referredBy)
+                subRefMap.set(src.referredBy, src._count.id);
+        }
+        const detailedReferrals = directReferrals.map(u => {
+            const dates = userStreakDates.get(u.id) || [];
+            let currentStreak = 0;
+            let checkDate = new Date(today.getTime());
+            const hasClaimedToday = dates.some(d => getISTDateString(d) === todayStr);
+            if (!hasClaimedToday) {
+                checkDate.setDate(checkDate.getDate() - 1);
+            }
+            for (const d of dates) {
+                const streakDateStr = getISTDateString(d);
+                const targetDateStr = getISTDateString(checkDate);
+                if (streakDateStr === targetDateStr) {
+                    currentStreak++;
+                    checkDate.setDate(checkDate.getDate() - 1);
+                }
+                else if (streakDateStr < targetDateStr) {
+                    break;
+                }
+            }
+            return {
+                id: u.id,
+                name: u.name || 'Anonymous',
+                phoneNumber: u.phoneNumber,
+                email: u.email,
+                referralCode: u.referralCode,
+                totalEarned: u.totalEarned,
+                balance: u.balance,
+                withdrawalAmount: u.withdrawalAmount,
+                isBlocked: u.isBlocked,
+                totalPlaytimeMinutes: playtimeMap.get(u.id) || 0,
+                dailyStreak: currentStreak,
+                subReferralsCount: subRefMap.get(u.referralCode) || 0,
+                createdAt: u.createdAt
+            };
+        });
+        res.status(200).json({
+            success: true,
+            promoter,
+            referrals: detailedReferrals,
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+            page
+        });
+    }
+    catch (error) {
+        console.error('Get Promotion User Referrals Error:', error);
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' });
+    }
+};
+exports.getPromotionUserReferrals = getPromotionUserReferrals;
