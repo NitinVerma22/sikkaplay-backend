@@ -115,10 +115,10 @@ app.get('/', (req: Request, res: Response) => {
 // Test DB Connection
 app.get('/api/test-db', async (req: Request, res: Response) => {
   try {
-    const usersCount = await prisma.user.count();
-    res.status(200).json({ status: 'success', message: 'Database connected successfully!', usersCount });
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: 'success', message: 'Database connected successfully!' });
   } catch (error) {
-    res.status(500).json({ status: 'error', message: 'Database connection failed', error });
+    res.status(500).json({ status: 'error', message: 'Database connection failed' });
   }
 });
 

@@ -31,6 +31,7 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const LEGACY_JWT_SECRET = 'super-secret-sikkaplay-key';
 
 export const requireJwt = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
@@ -42,8 +43,25 @@ export const requireJwt = async (req: AuthRequest, res: Response, next: NextFunc
 
   const token = authHeader.split('Bearer ')[1];
 
+  let decoded: any;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    decoded = jwt.verify(token, JWT_SECRET) as any;
+  } catch (primaryErr) {
+    // Graceful fallback to legacy secret for existing live sessions to avoid logging out users
+    if (JWT_SECRET !== LEGACY_JWT_SECRET) {
+      try {
+        decoded = jwt.verify(token, LEGACY_JWT_SECRET) as any;
+      } catch (legacyErr) {
+        res.status(401).json({ error: 'Unauthorized: Invalid session' });
+        return;
+      }
+    } else {
+      res.status(401).json({ error: 'Unauthorized: Invalid session' });
+      return;
+    }
+  }
+
+  try {
     req.user = decoded; // Contains userId
     onlineUsersCache.set(decoded.userId, true);
 

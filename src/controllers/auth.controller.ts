@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db';
 import { getCachedAppConfig } from '../services/config.service';
+import { auth as firebaseAuth } from '../config/firebase';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
@@ -336,6 +337,21 @@ export const completeGoogleSignup = async (req: Request, res: Response): Promise
     if (!firebaseUid) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
+    }
+
+    // Verify that firebaseUid actually exists in Firebase Authentication
+    // This blocks automated scripts creating fake referral accounts while working seamlessly for real users
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const fbUser = await firebaseAuth.getUser(firebaseUid);
+        if (!fbUser) {
+          res.status(400).json({ error: 'Invalid Google account session. User not found in Firebase.' });
+          return;
+        }
+      } catch (fbErr) {
+        res.status(400).json({ error: 'Invalid or non-existent Google authentication session.' });
+        return;
+      }
     }
 
     if (!username) {

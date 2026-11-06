@@ -185,42 +185,19 @@ export const recordAdImpression = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const coinsToAward = coinsAwarded ? parseInt(coinsAwarded.toString(), 10) : 0;
+    // Client cannot dictate coinsAwarded. Unverified client ad impressions are logged for analytics only (0 coins).
+    // Legitimate coin earnings are awarded via server-side postbacks (AdMob SSV, Tapjoy) or game session controllers.
+    const coinsToAward = 0;
 
-    const result = await prisma.$transaction(async (tx) => {
-      const impression = await tx.adImpression.create({
-        data: {
-          userId,
-          adType,
-          adNetwork,
-          coinsAwarded: coinsToAward,
-          externalTxId: externalTxId || null,
-          verifiedByServer: false
-        }
-      });
-
-      if (coinsToAward > 0) {
-        await tx.user.update({
-          where: { id: userId },
-          data: {
-            balance: { increment: coinsToAward },
-            totalEarned: { increment: coinsToAward }
-          }
-        });
-
-        await tx.transaction.create({
-          data: {
-            userId,
-            amount: coinsToAward,
-            type: 'earning',
-            status: 'success',
-            description: `Reward for watching ${adType} ad (${adNetwork})`,
-            externalTransactionId: externalTxId || null
-          }
-        });
+    const result = await prisma.adImpression.create({
+      data: {
+        userId,
+        adType,
+        adNetwork,
+        coinsAwarded: coinsToAward,
+        externalTxId: externalTxId || null,
+        verifiedByServer: false
       }
-
-      return impression;
     });
 
     res.status(200).json({ success: true, impression: result });

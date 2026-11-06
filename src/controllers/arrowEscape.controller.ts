@@ -49,6 +49,20 @@ export const completeArrowEscapeLevel = async (req: AuthRequest, res: Response):
       }
     }
 
+    if (isMilestoneClaim && coinsEarned > 0 && userId) {
+      const milestoneDesc = `Arrow Escape Level ${levelNumber} Milestone Reward`;
+      const existingClaim = await prisma.transaction.findFirst({
+        where: {
+          userId,
+          type: 'game',
+          description: milestoneDesc
+        }
+      });
+      if (existingClaim) {
+        coinsEarned = 0;
+      }
+    }
+
     if (userId) {
       // Check if user is actually on this level
       const sessionsCount = await prisma.gameSession.count({

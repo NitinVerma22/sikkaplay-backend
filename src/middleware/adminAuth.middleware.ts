@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { prisma } from '../config/db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
 export interface AdminAuthRequest extends Request {
   admin?: any;
 }
 
-export const requireAdminJwt = (req: AdminAuthRequest, res: Response, next: NextFunction): void => {
+export const requireAdminJwt = async (req: AdminAuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -18,14 +19,38 @@ export const requireAdminJwt = (req: AdminAuthRequest, res: Response, next: Next
   const token = authHeader.split('Bearer ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, ADMIN_JWT_SECRET) as any;
+    } catch (err) {
+      if (process.env.JWT_SECRET && ADMIN_JWT_SECRET !== process.env.JWT_SECRET) {
+        decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
+      } else {
+        throw err;
+      }
+    }
+
     // Ensure the token belongs to an admin (has adminId)
-    const payload = decoded as any;
-    if (!payload.adminId) {
+    if (!decoded || !decoded.adminId) {
       res.status(403).json({ error: 'Forbidden: Admin access required' });
       return;
     }
-    req.admin = payload;
+
+    // Database verification: Ensure admin exists in DB to prevent token forgery
+    const adminUser = await prisma.admin.findUnique({
+      where: { id: decoded.adminId }
+    });
+
+    if (!adminUser) {
+      res.status(401).json({ error: 'Unauthorized: Admin account not found or deactivated' });
+      return;
+    }
+
+    req.admin = {
+      adminId: adminUser.id,
+      username: adminUser.username,
+      role: adminUser.role
+    };
     next();
   } catch (error) {
     res.status(401).json({ error: 'Unauthorized: Invalid admin session' });

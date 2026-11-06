@@ -10,6 +10,7 @@ import { invalidateConfigCache } from '../services/config.service';
 import { auth as firebaseAuth } from '../config/firebase';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 
 // Helper to get Midnight IST in UTC for accurate daily filtering
 const getISTMidnightUTC = (date: Date = new Date()): Date => {
@@ -50,7 +51,7 @@ export const loginAdmin = async (req: Request, res: Response): Promise<void> => 
 
     const token = jwt.sign(
       { adminId: admin.id, role: admin.role, username: admin.username },
-      JWT_SECRET,
+      ADMIN_JWT_SECRET,
       { expiresIn: '7d' }
     );
 

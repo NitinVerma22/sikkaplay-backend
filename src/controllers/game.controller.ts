@@ -306,8 +306,8 @@ export const endGame = async (req: AuthRequest, res: Response): Promise<void> =>
       return;
     }
 
-    const requestedCoins = typeof reqCoins === 'number' ? Math.floor(reqCoins) : 0;
-    const fee = typeof bypassFee === 'number' ? Math.floor(bypassFee) : 0;
+    const requestedCoins = typeof reqCoins === 'number' && reqCoins > 0 ? Math.floor(reqCoins) : 0;
+    const fee = typeof bypassFee === 'number' && bypassFee > 0 ? Math.floor(bypassFee) : 0;
 
     const result = await prisma.$transaction(async (tx) => {
       const session = await tx.gameSession.findUnique({
