@@ -10,21 +10,7 @@ interface LeaderboardCacheEntry {
 
 // In-memory cache for tournament leaderboards (15s TTL) to prevent DB egress & CPU spikes
 const leaderboardCache = new Map<string, LeaderboardCacheEntry>();
-const CACHE_TTL_MS = 15 * 1000; // 15 seconds
-
-export const formatTournamentDisplayTitle = (title: string, minPoints: number): string => {
-  if (!title) return '';
-  if (!minPoints || minPoints <= 0) return title;
-
-  let clean = title
-    .replace(/\s*\(Min \d+ pts to win\)/gi, '')
-    .replace(/^🎯\s*Min \d+ Pts\s*[•|]\s*/gi, '')
-    .trim();
-
-  clean = clean.replace(/^1-Hour\s+/i, '');
-
-  return `🎯 Min ${minPoints} Pts • ${clean}`;
-};
+const CACHE_TTL_MS = 15 * 1000; // 15 seconds
 
 export class TournamentService {
   /**
@@ -221,13 +207,12 @@ export class TournamentService {
         };
       });
 
-      const tagBadge = minRequired > 0 ? `MIN ${minRequired} PTS` : (tournament?.tag || 'MEGA');
       const payload = {
         tournament: tournament ? {
           id: tournament.id,
-          title: formatTournamentDisplayTitle(tournament.title, minRequired),
+          title: tournament.title,
           rawTitle: tournament.title,
-          tag: tagBadge,
+          tag: tournament.tag,
           prizePool: tournament.prizePool,
           prizePoolRupees: tournament.prizePoolRupees || 0,
           status: tournament.status,

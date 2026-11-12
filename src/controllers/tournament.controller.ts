@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
-import { TournamentService, formatTournamentDisplayTitle } from '../services/tournament.service';
+import { TournamentService } from '../services/tournament.service';
 import { invalidateConfigCache } from '../services/config.service';
 import { DEFAULT_RECURRING_TEMPLATES, ensureRecurringDailyTournaments } from '../cron/tournament.cron';
 
@@ -144,16 +144,13 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       const pCount = (t as any)._count?.participants || 0;
       const { theme, order } = parseThemeAndOrder(t.tag);
       const minPoints = (t as any).minPointsToWin ?? 1000;
-      const tagBadge = minPoints > 0 ? `MIN ${minPoints} PTS` : (t.tag || 'MEGA');
-      const displayTitle = formatTournamentDisplayTitle(t.title, minPoints);
-
       return {
         id: t.id,
-        title: displayTitle,
+        title: t.title,
         rawTitle: t.title,
         description: t.description,
         bannerUrl: t.bannerUrl,
-        tag: tagBadge,
+        tag: t.tag,
         gradientTheme: theme,
         order: order,
         displayOrder: order,
@@ -287,15 +284,12 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
 
     const pCount = (tournament as any)._count?.participants || 0;
     const minPoints = (tournament as any).minPointsToWin ?? 1000;
-    const tagBadge = minPoints > 0 ? `MIN ${minPoints} PTS` : (tournament.tag || 'MEGA');
-    const displayTitle = formatTournamentDisplayTitle(tournament.title, minPoints);
-
     res.status(200).json({
       success: true,
       tournament: {
         ...tournament,
-        tag: tagBadge,
-        title: displayTitle,
+        tag: tournament.tag,
+        title: tournament.title,
         rawTitle: tournament.title,
         minPointsToWin: minPoints,
         entryFeeCoins: tournament.entryFee,
