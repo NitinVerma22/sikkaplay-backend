@@ -10,7 +10,12 @@ interface LeaderboardCacheEntry {
 
 // In-memory cache for tournament leaderboards (15s TTL) to prevent DB egress & CPU spikes
 const leaderboardCache = new Map<string, LeaderboardCacheEntry>();
-const CACHE_TTL_MS = 15 * 1000; // 15 seconds
+const CACHE_TTL_MS = 15 * 1000; // 15 seconds
+
+// Cooldown map for overtake push notifications (max 1 alert per player per tournament every 15 mins)
+const overtakeNotificationCooldown = new Map<string, number>();
+const OVERTAKE_COOLDOWN_MS = 15 * 60 * 1000;
+
 
 export class TournamentService {
   /**
@@ -67,6 +72,14 @@ export class TournamentService {
             tournamentId,
             userId
           }
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              username: true
+            }
+          }
         }
       });
 
@@ -80,6 +93,33 @@ export class TournamentService {
 
       if (points <= 0) {
         return { scored: false, pointsAwarded: 0 };
+      }
+
+      // Snapshot top 3 podium before score increment to detect outranking/overtake
+      let topPodiumBefore: any[] = [];
+      try {
+        topPodiumBefore = await db.tournamentParticipant.findMany({
+          where: { tournamentId },
+          orderBy: [
+            { score: 'desc' },
+            { lastScoreUpdatedAt: 'asc' }
+          ],
+          take: 3,
+          select: {
+            userId: true,
+            score: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                fcmToken: true
+              }
+            }
+          }
+        });
+      } catch (podiumErr) {
+        console.error('[TournamentService] Failed to snapshot topPodiumBefore:', podiumErr);
       }
 
       // 5. Update participant score and tie-breaker timestamp atomically
@@ -96,9 +136,20 @@ export class TournamentService {
         }
       });
 
+      // Trigger Overtake push notification check asynchronously (non-blocking)
+      const scorerName = participant.user?.name || participant.user?.username || 'A player';
+      TournamentService.checkAndNotifyOutrankedPlayers({
+        tournament,
+        scorerUserId: userId,
+        scorerName,
+        oldScore: participant.score,
+        newScore: updated.score,
+        topPodiumBefore
+      }).catch(err => console.error('[TournamentService] Error in overtake notification trigger:', err));
+
       // Invalidate leaderboard in-memory cache for this tournament
       for (const key of leaderboardCache.keys()) {
-        if (key.startsWith(`lb_${tournamentId}_`)) {
+        if (key.startsWith(`${tournamentId}:`) || key.startsWith(`lb_${tournamentId}_`)) {
           leaderboardCache.delete(key);
         }
       }
@@ -536,4 +587,88 @@ export class TournamentService {
       console.error('[TournamentService.processLifecycleTransitions] Error running lifecycle transitions:', error);
     }
   }
+
+  /**
+   * Sends "Overtake Alert" push notification to players in Top 3 who were just surpassed.
+   * Includes 15-minute rate-limiting cooldown per player to prevent spam.
+   */
+  private static async checkAndNotifyOutrankedPlayers(params: {
+    tournament: any;
+    scorerUserId: string;
+    scorerName: string;
+    oldScore: number;
+    newScore: number;
+    topPodiumBefore: Array<any>;
+  }): Promise<void> {
+    const { tournament, scorerUserId, scorerName, oldScore, newScore, topPodiumBefore } = params;
+    if (!topPodiumBefore || topPodiumBefore.length === 0) return;
+
+    // Must be LIVE and have at least 2 minutes remaining before tournament end
+    const now = Date.now();
+    const endTime = new Date(tournament.endTime).getTime();
+    if (tournament.status !== 'LIVE' || endTime - now < 2 * 60 * 1000) {
+      return;
+    }
+
+    // Clean up stale cooldowns if map grows large
+    if (overtakeNotificationCooldown.size > 1000) {
+      const staleCutoff = now - 30 * 60 * 1000;
+      for (const [k, v] of overtakeNotificationCooldown.entries()) {
+        if (v < staleCutoff) overtakeNotificationCooldown.delete(k);
+      }
+    }
+
+    for (let i = 0; i < topPodiumBefore.length; i++) {
+      const prevPlayer = topPodiumBefore[i];
+      const prevUserId = prevPlayer.userId;
+      const prevOldRank = i + 1; // 1, 2, or 3
+
+      // Don't notify the scorer themselves
+      if (prevUserId === scorerUserId) continue;
+
+      // Check if scorer directly overtook this player:
+      // Previously, scorer was <= player's score, now scorer is strictly > player's score
+      if (oldScore <= prevPlayer.score && newScore > prevPlayer.score) {
+        // Cooldown check (max 1 notification per player per tournament every 15 minutes)
+        const cooldownKey = `${tournament.id}_${prevUserId}`;
+        const lastSent = overtakeNotificationCooldown.get(cooldownKey) || 0;
+        if (now - lastSent < OVERTAKE_COOLDOWN_MS) {
+          continue;
+        }
+
+        const fcmToken = prevPlayer.user?.fcmToken;
+        if (!fcmToken) continue;
+
+        overtakeNotificationCooldown.set(cooldownKey, now);
+
+        let alertTitle = '⚠️ Overtake Alert! ⚔️';
+        let alertMsg = '';
+        if (prevOldRank === 1) {
+          alertTitle = '⚠️ Rank #1 Snatched! ⚔️';
+          alertMsg = `${scorerName} ne aapko peeche chhod kar Rank #1 le liya in "${tournament.title}". Turant khelo aur apna #1 spot wapas pao! 🏆`;
+        } else if (prevOldRank === 2) {
+          alertTitle = '⚠️ Rank #2 Snatched! ⚔️';
+          alertMsg = `${scorerName} ne aapko peeche kar diya in "${tournament.title}". Turant khelo aur wapas podium par aao! ⚔️`;
+        } else {
+          alertTitle = '⚠️ Top 3 Alert! ⚔️';
+          alertMsg = `${scorerName} ne aapko Top 3 Podium se bahar kar diya in "${tournament.title}". Khelo aur apni winning rank wapas pao! 🏆`;
+        }
+
+        console.log(`[TournamentService] Overtake push sent to user ${prevUserId} (was Rank #${prevOldRank}) by ${scorerName}`);
+
+        sendPushNotification(
+          fcmToken,
+          alertTitle,
+          alertMsg,
+          'tournament_outranked',
+          tournament.bannerUrl || null,
+          prevUserId,
+          false,
+          scorerUserId,
+          tournament.id
+        ).catch(e => console.error('[TournamentService] Error sending outranked push notification:', e));
+      }
+    }
+  }
+
 }
