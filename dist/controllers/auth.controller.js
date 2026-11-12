@@ -9,6 +9,7 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("../config/db");
 const config_service_1 = require("../services/config.service");
+const firebase_1 = require("../config/firebase");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 const generateReferralCode = () => {
     return crypto_1.default.randomBytes(3).toString('hex').toUpperCase();
@@ -296,6 +297,21 @@ const completeGoogleSignup = async (req, res) => {
         if (!firebaseUid) {
             res.status(400).json({ error: 'Missing required fields' });
             return;
+        }
+        // Verify that firebaseUid actually exists in Firebase Authentication
+        // This blocks automated scripts creating fake referral accounts while working seamlessly for real users
+        if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+            try {
+                const fbUser = await firebase_1.auth.getUser(firebaseUid);
+                if (!fbUser) {
+                    res.status(400).json({ error: 'Invalid Google account session. User not found in Firebase.' });
+                    return;
+                }
+            }
+            catch (fbErr) {
+                res.status(400).json({ error: 'Invalid or non-existent Google authentication session.' });
+                return;
+            }
         }
         if (!username) {
             res.status(400).json({ error: 'Username is required' });

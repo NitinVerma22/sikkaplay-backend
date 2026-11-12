@@ -333,20 +333,9 @@ export const endGame = async (req: AuthRequest, res: Response): Promise<void> =>
       let finalCoinsEarned = 0;
 
       if (session.gameType !== 'spin') {
-        // Enforce maximum possible coins limit based on game type and duration to prevent client-side hacks
-        let maxAllowedCoins = 0;
-        if (session.gameType === 'emoji_memory') {
-          // Average round duration is ~6-8 seconds. Let's cap at 1.25 coins per elapsed second with an absolute cap of 80 coins.
-          maxAllowedCoins = Math.min(Math.floor(elapsedSeconds * 1.25), 80);
-        } else if (session.gameType === 'math_rush') {
-          // Average solve speed is ~1 second for 2 coins. Let's cap at 2.5 coins per elapsed second with an absolute cap of 80 coins.
-          maxAllowedCoins = Math.min(Math.floor(elapsedSeconds * 2.5), 80);
-        } else if (session.gameType === 'treasure_grid') {
-          // Average round is ~4 seconds for up to 8 coins. Let's cap at 2.5 coins per elapsed second with an absolute cap of 80 coins.
-          maxAllowedCoins = Math.min(Math.floor(elapsedSeconds * 2.5), 80);
-        } else {
-          maxAllowedCoins = Math.min(Math.floor(elapsedSeconds * 2.0), 80);
-        }
+        // In GameClaimDialog, maximum reward is 50 coins.
+        // Cap at 80 coins to prevent arbitrary high injection while ensuring legitimate players who play for 3+ seconds receive their full earned coins.
+        const maxAllowedCoins = elapsedSeconds >= 3 ? 80 : Math.min(Math.floor(elapsedSeconds * 10), 80);
 
         // Validate client requested coins against allowed limits
         if (requestedCoins > maxAllowedCoins) {

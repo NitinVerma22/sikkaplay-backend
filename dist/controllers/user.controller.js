@@ -167,7 +167,9 @@ const recordAdImpression = async (req, res) => {
             res.status(400).json({ error: 'adType and adNetwork are required' });
             return;
         }
-        const coinsToAward = coinsAwarded ? parseInt(coinsAwarded.toString(), 10) : 0;
+        const rawCoins = coinsAwarded ? parseInt(coinsAwarded.toString(), 10) : 0;
+        // Cap at 500 coins to prevent client-side inflation exploits while allowing all valid game milestone rewards
+        const coinsToAward = Number.isFinite(rawCoins) && rawCoins > 0 ? Math.min(rawCoins, 500) : 0;
         const result = await db_1.prisma.$transaction(async (tx) => {
             const impression = await tx.adImpression.create({
                 data: {

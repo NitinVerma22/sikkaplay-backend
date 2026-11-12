@@ -113,11 +113,11 @@ app.get('/', (req, res) => {
 // Test DB Connection
 app.get('/api/test-db', async (req, res) => {
     try {
-        const usersCount = await db_1.prisma.user.count();
-        res.status(200).json({ status: 'success', message: 'Database connected successfully!', usersCount });
+        await db_1.prisma.$queryRaw `SELECT 1`;
+        res.status(200).json({ status: 'success', message: 'Database connected successfully!' });
     }
     catch (error) {
-        res.status(500).json({ status: 'error', message: 'Database connection failed', error });
+        res.status(500).json({ status: 'error', message: 'Database connection failed' });
     }
 });
 // Global error handler middleware

@@ -22,19 +22,22 @@ const handleCpxCallback = async (req, res) => {
             return;
         }
         const secureKey = process.env.CPX_SECURE_KEY || '';
-        if (secureKey) {
-            // Calculate MD5 hash formats
-            // Format 1: Default CPX: md5(trans_id + "-" + secureKey)
-            const defaultData = `${trans_id}-${secureKey}`;
-            const defaultHash = crypto_1.default.createHash('md5').update(defaultData).digest('hex');
-            // Format 2: Extended: md5(trans_id + "-" + user_id + "-" + amount_local + "-" + secureKey)
-            const extendedData = `${trans_id}-${user_id}-${amount_local}-${secureKey}`;
-            const extendedHash = crypto_1.default.createHash('md5').update(extendedData).digest('hex');
-            if (hash !== defaultHash && hash !== extendedHash) {
-                console.error('CPX Callback: Invalid signature hash');
-                res.status(403).send('Invalid signature');
-                return;
-            }
+        if (!secureKey) {
+            console.error('CPX Callback: CPX_SECURE_KEY is not configured');
+            res.status(500).send('CPX callback not configured');
+            return;
+        }
+        // Calculate MD5 hash formats
+        // Format 1: Default CPX: md5(trans_id + "-" + secureKey)
+        const defaultData = `${trans_id}-${secureKey}`;
+        const defaultHash = crypto_1.default.createHash('md5').update(defaultData).digest('hex');
+        // Format 2: Extended: md5(trans_id + "-" + user_id + "-" + amount_local + "-" + secureKey)
+        const extendedData = `${trans_id}-${user_id}-${amount_local}-${secureKey}`;
+        const extendedHash = crypto_1.default.createHash('md5').update(extendedData).digest('hex');
+        if (hash !== defaultHash && hash !== extendedHash) {
+            console.error('CPX Callback: Invalid signature hash');
+            res.status(403).send('Invalid signature');
+            return;
         }
         const userId = user_id;
         const amount = parseInt(amount_local) || 0;

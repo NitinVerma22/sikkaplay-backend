@@ -1234,6 +1234,11 @@ const syncPlaygroundMessages = async (req, res) => {
             const ids = [userId, recipientId].sort();
             finalChannelName = `private-chat-${ids[0]}-${ids[1]}`;
         }
+        // Authorization check: Verify requesting user is a legitimate participant of this private chat
+        if (finalChannelName.startsWith('private-chat-') && !finalChannelName.includes(userId)) {
+            res.status(403).json({ error: 'Forbidden: You are not authorized to view this chat history' });
+            return;
+        }
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         // Global cleanup of messages older than 24 hours
         await db_1.prisma.playgroundMessage.deleteMany({

@@ -159,7 +159,7 @@ export const handleAdscalexCallback = async (req: Request, res: Response): Promi
       return;
     }
 
-    const rewardAmount = Math.floor(amountUsd * ADSCALEX_POINTS_PER_USD + Number.EPSILON);
+    const rewardAmount = Math.max(1, Math.floor(amountUsd * ADSCALEX_POINTS_PER_USD + Number.EPSILON));
     if (!Number.isSafeInteger(rewardAmount) || rewardAmount <= 0) {
       res.status(400).send('Invalid reward amount');
       return;

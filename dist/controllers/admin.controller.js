@@ -13,6 +13,7 @@ const audit_service_1 = require("../services/audit.service");
 const config_service_1 = require("../services/config.service");
 const firebase_1 = require("../config/firebase");
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
 // Helper to get Midnight IST in UTC for accurate daily filtering
 const getISTMidnightUTC = (date = new Date()) => {
     const istOffset = 5.5 * 60 * 60 * 1000;
@@ -44,7 +45,7 @@ const loginAdmin = async (req, res) => {
             res.status(401).json({ error: 'Invalid credentials' });
             return;
         }
-        const token = jsonwebtoken_1.default.sign({ adminId: admin.id, role: admin.role, username: admin.username }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ adminId: admin.id, role: admin.role, username: admin.username }, ADMIN_JWT_SECRET, { expiresIn: '7d' });
         res.status(200).json({
             success: true,
             message: 'Login successful',

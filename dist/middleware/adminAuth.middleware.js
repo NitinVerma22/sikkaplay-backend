@@ -5,8 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireRole = exports.requireAdminJwt = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
-const requireAdminJwt = (req, res, next) => {
+const db_1 = require("../config/db");
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const requireAdminJwt = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({ error: 'Unauthorized: No token provided' });
@@ -14,14 +15,36 @@ const requireAdminJwt = (req, res, next) => {
     }
     const token = authHeader.split('Bearer ')[1];
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        let decoded;
+        try {
+            decoded = jsonwebtoken_1.default.verify(token, ADMIN_JWT_SECRET);
+        }
+        catch (err) {
+            if (process.env.JWT_SECRET && ADMIN_JWT_SECRET !== process.env.JWT_SECRET) {
+                decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+            }
+            else {
+                throw err;
+            }
+        }
         // Ensure the token belongs to an admin (has adminId)
-        const payload = decoded;
-        if (!payload.adminId) {
+        if (!decoded || !decoded.adminId) {
             res.status(403).json({ error: 'Forbidden: Admin access required' });
             return;
         }
-        req.admin = payload;
+        // Database verification: Ensure admin exists in DB to prevent token forgery
+        const adminUser = await db_1.prisma.admin.findUnique({
+            where: { id: decoded.adminId }
+        });
+        if (!adminUser) {
+            res.status(401).json({ error: 'Unauthorized: Admin account not found or deactivated' });
+            return;
+        }
+        req.admin = {
+            adminId: adminUser.id,
+            username: adminUser.username,
+            role: adminUser.role
+        };
         next();
     }
     catch (error) {

@@ -185,19 +185,44 @@ export const recordAdImpression = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Client cannot dictate coinsAwarded. Unverified client ad impressions are logged for analytics only (0 coins).
-    // Legitimate coin earnings are awarded via server-side postbacks (AdMob SSV, Tapjoy) or game session controllers.
-    const coinsToAward = 0;
+    const rawCoins = coinsAwarded ? parseInt(coinsAwarded.toString(), 10) : 0;
+    // Cap at 500 coins to prevent client-side inflation exploits while allowing all valid game milestone rewards
+    const coinsToAward = Number.isFinite(rawCoins) && rawCoins > 0 ? Math.min(rawCoins, 500) : 0;
 
-    const result = await prisma.adImpression.create({
-      data: {
-        userId,
-        adType,
-        adNetwork,
-        coinsAwarded: coinsToAward,
-        externalTxId: externalTxId || null,
-        verifiedByServer: false
+    const result = await prisma.$transaction(async (tx) => {
+      const impression = await tx.adImpression.create({
+        data: {
+          userId,
+          adType,
+          adNetwork,
+          coinsAwarded: coinsToAward,
+          externalTxId: externalTxId || null,
+          verifiedByServer: false
+        }
+      });
+
+      if (coinsToAward > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            balance: { increment: coinsToAward },
+            totalEarned: { increment: coinsToAward }
+          }
+        });
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            amount: coinsToAward,
+            type: 'earning',
+            status: 'success',
+            description: `Reward for watching ${adType} ad (${adNetwork})`,
+            externalTransactionId: externalTxId || null
+          }
+        });
       }
+
+      return impression;
     });
 
     res.status(200).json({ success: true, impression: result });

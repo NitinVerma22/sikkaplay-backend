@@ -72,7 +72,7 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
                 click_action: 'FLUTTER_NOTIFICATION_CLICK',
                 ...(bannerUrl ? { bannerUrl } : {}),
                 ...(senderId ? { senderId, partnerId: senderId } : {}),
-                ...(channelName ? { channelName } : {})
+                ...(channelName ? { channelName, tournamentId: channelName } : {})
             },
             android: { priority: 'high' }
         };

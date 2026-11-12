@@ -64,20 +64,7 @@ export const completeBubbleShooterLevel = async (req: AuthRequest, res: Response
       else if (levelNumber === 15) coinsEarned = 105;
     }
 
-    // Verify milestone has not been claimed previously to prevent replay abuse
-    if (isMilestoneClaim && coinsEarned > 0 && userId) {
-      const milestoneDesc = `Bubble Shooter Level ${levelNumber} Milestone Reward`;
-      const existingClaim = await prisma.transaction.findFirst({
-        where: {
-          userId,
-          type: 'game',
-          description: milestoneDesc
-        }
-      });
-      if (existingClaim) {
-        coinsEarned = 0;
-      }
-    }
+
 
     let tournamentScoreResult: any = null;
 

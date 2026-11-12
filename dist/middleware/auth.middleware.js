@@ -28,6 +28,7 @@ const verifyToken = async (req, res, next) => {
 };
 exports.verifyToken = verifyToken;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-sikkaplay-key';
+const LEGACY_JWT_SECRET = 'super-secret-sikkaplay-key';
 const requireJwt = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -35,8 +36,27 @@ const requireJwt = async (req, res, next) => {
         return;
     }
     const token = authHeader.split('Bearer ')[1];
+    let decoded;
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+    }
+    catch (primaryErr) {
+        // Graceful fallback to legacy secret for existing live sessions to avoid logging out users
+        if (JWT_SECRET !== LEGACY_JWT_SECRET) {
+            try {
+                decoded = jsonwebtoken_1.default.verify(token, LEGACY_JWT_SECRET);
+            }
+            catch (legacyErr) {
+                res.status(401).json({ error: 'Unauthorized: Invalid session' });
+                return;
+            }
+        }
+        else {
+            res.status(401).json({ error: 'Unauthorized: Invalid session' });
+            return;
+        }
+    }
+    try {
         req.user = decoded; // Contains userId
         exports.onlineUsersCache.set(decoded.userId, true);
         // Dynamic anti-fraud/suspension check
