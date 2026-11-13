@@ -57,6 +57,7 @@ model User {
   playgroundMessages    PlaygroundMessage[]
   tournamentParticipants TournamentParticipant[]
   tournamentPrizes       TournamentPrizeWinner[]
+  reviewSubmissions      ReviewSubmission[]
 
   @@index([balance])
   @@index([totalEarned])
@@ -312,6 +313,39 @@ model VisitEarnClaim {
   @@index([userId, linkId])
   @@index([userId])
   @@index([claimedAt])
+}
+
+model ReviewTask {
+  id           String             @id @default(uuid())
+  businessName String
+  reviewUrl    String
+  coinsReward  Int                @default(50)
+  instructions String?
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  submissions  ReviewSubmission[]
+}
+
+model ReviewSubmission {
+  id              String       @id @default(uuid())
+  userId          String
+  taskId          String
+  deviceId        String?
+  screenshotUrl   String
+  status          String       @default("PENDING") // PENDING | APPROVED | REJECTED
+  rejectionReason String?
+  submittedAt     DateTime     @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task            ReviewTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@index([deviceId, taskId])
+  @@index([status])
+  @@index([userId])
 }
 
 model AdminAuditLog {

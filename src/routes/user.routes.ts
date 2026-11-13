@@ -92,6 +92,11 @@ router.post('/withdraw', vpnGuard, withdrawLimiter, requestWithdrawal);
 router.get('/visit-links', getVisitLinks);
 router.post('/visit-links/claim', vpnGuard, earnLimiter, claimVisitLinkReward);
 
+// Review & Earn Tasks
+import { getReviewTasks, submitReviewProof } from '../controllers/reviewTask.controller';
+router.get('/review-tasks', getReviewTasks);
+router.post('/review-tasks/submit', vpnGuard, earnLimiter, submitReviewProof);
+
 // Ad Impression Logging
 router.post('/ad-impression', recordAdImpression);
 

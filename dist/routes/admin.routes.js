@@ -79,6 +79,15 @@ router.post('/visit-links', visitLink_controller_1.createVisitLink);
 router.get('/visit-links', visitLink_controller_1.getVisitLinks);
 router.put('/visit-links/:id', visitLink_controller_1.updateVisitLink);
 router.delete('/visit-links/:id', visitLink_controller_1.deleteVisitLink);
+// Review Tasks & Submissions Management
+const reviewTask_controller_1 = require("../controllers/reviewTask.controller");
+router.get('/review-tasks', reviewTask_controller_1.getAdminReviewTasks);
+router.post('/review-tasks', reviewTask_controller_1.createAdminReviewTask);
+router.put('/review-tasks/:id', reviewTask_controller_1.updateAdminReviewTask);
+router.delete('/review-tasks/:id', reviewTask_controller_1.deleteAdminReviewTask);
+router.get('/review-submissions', reviewTask_controller_1.getAdminReviewSubmissions);
+router.post('/review-submissions/:id/approve', reviewTask_controller_1.approveReviewSubmission);
+router.post('/review-submissions/:id/reject', reviewTask_controller_1.rejectReviewSubmission);
 // Social Tasks Management
 router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);
 router.post('/social-tasks', socialTask_controller_1.createSocialTaskAdmin);

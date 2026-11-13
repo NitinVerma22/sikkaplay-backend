@@ -154,6 +154,26 @@ router.get('/visit-links', getVisitLinks);
 router.put('/visit-links/:id', updateVisitLink);
 router.delete('/visit-links/:id', deleteVisitLink);
 
+// Review Tasks & Submissions Management
+import {
+  getAdminReviewTasks,
+  createAdminReviewTask,
+  updateAdminReviewTask,
+  deleteAdminReviewTask,
+  getAdminReviewSubmissions,
+  approveReviewSubmission,
+  rejectReviewSubmission
+} from '../controllers/reviewTask.controller';
+
+router.get('/review-tasks', getAdminReviewTasks);
+router.post('/review-tasks', createAdminReviewTask);
+router.put('/review-tasks/:id', updateAdminReviewTask);
+router.delete('/review-tasks/:id', deleteAdminReviewTask);
+
+router.get('/review-submissions', getAdminReviewSubmissions);
+router.post('/review-submissions/:id/approve', approveReviewSubmission);
+router.post('/review-submissions/:id/reject', rejectReviewSubmission);
+
 // Social Tasks Management
 router.get('/social-tasks', getSocialTasksAdmin);
 router.post('/social-tasks', createSocialTaskAdmin);
