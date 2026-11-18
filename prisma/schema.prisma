@@ -674,6 +674,8 @@ model ScratchCardConfig {
   scratchThresholdPercent Int      @default(70)
   liftoffRewardedId       String   @default("REWARDED-7693446")
   liftoffNativeId         String   @default("NATIVE-2505365")
+  yandexAppId             String   @default("20446602")
+  yandexRewardedId        String   @default("R-M-20446602-1")
   admobRewardedId         String   @default("")
   admobNativeId           String   @default("")
   updatedAt               DateTime @updatedAt

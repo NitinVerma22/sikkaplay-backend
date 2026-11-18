@@ -4,7 +4,7 @@ import { AdminAuthRequest } from '../middleware/adminAuth.middleware';
 import { prisma } from '../config/db';
 
 const DEFAULT_REWARDS = [100, 150, 200, 250, 150, 300, 150, 400, 250, 350, 200, 500];
-const VALID_REWARDED_NETWORKS = new Set(['liftoff', 'admob', 'auto']);
+const VALID_REWARDED_NETWORKS = new Set(['liftoff', 'admob', 'yandex', 'auto']);
 const VALID_NATIVE_NETWORKS = new Set(['liftoff', 'admob', 'auto', 'off']);
 
 const getIstDateStr = (): string => {
@@ -67,6 +67,8 @@ export const getOrCreateScratchConfig = async () => {
         scratchThresholdPercent: 70,
         liftoffRewardedId: 'REWARDED-7693446',
         liftoffNativeId: 'NATIVE-2505365',
+        yandexAppId: '20446602',
+        yandexRewardedId: 'R-M-20446602-1',
         admobRewardedId: '',
         admobNativeId: '',
       },
@@ -96,6 +98,8 @@ const formatPublicConfig = (config: any) => ({
   scratchThresholdPercent: Math.max(10, Math.min(95, Number(config.scratchThresholdPercent) || 70)),
   liftoffRewardedId: config.liftoffRewardedId || 'REWARDED-7693446',
   liftoffNativeId: config.liftoffNativeId || 'NATIVE-2505365',
+  yandexAppId: config.yandexAppId || '20446602',
+  yandexRewardedId: config.yandexRewardedId || 'R-M-20446602-1',
   admobRewardedId: config.admobRewardedId || '',
   admobNativeId: config.admobNativeId || '',
 });
@@ -347,6 +351,8 @@ export const updateAdminScratchConfig = async (req: AdminAuthRequest, res: Respo
       scratchThresholdPercent,
       liftoffRewardedId,
       liftoffNativeId,
+      yandexAppId,
+      yandexRewardedId,
       admobRewardedId,
       admobNativeId,
     } = req.body;
@@ -414,6 +420,14 @@ export const updateAdminScratchConfig = async (req: AdminAuthRequest, res: Respo
       typeof liftoffNativeId === 'string' && liftoffNativeId.trim().length > 0
         ? liftoffNativeId.trim()
         : current.liftoffNativeId;
+    const nextYandexAppId =
+      typeof yandexAppId === 'string' && yandexAppId.trim().length > 0
+        ? yandexAppId.trim()
+        : current.yandexAppId;
+    const nextYandexRewardedId =
+      typeof yandexRewardedId === 'string' && yandexRewardedId.trim().length > 0
+        ? yandexRewardedId.trim()
+        : current.yandexRewardedId;
     const nextAdmobRewardedId =
       typeof admobRewardedId === 'string' ? admobRewardedId.trim() : current.admobRewardedId;
     const nextAdmobNativeId =
@@ -443,6 +457,8 @@ export const updateAdminScratchConfig = async (req: AdminAuthRequest, res: Respo
       scratchThresholdPercent: nextScratchThresholdPercent,
       liftoffRewardedId: nextLiftoffRewardedId,
       liftoffNativeId: nextLiftoffNativeId,
+      yandexAppId: nextYandexAppId,
+      yandexRewardedId: nextYandexRewardedId,
       admobRewardedId: nextAdmobRewardedId,
       admobNativeId: nextAdmobNativeId,
     };
