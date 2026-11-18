@@ -69,6 +69,10 @@ router.post('/visit-links/claim', vpn_middleware_1.vpnGuard, rateLimiter_middlew
 const reviewTask_controller_1 = require("../controllers/reviewTask.controller");
 router.get('/review-tasks', reviewTask_controller_1.getReviewTasks);
 router.post('/review-tasks/submit', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, reviewTask_controller_1.submitReviewProof);
+// Scratch & Win Cards
+const scratchCard_controller_1 = require("../controllers/scratchCard.controller");
+router.get('/scratch-cards', scratchCard_controller_1.getUserScratchCards);
+router.post('/scratch-cards/claim', vpn_middleware_1.vpnGuard, rateLimiter_middleware_1.earnLimiter, scratchCard_controller_1.claimScratchCard);
 // Ad Impression Logging
 router.post('/ad-impression', user_controller_1.recordAdImpression);
 // DELETE /api/user/me

@@ -174,6 +174,15 @@ router.get('/review-submissions', getAdminReviewSubmissions);
 router.post('/review-submissions/:id/approve', approveReviewSubmission);
 router.post('/review-submissions/:id/reject', rejectReviewSubmission);
 
+// Scratch & Win Management
+import {
+  getAdminScratchConfig,
+  updateAdminScratchConfig
+} from '../controllers/scratchCard.controller';
+
+router.get('/scratch-cards/config', getAdminScratchConfig);
+router.put('/scratch-cards/config', updateAdminScratchConfig);
+
 // Social Tasks Management
 router.get('/social-tasks', getSocialTasksAdmin);
 router.post('/social-tasks', createSocialTaskAdmin);

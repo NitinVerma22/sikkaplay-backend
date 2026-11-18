@@ -97,6 +97,11 @@ import { getReviewTasks, submitReviewProof } from '../controllers/reviewTask.con
 router.get('/review-tasks', getReviewTasks);
 router.post('/review-tasks/submit', vpnGuard, earnLimiter, submitReviewProof);
 
+// Scratch & Win Cards
+import { getUserScratchCards, claimScratchCard } from '../controllers/scratchCard.controller';
+router.get('/scratch-cards', getUserScratchCards);
+router.post('/scratch-cards/claim', vpnGuard, earnLimiter, claimScratchCard);
+
 // Ad Impression Logging
 router.post('/ad-impression', recordAdImpression);
 

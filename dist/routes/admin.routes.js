@@ -88,6 +88,10 @@ router.delete('/review-tasks/:id', reviewTask_controller_1.deleteAdminReviewTask
 router.get('/review-submissions', reviewTask_controller_1.getAdminReviewSubmissions);
 router.post('/review-submissions/:id/approve', reviewTask_controller_1.approveReviewSubmission);
 router.post('/review-submissions/:id/reject', reviewTask_controller_1.rejectReviewSubmission);
+// Scratch & Win Management
+const scratchCard_controller_1 = require("../controllers/scratchCard.controller");
+router.get('/scratch-cards/config', scratchCard_controller_1.getAdminScratchConfig);
+router.put('/scratch-cards/config', scratchCard_controller_1.updateAdminScratchConfig);
 // Social Tasks Management
 router.get('/social-tasks', socialTask_controller_1.getSocialTasksAdmin);
 router.post('/social-tasks', socialTask_controller_1.createSocialTaskAdmin);

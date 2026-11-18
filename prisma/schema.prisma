@@ -58,6 +58,7 @@ model User {
   tournamentParticipants TournamentParticipant[]
   tournamentPrizes       TournamentPrizeWinner[]
   reviewSubmissions      ReviewSubmission[]
+  scratchCardClaims      ScratchCardClaim[]
 
   @@index([balance])
   @@index([totalEarned])
@@ -653,5 +654,32 @@ model TournamentPrizeWinner {
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tournamentId, userId])
+}
+
+model ScratchCardConfig {
+  id             String   @id @default("default")
+  isEnabled      Boolean  @default(true)
+  heading        String   @default("Scratch All Cards & Win Upto 3000 Coins")
+  totalCards     Int      @default(12)
+  minCoins       Int      @default(50)
+  maxCoins       Int      @default(500)
+  bannerMaxCoins Int      @default(3000)
+  cardRewards    Json     @default("[100,150,200,250,100,300,150,400,200,350,300,500]")
+  updatedAt      DateTime @updatedAt
+}
+
+model ScratchCardClaim {
+  id          String   @id @default(uuid())
+  userId      String
+  cardIndex   Int
+  coinsEarned Int
+  dateStr     String   // YYYY-MM-DD in IST
+  claimedAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateStr, cardIndex])
+  @@index([userId, dateStr])
+  @@index([dateStr])
 }
 
