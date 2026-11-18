@@ -657,15 +657,26 @@ model TournamentPrizeWinner {
 }
 
 model ScratchCardConfig {
-  id             String   @id @default("default")
-  isEnabled      Boolean  @default(true)
-  heading        String   @default("Scratch All Cards & Win Upto 3000 Coins")
-  totalCards     Int      @default(12)
-  minCoins       Int      @default(50)
-  maxCoins       Int      @default(500)
-  bannerMaxCoins Int      @default(3000)
-  cardRewards    Json     @default("[100,150,200,250,100,300,150,400,200,350,300,500]")
-  updatedAt      DateTime @updatedAt
+  id                      String   @id @default("default")
+  isEnabled               Boolean  @default(true)
+  homeTitle               String   @default("Scratch & Win")
+  homeSubtitle            String   @default("Reward from 50-500 Coins per scratch")
+  heading                 String   @default("Scratch All Cards & Win Upto 3000 Coins")
+  popupButtonText         String   @default("Watch Video to Claim")
+  totalCards              Int      @default(12)
+  minCoins                Int      @default(50)
+  maxCoins                Int      @default(500)
+  bannerMaxCoins          Int      @default(3000)
+  cardRewards             Json     @default("[100,150,200,250,150,300,150,400,250,350,200,500]")
+  rewardedAdNetwork       String   @default("auto")
+  nativeAdNetwork         String   @default("auto")
+  nativeAdEveryNCards     Int      @default(4)
+  scratchThresholdPercent Int      @default(70)
+  liftoffRewardedId       String   @default("REWARDED-7693446")
+  liftoffNativeId         String   @default("NATIVE-2505365")
+  admobRewardedId         String   @default("")
+  admobNativeId           String   @default("")
+  updatedAt               DateTime @updatedAt
 }
 
 model ScratchCardClaim {

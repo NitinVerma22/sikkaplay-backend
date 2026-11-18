@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/db';
 import { getISTDateString, getStartOfTodayIST } from '../utils/date.utils';
 import { getCachedAppConfig } from '../services/config.service';
+import { getOrCreateScratchConfig } from './scratchCard.controller';
 
 // Social Tasks In-Memory Cache
 let cachedSocialTasks: any[] | null = null;
@@ -255,6 +256,9 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
     const dailyCodeTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Claimed Daily Code');
     const visitAllTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Visited All Links');
 
+    // 4. Scratch & Win live summary config for Home Screen card
+    const scratchCfg = await getOrCreateScratchConfig();
+
     res.status(200).json({
       success: true,
       balance: user.balance,
@@ -277,7 +281,15 @@ export const getHomeState = async (req: AuthRequest, res: Response): Promise<voi
       canStreakResume,
       streakResumeCost: resumeCost,
       skippedDaysCount: skippedDays,
-      streakBeforeSkip
+      streakBeforeSkip,
+      scratchWinConfig: {
+        isEnabled: scratchCfg.isEnabled,
+        homeTitle: scratchCfg.homeTitle,
+        homeSubtitle: scratchCfg.homeSubtitle,
+        minCoins: scratchCfg.minCoins,
+        maxCoins: scratchCfg.maxCoins,
+        bannerMaxCoins: scratchCfg.bannerMaxCoins,
+      }
     });
 
   } catch (error) {
