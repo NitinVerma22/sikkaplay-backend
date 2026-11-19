@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHomeState = exports.invalidateVisitEarnLinksCountCache = exports.getCachedVisitEarnLinksCount = exports.invalidateSocialTasksCache = exports.getCachedSocialTasks = void 0;
 const db_1 = require("../config/db");
 const date_utils_1 = require("../utils/date.utils");
+const scratchCard_controller_1 = require("./scratchCard.controller");
 // Social Tasks In-Memory Cache
 let cachedSocialTasks = null;
 let socialTasksCacheExpiry = 0;
@@ -226,6 +227,8 @@ const getHomeState = async (req, res) => {
         // 3. Check if task rewards were claimed today
         const dailyCodeTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Claimed Daily Code');
         const visitAllTaskClaimed = todaysTransactions.some(t => t.description === 'Daily Task: Visited All Links');
+        // 4. Scratch & Win live summary config for Home Screen card
+        const scratchCfg = await (0, scratchCard_controller_1.getOrCreateScratchConfig)();
         res.status(200).json({
             success: true,
             balance: user.balance,
@@ -248,7 +251,15 @@ const getHomeState = async (req, res) => {
             canStreakResume,
             streakResumeCost: resumeCost,
             skippedDaysCount: skippedDays,
-            streakBeforeSkip
+            streakBeforeSkip,
+            scratchWinConfig: {
+                isEnabled: scratchCfg.isEnabled,
+                homeTitle: scratchCfg.homeTitle,
+                homeSubtitle: scratchCfg.homeSubtitle,
+                minCoins: scratchCfg.minCoins,
+                maxCoins: scratchCfg.maxCoins,
+                bannerMaxCoins: scratchCfg.bannerMaxCoins,
+            }
         });
     }
     catch (error) {
