@@ -672,11 +672,13 @@ model ScratchCardConfig {
   nativeAdNetwork         String   @default("admob")
   nativeAdEveryNCards     Int      @default(4)
   scratchThresholdPercent Int      @default(70)
+  cooldownBatchCards      Int      @default(3)
+  cooldownMinutes         Int      @default(5)
   liftoffRewardedId       String   @default("")
   liftoffNativeId         String   @default("")
   yandexAppId             String   @default("")
   yandexRewardedId        String   @default("")
-  admobRewardedId         String   @default("")
+  admobRewardedId         String   @default("ca-app-pub-8599317656200402/5652375719")
   admobNativeId           String   @default("")
   updatedAt               DateTime @updatedAt
 }

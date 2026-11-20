@@ -65,11 +65,13 @@ export const getOrCreateScratchConfig = async () => {
         nativeAdNetwork: 'admob',
         nativeAdEveryNCards: 4,
         scratchThresholdPercent: 70,
+        cooldownBatchCards: 3,
+        cooldownMinutes: 5,
         liftoffRewardedId: '',
         liftoffNativeId: '',
         yandexAppId: '',
         yandexRewardedId: '',
-        admobRewardedId: '',
+        admobRewardedId: 'ca-app-pub-8599317656200402/5652375719',
         admobNativeId: '',
       },
     });
@@ -96,7 +98,9 @@ const formatPublicConfig = (config: any) => ({
     : 'admob',
   nativeAdEveryNCards: Math.max(1, Math.min(20, Number(config.nativeAdEveryNCards) || 4)),
   scratchThresholdPercent: Math.max(10, Math.min(95, Number(config.scratchThresholdPercent) || 70)),
-  admobRewardedId: config.admobRewardedId || '',
+  cooldownBatchCards: Math.max(1, Math.min(20, Number(config.cooldownBatchCards) || 3)),
+  cooldownMinutes: Math.max(1, Math.min(60, Number(config.cooldownMinutes) || 5)),
+  admobRewardedId: config.admobRewardedId || 'ca-app-pub-8599317656200402/5652375719',
   admobNativeId: config.admobNativeId || '',
 });
 
@@ -146,12 +150,50 @@ export const getUserScratchCards = async (req: Request, res: Response): Promise<
 
     const totalClaimedCoinsToday = todayClaims.reduce((sum, c) => sum + c.coinsEarned, 0);
 
+    const cooldownBatchCards = Math.max(1, Math.min(20, Number(config.cooldownBatchCards) || 3));
+    const cooldownMinutes = Math.max(1, Math.min(60, Number(config.cooldownMinutes) || 5));
+
+    let isCooldownActive = false;
+    let cooldownUntil: string | null = null;
+    let cooldownRemainingSeconds = 0;
+
+    const claimedCount = todayClaims.length;
+    const totalCards = config.totalCards;
+
+    if (claimedCount > 0 && claimedCount < totalCards && claimedCount % cooldownBatchCards === 0) {
+      const latestClaimTime = todayClaims.reduce((latest, c) => {
+        const t = new Date(c.claimedAt).getTime();
+        return t > latest ? t : latest;
+      }, 0);
+
+      if (latestClaimTime > 0) {
+        const cooldownMs = cooldownMinutes * 60 * 1000;
+        const targetTime = latestClaimTime + cooldownMs;
+        const diffMs = targetTime - Date.now();
+
+        if (diffMs > 0) {
+          isCooldownActive = true;
+          cooldownUntil = new Date(targetTime).toISOString();
+          cooldownRemainingSeconds = Math.ceil(diffMs / 1000);
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       dateStr,
       config: formatPublicConfig(config),
       claimedCount: todayClaims.length,
       totalClaimedCoinsToday,
+      cooldown: {
+        isActive: isCooldownActive,
+        remainingSeconds: cooldownRemainingSeconds,
+        cooldownUntil,
+        cooldownMinutes,
+        batchCards: cooldownBatchCards,
+        currentBatchClaimed: claimedCount % cooldownBatchCards,
+        cooldownMessage: 'Play this game and earn 250 coins in 5 minutes only!',
+      },
       cards,
     });
   } catch (error) {
@@ -194,19 +236,42 @@ export const claimScratchCard = async (req: Request, res: Response): Promise<voi
 
     const dateStr = getIstDateStr();
 
-    const existingClaim = await prisma.scratchCardClaim.findUnique({
-      where: {
-        userId_dateStr_cardIndex: {
-          userId,
-          dateStr,
-          cardIndex,
-        },
-      },
+    // Fetch existing claims today to check duplicate & cooldown
+    const todayClaims = await prisma.scratchCardClaim.findMany({
+      where: { userId, dateStr },
     });
 
-    if (existingClaim) {
+    const isAlreadyClaimed = todayClaims.some((c) => c.cardIndex === cardIndex);
+    if (isAlreadyClaimed) {
       res.status(400).json({ error: 'You have already claimed this scratch card today.' });
       return;
+    }
+
+    const cooldownBatchCards = Math.max(1, Math.min(20, Number(config.cooldownBatchCards) || 3));
+    const cooldownMinutes = Math.max(1, Math.min(60, Number(config.cooldownMinutes) || 5));
+    const claimedCount = todayClaims.length;
+
+    // Check if cooldown is active
+    if (claimedCount > 0 && claimedCount < config.totalCards && claimedCount % cooldownBatchCards === 0) {
+      const latestClaimTime = todayClaims.reduce((latest, c) => {
+        const t = new Date(c.claimedAt).getTime();
+        return t > latest ? t : latest;
+      }, 0);
+
+      const cooldownMs = cooldownMinutes * 60 * 1000;
+      const targetTime = latestClaimTime + cooldownMs;
+      const diffMs = targetTime - Date.now();
+
+      if (diffMs > 0) {
+        const remainingSec = Math.ceil(diffMs / 1000);
+        res.status(429).json({
+          error: `Cooldown active. Next scratch cards unlock in ${Math.ceil(remainingSec / 60)} minutes. Play games to earn 250 coins while you wait!`,
+          isCooldown: true,
+          remainingSeconds: remainingSec,
+          cooldownUntil: new Date(targetTime).toISOString(),
+        });
+        return;
+      }
     }
 
     const cardRewards = normalizeCardRewards(
@@ -248,6 +313,17 @@ export const claimScratchCard = async (req: Request, res: Response): Promise<voi
       return { claim: claimRecord, user: updatedUser, transaction: transactionRecord };
     });
 
+    const newClaimedCount = claimedCount + 1;
+    let nextCooldownActive = false;
+    let nextCooldownRemainingSeconds = 0;
+    let nextCooldownUntil: string | null = null;
+
+    if (newClaimedCount < config.totalCards && newClaimedCount % cooldownBatchCards === 0) {
+      nextCooldownActive = true;
+      nextCooldownRemainingSeconds = cooldownMinutes * 60;
+      nextCooldownUntil = new Date(Date.now() + cooldownMinutes * 60 * 1000).toISOString();
+    }
+
     res.status(200).json({
       success: true,
       message: `Congratulations! +${coinsEarned} Coins added to your wallet!`,
@@ -255,6 +331,13 @@ export const claimScratchCard = async (req: Request, res: Response): Promise<voi
       coinsEarned,
       newBalance: result.user.balance,
       transaction: result.transaction,
+      cooldown: {
+        isActive: nextCooldownActive,
+        remainingSeconds: nextCooldownRemainingSeconds,
+        cooldownUntil: nextCooldownUntil,
+        cooldownMinutes,
+        batchCards: cooldownBatchCards,
+      },
     });
   } catch (error: any) {
     if (error?.code === 'P2002') {
@@ -407,9 +490,19 @@ export const updateAdminScratchConfig = async (req: AdminAuthRequest, res: Respo
       10,
       Math.min(95, Math.floor(Number(scratchThresholdPercent ?? current.scratchThresholdPercent) || 70))
     );
+    const nextCooldownBatchCards = Math.max(
+      1,
+      Math.min(20, Math.floor(Number(req.body?.cooldownBatchCards ?? (current as any).cooldownBatchCards) || 3))
+    );
+    const nextCooldownMinutes = Math.max(
+      1,
+      Math.min(60, Math.floor(Number(req.body?.cooldownMinutes ?? (current as any).cooldownMinutes) || 5))
+    );
 
     const nextAdmobRewardedId =
-      typeof admobRewardedId === 'string' ? admobRewardedId.trim() : current.admobRewardedId;
+      typeof admobRewardedId === 'string' && admobRewardedId.trim().length > 0
+        ? admobRewardedId.trim()
+        : (current.admobRewardedId || 'ca-app-pub-8599317656200402/5652375719');
     const nextAdmobNativeId =
       typeof admobNativeId === 'string' ? admobNativeId.trim() : current.admobNativeId;
 
@@ -435,6 +528,8 @@ export const updateAdminScratchConfig = async (req: AdminAuthRequest, res: Respo
       nativeAdNetwork: nextNativeAdNetwork,
       nativeAdEveryNCards: nextNativeAdEveryNCards,
       scratchThresholdPercent: nextScratchThresholdPercent,
+      cooldownBatchCards: nextCooldownBatchCards,
+      cooldownMinutes: nextCooldownMinutes,
       liftoffRewardedId: '',
       liftoffNativeId: '',
       yandexAppId: '',
