@@ -1,6 +1,6 @@
 import { prisma } from '../config/db';
 import crypto from 'crypto';
-import { sendPushNotification } from './push.service';
+import { sendPushNotification, broadcastPushNotification } from './push.service';
 
 interface LeaderboardCacheEntry {
   data: any;
@@ -507,21 +507,34 @@ export class TournamentService {
    * Lifecycle State Transition Engine (invoked by Cron every minute):
    * Transitions UPCOMING -> LIVE, LIVE -> COMPLETED, and triggers prize distribution.
    */
+  /**
+   * Lifecycle State Transition Engine (invoked by Cron every minute):
+   * Transitions UPCOMING -> LIVE, LIVE -> COMPLETED, triggers prize distribution,
+   * and automatically broadcasts Start & End push notifications to all users.
+   */
   public static async processLifecycleTransitions(): Promise<void> {
     const now = new Date();
 
     try {
-      // 1. Auto-transition recurring tournaments from UPCOMING to LIVE when startTime arrives (if recurring enabled)
+      // 1. Auto-transition tournaments from UPCOMING to LIVE when startTime arrives
       const config = await prisma.appConfig.findFirst({
-        select: { isRecurringTournamentsEnabled: true }
+        select: {
+          isTournamentsEnabled: true,
+          isRecurringTournamentsEnabled: true
+        }
       });
-      if (config?.isRecurringTournamentsEnabled) {
+
+      const isTournamentsMasterEnabled = config ? config.isTournamentsEnabled !== false : true;
+      const isRecurringEnabled = config ? config.isRecurringTournamentsEnabled !== false : true;
+
+      if (isTournamentsMasterEnabled) {
         const toLive = await prisma.tournament.findMany({
           where: {
-            isRecurring: true,
             status: 'UPCOMING',
             startTime: { lte: now },
-            endTime: { gt: now }
+            endTime: { gt: now },
+            // If recurring tournaments are disabled, only activate non-recurring
+            ...(isRecurringEnabled ? {} : { isRecurring: false })
           },
           select: { id: true, title: true }
         });
@@ -531,7 +544,7 @@ export class TournamentService {
             where: { id: t.id },
             data: { status: 'LIVE' }
           });
-          console.log(`[TournamentService] Auto-recurring Tournament "${t.title}" (${t.id}) is now LIVE.`);
+          console.log(`[TournamentService] Tournament "${t.title}" (${t.id}) transitioned to LIVE.`);
         }
       }
 
@@ -546,12 +559,38 @@ export class TournamentService {
       for (const t of expiredUpcoming) {
         await prisma.tournament.update({
           where: { id: t.id },
-          data: { status: t.isRecurring ? 'CANCELLED' : 'COMPLETED' }
+          data: {
+            status: t.isRecurring ? 'CANCELLED' : 'COMPLETED',
+            isStartNotified: true,
+            isEndNotified: true
+          }
         });
         console.log(`[TournamentService] Expired UPCOMING tournament "${t.title}" (${t.id}) marked as ${t.isRecurring ? 'CANCELLED' : 'COMPLETED'}.`);
       }
 
-      // 2. LIVE -> COMPLETED (Auto-transition when endTime has passed)
+      // 2. Broadcast Tournament START Push Notifications (for LIVE tournaments that haven't notified yet)
+      const unnotifiedLiveTournaments = await prisma.tournament.findMany({
+        where: {
+          status: 'LIVE',
+          isStartNotified: false,
+          endTime: { gt: now }
+        },
+        select: { id: true, title: true, bannerUrl: true, prizePool: true, prizePoolRupees: true }
+      });
+
+      for (const t of unnotifiedLiveTournaments) {
+        // Mark notified first to avoid race conditions across cron iterations
+        await prisma.tournament.update({
+          where: { id: t.id },
+          data: { isStartNotified: true }
+        });
+
+        TournamentService.sendTournamentStartNotification(t).catch((err) =>
+          console.error(`[TournamentService] Failed to send start notification for "${t.title}" (${t.id}):`, err)
+        );
+      }
+
+      // 3. LIVE -> COMPLETED (Auto-transition when endTime has passed)
       const toComplete = await prisma.tournament.findMany({
         where: {
           status: 'LIVE',
@@ -571,7 +610,7 @@ export class TournamentService {
         await this.distributePrizesForTournament(t.id);
       }
 
-      // 3. Re-check any COMPLETED tournaments where isPrizesDistributed is false
+      // 4. Re-check any COMPLETED tournaments where isPrizesDistributed is false
       const unrewarded = await prisma.tournament.findMany({
         where: {
           status: 'COMPLETED',
@@ -583,8 +622,124 @@ export class TournamentService {
       for (const t of unrewarded) {
         await this.distributePrizesForTournament(t.id);
       }
+
+      // 5. Broadcast Tournament END Push Notifications (with Top Rankers)
+      const unnotifiedCompletedTournaments = await prisma.tournament.findMany({
+        where: {
+          status: 'COMPLETED',
+          isEndNotified: false
+        },
+        select: { id: true, title: true, bannerUrl: true, prizePool: true, prizePoolRupees: true }
+      });
+
+      for (const t of unnotifiedCompletedTournaments) {
+        // Mark notified first to prevent duplicate sends
+        await prisma.tournament.update({
+          where: { id: t.id },
+          data: { isEndNotified: true }
+        });
+
+        TournamentService.sendTournamentEndNotification(t).catch((err) =>
+          console.error(`[TournamentService] Failed to send end notification for "${t.title}" (${t.id}):`, err)
+        );
+      }
     } catch (error) {
       console.error('[TournamentService.processLifecycleTransitions] Error running lifecycle transitions:', error);
+    }
+  }
+
+  /**
+   * Broadcasts push notification when a tournament goes LIVE.
+   */
+  public static async sendTournamentStartNotification(tournament: {
+    id: string;
+    title: string;
+    bannerUrl?: string | null;
+    prizePool?: number;
+    prizePoolRupees?: number;
+  }): Promise<void> {
+    try {
+      const title = `🔥 Tournament Shuru Ho Chuka Hai!`;
+      const body = `"${tournament.title}" shuru ho chuka hai! Jaldi join karo, der na ho jaye aur rewards jeeto! ⚡🏆`;
+
+      console.log(`[TournamentService] Broadcasting Tournament START: "${tournament.title}" (${tournament.id})`);
+
+      await broadcastPushNotification({
+        title,
+        body,
+        type: 'tournament_start',
+        bannerUrl: tournament.bannerUrl || null,
+        tournamentId: tournament.id
+      });
+    } catch (error) {
+      console.error(`[TournamentService.sendTournamentStartNotification] Error for ${tournament.id}:`, error);
+    }
+  }
+
+  /**
+   * Broadcasts push notification when a tournament ends, showing the Top Rankers & their ranks.
+   */
+  public static async sendTournamentEndNotification(tournament: {
+    id: string;
+    title: string;
+    bannerUrl?: string | null;
+    prizePool?: number;
+    prizePoolRupees?: number;
+  }): Promise<void> {
+    try {
+      // Fetch top 3 participants
+      const topParticipants = await prisma.tournamentParticipant.findMany({
+        where: { tournamentId: tournament.id },
+        orderBy: [
+          { score: 'desc' },
+          { lastScoreUpdatedAt: 'asc' }
+        ],
+        take: 3,
+        include: {
+          user: {
+            select: {
+              name: true,
+              username: true
+            }
+          }
+        }
+      });
+
+      const getPlayerName = (p: any, rank: number) => {
+        return p?.user?.name?.trim() || p?.user?.username?.trim() || `Player #${rank}`;
+      };
+
+      const title = `🏁 ${tournament.title} Ended!`;
+      let body = '';
+
+      if (topParticipants.length >= 3) {
+        const p1 = getPlayerName(topParticipants[0], 1);
+        const p2 = getPlayerName(topParticipants[1], 2);
+        const p3 = getPlayerName(topParticipants[2], 3);
+        body = `Tournament end ho gaya! 🏆 Top Rankers: 🥇 #1 ${p1}, 🥈 #2 ${p2}, 🥉 #3 ${p3}. Check full leaderboard & winnings! ⚡`;
+      } else if (topParticipants.length === 2) {
+        const p1 = getPlayerName(topParticipants[0], 1);
+        const p2 = getPlayerName(topParticipants[1], 2);
+        body = `Tournament end ho gaya! 🏆 Top Rankers: 🥇 #1 ${p1}, 🥈 #2 ${p2}. Check leaderboard & winnings! ⚡`;
+      } else if (topParticipants.length === 1) {
+        const p1 = getPlayerName(topParticipants[0], 1);
+        const s1 = topParticipants[0].score;
+        body = `Tournament end ho gaya! 🏆 Top Ranker: 🥇 #1 ${p1} (${s1} pts). Check full leaderboard & winnings! ⚡`;
+      } else {
+        body = `"${tournament.title}" end ho gaya hai! Check leaderboard aur agle tournament me hissa lo! ⚡`;
+      }
+
+      console.log(`[TournamentService] Broadcasting Tournament END: "${tournament.title}" (${tournament.id}) -> "${body}"`);
+
+      await broadcastPushNotification({
+        title,
+        body,
+        type: 'tournament_ended',
+        bannerUrl: tournament.bannerUrl || null,
+        tournamentId: tournament.id
+      });
+    } catch (error) {
+      console.error(`[TournamentService.sendTournamentEndNotification] Error for ${tournament.id}:`, error);
     }
   }
 

@@ -74,7 +74,8 @@ export const sendPushNotificationBatch = async (
   title: string,
   body: string,
   type: string = 'alert',
-  bannerUrl: string | null = null
+  bannerUrl: string | null = null,
+  tournamentId?: string
 ) => {
   if (!tokens || tokens.length === 0) return;
 
@@ -89,7 +90,8 @@ export const sendPushNotificationBatch = async (
           body,
           type,
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          ...(bannerUrl ? { bannerUrl } : {})
+          ...(bannerUrl ? { bannerUrl } : {}),
+          ...(tournamentId ? { tournamentId, channelName: tournamentId } : {})
         },
         android: {
           priority: 'high' as const
@@ -130,6 +132,65 @@ export const sendPushNotificationBatch = async (
         name: error?.name
       });
     }
+  }
+};
+
+/**
+ * Broadcasts a push notification to all users with valid FCM tokens and persists in-app notification records in DB.
+ */
+export const broadcastPushNotification = async (params: {
+  title: string;
+  body: string;
+  type?: string;
+  bannerUrl?: string | null;
+  tournamentId?: string;
+  skipDb?: boolean;
+}): Promise<void> => {
+  const { title, body, type = 'alert', bannerUrl = null, tournamentId, skipDb = false } = params;
+
+  try {
+    // 1. Fetch all users to obtain IDs and FCM tokens
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        fcmToken: true
+      }
+    });
+
+    if (!users || users.length === 0) return;
+
+    // 2. Persist in-app notifications in DB in chunks of 1000 so all users see it in their notification inbox
+    if (!skipDb) {
+      try {
+        const dbEntries = users.map(u => ({
+          userId: u.id,
+          title,
+          body,
+          type,
+          bannerUrl: bannerUrl || null,
+        }));
+
+        const chunkSize = 1000;
+        for (let i = 0; i < dbEntries.length; i += chunkSize) {
+          const chunk = dbEntries.slice(i, i + chunkSize);
+          await prisma.notification.createMany({ data: chunk });
+        }
+      } catch (dbErr) {
+        console.error('[broadcastPushNotification] Error inserting notifications into DB:', dbErr);
+      }
+    }
+
+    // 3. Send real push notifications via FCM in batches of 500
+    const tokens = users
+      .filter(u => u.fcmToken && u.fcmToken.trim().length > 10)
+      .map(u => u.fcmToken!.trim());
+
+    if (tokens.length > 0) {
+      console.log(`[broadcastPushNotification] Dispatching push to ${tokens.length} registered devices...`);
+      await sendPushNotificationBatch(tokens, title, body, type, bannerUrl, tournamentId);
+    }
+  } catch (error) {
+    console.error('[broadcastPushNotification] Error broadcasting push notification:', error);
   }
 };
 

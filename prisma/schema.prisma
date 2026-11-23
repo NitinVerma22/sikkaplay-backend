@@ -614,6 +614,8 @@ model Tournament {
   endTime             DateTime
   status              TournamentStatus     @default(UPCOMING)
   isPrizesDistributed Boolean              @default(false)
+  isStartNotified     Boolean              @default(false)
+  isEndNotified       Boolean              @default(false)
   minPointsToWin      Int                  @default(1000)
   isRecurring         Boolean              @default(false)
   recurringCron       String?

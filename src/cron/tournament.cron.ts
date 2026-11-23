@@ -186,6 +186,8 @@ export const ensureRecurringDailyTournaments = async (): Promise<void> => {
             endTime,
             status,
             isRecurring: true,
+            isStartNotified: status !== 'UPCOMING',
+            isEndNotified: status === 'COMPLETED',
             allowedGames: [
               'treasure_grid', 'emoji_memory', 'math_rush', 'water_sort', 'bubble_shooter', 'arrow_escape'
             ]

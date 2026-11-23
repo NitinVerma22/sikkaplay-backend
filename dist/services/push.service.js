@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendPushNotificationBatch = exports.sendPushNotification = void 0;
+exports.broadcastPushNotification = exports.sendPushNotificationBatch = exports.sendPushNotification = void 0;
 const db_1 = require("../config/db");
 const admin = __importStar(require("firebase-admin"));
 require("../config/firebase"); // Ensure Firebase Admin is initialized
@@ -92,7 +92,7 @@ const sendPushNotification = async (fcmToken, title, body, type = 'alert', banne
     }
 };
 exports.sendPushNotification = sendPushNotification;
-const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', bannerUrl = null) => {
+const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', bannerUrl = null, tournamentId) => {
     if (!tokens || tokens.length === 0)
         return;
     const batchSize = 500;
@@ -106,7 +106,8 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
                     body,
                     type,
                     click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                    ...(bannerUrl ? { bannerUrl } : {})
+                    ...(bannerUrl ? { bannerUrl } : {}),
+                    ...(tournamentId ? { tournamentId, channelName: tournamentId } : {})
                 },
                 android: {
                     priority: 'high'
@@ -147,3 +148,52 @@ const sendPushNotificationBatch = async (tokens, title, body, type = 'alert', ba
     }
 };
 exports.sendPushNotificationBatch = sendPushNotificationBatch;
+/**
+ * Broadcasts a push notification to all users with valid FCM tokens and persists in-app notification records in DB.
+ */
+const broadcastPushNotification = async (params) => {
+    const { title, body, type = 'alert', bannerUrl = null, tournamentId, skipDb = false } = params;
+    try {
+        // 1. Fetch all users to obtain IDs and FCM tokens
+        const users = await db_1.prisma.user.findMany({
+            select: {
+                id: true,
+                fcmToken: true
+            }
+        });
+        if (!users || users.length === 0)
+            return;
+        // 2. Persist in-app notifications in DB in chunks of 1000 so all users see it in their notification inbox
+        if (!skipDb) {
+            try {
+                const dbEntries = users.map(u => ({
+                    userId: u.id,
+                    title,
+                    body,
+                    type,
+                    bannerUrl: bannerUrl || null,
+                }));
+                const chunkSize = 1000;
+                for (let i = 0; i < dbEntries.length; i += chunkSize) {
+                    const chunk = dbEntries.slice(i, i + chunkSize);
+                    await db_1.prisma.notification.createMany({ data: chunk });
+                }
+            }
+            catch (dbErr) {
+                console.error('[broadcastPushNotification] Error inserting notifications into DB:', dbErr);
+            }
+        }
+        // 3. Send real push notifications via FCM in batches of 500
+        const tokens = users
+            .filter(u => u.fcmToken && u.fcmToken.trim().length > 10)
+            .map(u => u.fcmToken.trim());
+        if (tokens.length > 0) {
+            console.log(`[broadcastPushNotification] Dispatching push to ${tokens.length} registered devices...`);
+            await (0, exports.sendPushNotificationBatch)(tokens, title, body, type, bannerUrl, tournamentId);
+        }
+    }
+    catch (error) {
+        console.error('[broadcastPushNotification] Error broadcasting push notification:', error);
+    }
+};
+exports.broadcastPushNotification = broadcastPushNotification;
