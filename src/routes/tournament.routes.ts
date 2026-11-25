@@ -19,7 +19,8 @@ import {
   adminGetRecurringSettings,
   adminUpdateRecurringSettings,
   adminTriggerRecurringCreation,
-  adminUpdateParticipantScore
+  adminUpdateParticipantScore,
+  adminTogglePauseTournament
 } from '../controllers/tournament.controller';
 
 const router = Router();
@@ -48,6 +49,7 @@ router.post('/admin/reorder', requireAdminJwt, adminReorderTournaments);
 router.post('/admin/:id/duplicate', requireAdminJwt, adminDuplicateTournament);
 router.post('/admin/:id/cancel', requireAdminJwt, adminCancelTournament);
 router.post('/admin/:id/payout', requireAdminJwt, adminTriggerPayout);
+router.post('/admin/:id/toggle-pause', requireAdminJwt, adminTogglePauseTournament);
 router.post('/admin/toggle-feature-flag', requireAdminJwt, adminToggleFeatureFlag);
 
 export default router;

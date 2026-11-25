@@ -617,6 +617,8 @@ model Tournament {
   isStartNotified     Boolean              @default(false)
   isEndNotified       Boolean              @default(false)
   minPointsToWin      Int                  @default(1000)
+  isPaused            Boolean              @default(false)
+  pauseMessage        String?              @default("Paused: will resume tomorrow")
   isRecurring         Boolean              @default(false)
   recurringCron       String?
   createdAt           DateTime             @default(now())

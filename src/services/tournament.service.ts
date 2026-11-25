@@ -25,6 +25,14 @@ export class TournamentService {
     return `${tournamentId}:${page}:${limit}`;
   }
 
+  public static invalidateTournamentCache(tournamentId: string): void {
+    for (const key of leaderboardCache.keys()) {
+      if (key.startsWith(`${tournamentId}:`) || key.startsWith(`lb_${tournamentId}_`)) {
+        leaderboardCache.delete(key);
+      }
+    }
+  }
+
   /**
    * Records a user's earned coins as tournament points into their participant record.
    * Atomic, rate-limit protected, and verifies tournament status & end time cutoff.
@@ -55,6 +63,11 @@ export class TournamentService {
       // 1. Strict status & time cutoff check
       const now = new Date();
       if (tournament.status !== 'LIVE' || now < tournament.startTime || now > tournament.endTime) {
+        return { scored: false, pointsAwarded: 0 };
+      }
+
+      // 1b. Check if tournament is paused by admin
+      if ((tournament as any).isPaused) {
         return { scored: false, pointsAwarded: 0 };
       }
 
@@ -200,6 +213,8 @@ export class TournamentService {
             allowedGames: true,
             prizeStructure: true,
             minPointsToWin: true,
+            isPaused: true,
+            pauseMessage: true,
             tag: true
           }
         }),
@@ -261,7 +276,7 @@ export class TournamentService {
       const payload = {
         tournament: tournament ? {
           id: tournament.id,
-          title: tournament.title,
+          title: (tournament as any).isPaused ? `[⏸️ Paused] ${tournament.title}` : tournament.title,
           rawTitle: tournament.title,
           tag: tournament.tag,
           prizePool: tournament.prizePool,
@@ -272,6 +287,8 @@ export class TournamentService {
           allowedGames: tournament.allowedGames,
           prizeStructure: tournament.prizeStructure,
           minPointsToWin: minRequired,
+          isPaused: (tournament as any).isPaused || false,
+          pauseMessage: (tournament as any).pauseMessage || 'Paused: will resume tomorrow',
         } : null,
         rankings,
         leaderboard: rankings,

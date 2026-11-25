@@ -144,10 +144,14 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       const pCount = (t as any)._count?.participants || 0;
       const { theme, order } = parseThemeAndOrder(t.tag);
       const minPoints = (t as any).minPointsToWin ?? 1000;
+      const isPaused = (t as any).isPaused || false;
+      const pauseMsg = (t as any).pauseMessage || 'Paused: will resume tomorrow';
       return {
         id: t.id,
-        title: t.title,
+        title: isPaused ? `[⏸️ Paused] ${t.title}` : t.title,
         rawTitle: t.title,
+        isPaused,
+        pauseMessage: pauseMsg,
         description: t.description,
         bannerUrl: t.bannerUrl,
         tag: t.tag,
@@ -289,8 +293,10 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
       tournament: {
         ...tournament,
         tag: tournament.tag,
-        title: tournament.title,
+        title: (tournament as any).isPaused ? `[⏸️ Paused] ${tournament.title}` : tournament.title,
         rawTitle: tournament.title,
+        isPaused: (tournament as any).isPaused || false,
+        pauseMessage: (tournament as any).pauseMessage || 'Paused: will resume tomorrow',
         minPointsToWin: minPoints,
         entryFeeCoins: tournament.entryFee,
         participantCount: pCount,
@@ -1213,5 +1219,51 @@ export const adminUpdateParticipantScore = async (req: AdminAuthRequest, res: Re
   } catch (error: any) {
     console.error('Error updating participant score:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to update score' });
+  }
+};
+
+
+/**
+ * Admin: Quick toggle pause status for a tournament directly from list
+ * POST /tournaments/admin/:id/toggle-pause
+ */
+export const adminTogglePauseTournament = async (req: AdminAuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const { pauseMessage } = req.body;
+
+    const existing = await prisma.tournament.findUnique({
+      where: { id },
+      select: { id: true, title: true, isPaused: true, pauseMessage: true }
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: 'Tournament not found' });
+      return;
+    }
+
+    const nextState = !existing.isPaused;
+    const updated = await prisma.tournament.update({
+      where: { id },
+      data: {
+        isPaused: nextState,
+        pauseMessage: pauseMessage !== undefined ? pauseMessage : (existing.pauseMessage || 'Paused: will resume tomorrow')
+      }
+    });
+
+    // Invalidate tournament cache
+    TournamentService.invalidateTournamentCache(id);
+
+    console.log(`[TournamentAdmin] Tournament "${existing.title}" (${id}) pause toggled to: ${nextState}`);
+
+    res.status(200).json({
+      success: true,
+      message: nextState ? `Tournament "${existing.title}" is now PAUSED.` : `Tournament "${existing.title}" is now RESUMED.`,
+      isPaused: updated.isPaused,
+      pauseMessage: updated.pauseMessage
+    });
+  } catch (error) {
+    console.error('[adminTogglePauseTournament] Error:', error);
+    res.status(500).json({ error: 'Failed to toggle tournament pause state' });
   }
 };
