@@ -1232,6 +1232,18 @@ export const adminTogglePauseTournament = async (req: AdminAuthRequest, res: Res
     const id = req.params.id as string;
     const { pauseMessage } = req.body;
 
+    // Self-healing migration: Ensure isPaused and pauseMessage columns exist in DB
+    try {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isPaused" BOOLEAN DEFAULT false;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "pauseMessage" TEXT DEFAULT 'Paused: will resume tomorrow';
+      `);
+    } catch (migErr) {
+      console.warn('[adminTogglePauseTournament] Auto-migration check warning:', migErr);
+    }
+
     const existing = await prisma.tournament.findUnique({
       where: { id },
       select: { id: true, title: true, isPaused: true, pauseMessage: true }
@@ -1262,8 +1274,10 @@ export const adminTogglePauseTournament = async (req: AdminAuthRequest, res: Res
       isPaused: updated.isPaused,
       pauseMessage: updated.pauseMessage
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[adminTogglePauseTournament] Error:', error);
-    res.status(500).json({ error: 'Failed to toggle tournament pause state' });
+    res.status(500).json({ 
+      error: 'Failed to toggle tournament pause state: ' + (error?.message || String(error)) 
+    });
   }
 };
