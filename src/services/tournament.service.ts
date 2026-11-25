@@ -273,21 +273,32 @@ export class TournamentService {
         };
       });
 
+      const isPaused = (tournament as any)?.isPaused ?? false;
+      const tomorrowStart = new Date();
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      tomorrowStart.setHours(9, 0, 0, 0);
+      if (tomorrowStart.getTime() <= Date.now()) {
+        tomorrowStart.setTime(Date.now() + 14 * 60 * 60 * 1000);
+      }
+      const tomorrowEnd = new Date(tomorrowStart.getTime() + 14 * 60 * 60 * 1000);
+
       const payload = {
         tournament: tournament ? {
           id: tournament.id,
-          title: (tournament as any).isPaused ? `[⏸️ Paused] ${tournament.title}` : tournament.title,
+          title: isPaused ? `[⏸️ Paused: Resumes Tomorrow] ${tournament.title}` : tournament.title,
           rawTitle: tournament.title,
           tag: tournament.tag,
           prizePool: tournament.prizePool,
           prizePoolRupees: tournament.prizePoolRupees || 0,
           status: tournament.status,
-          startTime: tournament.startTime,
-          endTime: tournament.endTime,
+          startTime: isPaused ? tomorrowStart : tournament.startTime,
+          endTime: isPaused ? tomorrowEnd : tournament.endTime,
+          rawStartTime: tournament.startTime,
+          rawEndTime: tournament.endTime,
           allowedGames: tournament.allowedGames,
           prizeStructure: tournament.prizeStructure,
           minPointsToWin: minRequired,
-          isPaused: (tournament as any).isPaused || false,
+          isPaused,
           pauseMessage: (tournament as any).pauseMessage || 'Paused: will resume tomorrow',
         } : null,
         rankings,

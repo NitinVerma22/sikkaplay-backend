@@ -27,6 +27,19 @@ export const parseThemeAndOrder = (tag?: string | null): { theme: string; order:
  * GET /api/v1/tournaments
  * Lists tournaments filtered by tab: 'live' | 'upcoming' | 'completed' | 'history' | 'my'
  */
+
+export const getEffectiveTournamentTimes = (isPaused: boolean, startTime: Date, endTime: Date) => {
+  if (!isPaused) return { startTime, endTime };
+  const tomorrowStart = new Date();
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  tomorrowStart.setHours(9, 0, 0, 0);
+  if (tomorrowStart.getTime() <= Date.now()) {
+    tomorrowStart.setTime(Date.now() + 14 * 60 * 60 * 1000);
+  }
+  const tomorrowEnd = new Date(tomorrowStart.getTime() + 14 * 60 * 60 * 1000);
+  return { startTime: tomorrowStart, endTime: tomorrowEnd };
+};
+
 export const getTournaments = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId || req.user?.id;
@@ -146,9 +159,10 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
       const minPoints = (t as any).minPointsToWin ?? 1000;
       const isPaused = (t as any).isPaused || false;
       const pauseMsg = (t as any).pauseMessage || 'Paused: will resume tomorrow';
+      const effTimes = getEffectiveTournamentTimes(isPaused, t.startTime, t.endTime);
       return {
         id: t.id,
-        title: isPaused ? `[⏸️ Paused] ${t.title}` : t.title,
+        title: isPaused ? `[⏸️ Paused: Resumes Tomorrow] ${t.title}` : t.title,
         rawTitle: t.title,
         isPaused,
         pauseMessage: pauseMsg,
@@ -168,8 +182,10 @@ export const getTournaments = async (req: AuthRequest, res: Response): Promise<v
         maxParticipants: t.maxParticipants,
         allowedGames: t.allowedGames,
         scoreMultiplier: t.scoreMultiplier,
-        startTime: t.startTime,
-        endTime: t.endTime,
+        startTime: effTimes.startTime,
+        endTime: effTimes.endTime,
+        rawStartTime: t.startTime,
+        rawEndTime: t.endTime,
         status: t.status,
         isPrizesDistributed: t.isPrizesDistributed,
         participantCount: pCount,
@@ -288,15 +304,21 @@ export const getTournamentDetails = async (req: AuthRequest, res: Response): Pro
 
     const pCount = (tournament as any)._count?.participants || 0;
     const minPoints = (tournament as any).minPointsToWin ?? 1000;
+    const isPaused = (tournament as any).isPaused || false;
+    const effTimes = getEffectiveTournamentTimes(isPaused, tournament.startTime, tournament.endTime);
     res.status(200).json({
       success: true,
       tournament: {
         ...tournament,
         tag: tournament.tag,
-        title: (tournament as any).isPaused ? `[⏸️ Paused] ${tournament.title}` : tournament.title,
+        title: isPaused ? `[⏸️ Paused: Resumes Tomorrow] ${tournament.title}` : tournament.title,
         rawTitle: tournament.title,
-        isPaused: (tournament as any).isPaused || false,
+        isPaused,
         pauseMessage: (tournament as any).pauseMessage || 'Paused: will resume tomorrow',
+        startTime: effTimes.startTime,
+        endTime: effTimes.endTime,
+        rawStartTime: tournament.startTime,
+        rawEndTime: tournament.endTime,
         minPointsToWin: minPoints,
         entryFeeCoins: tournament.entryFee,
         participantCount: pCount,

@@ -74,6 +74,18 @@ export const startGame = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
+    // Verify tournament is not paused if tournament session
+    if (typeof tournamentId === 'string' && tournamentId.trim() !== '') {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournamentId.trim() },
+        select: { status: true, isPaused: true }
+      });
+      if (tournament?.isPaused) {
+        res.status(400).json({ error: 'This tournament is currently paused and will resume tomorrow.' });
+        return;
+      }
+    }
+
     // Invalidate any existing active sessions for this user and gameType to prevent multi-session exploits
     await prisma.gameSession.updateMany({
       where: {
