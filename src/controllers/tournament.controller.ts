@@ -1230,7 +1230,7 @@ export const adminUpdateParticipantScore = async (req: AdminAuthRequest, res: Re
 export const adminTogglePauseTournament = async (req: AdminAuthRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
-    const { pauseMessage } = req.body;
+    const { pauseMessage } = req.body || {};
 
     // Self-healing migration: Ensure isPaused and pauseMessage columns exist in DB
     try {
