@@ -96,6 +96,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/callbacks', callbackRoutes);
+app.use('/api/v1/callbacks', callbackRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/playground', playgroundRoutes);
 app.use('/api/v1/water-sort', waterSortRoutes);

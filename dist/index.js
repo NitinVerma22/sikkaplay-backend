@@ -96,6 +96,7 @@ app.use('/api/notifications', notification_routes_1.default);
 app.use('/api/support', support_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/callbacks', callback_routes_1.default);
+app.use('/api/v1/callbacks', callback_routes_1.default);
 app.use('/api/game', game_routes_1.default);
 app.use('/api/playground', playground_routes_1.default);
 app.use('/api/v1/water-sort', waterSort_routes_1.default);
@@ -302,8 +303,21 @@ exports.io.on('connection', (socket) => {
     });
 });
 // Start the server
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+    // Safe auto-migration for Tournament pause columns
+    try {
+        await db_1.prisma.$executeRawUnsafe(`
+      ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isPaused" BOOLEAN DEFAULT false;
+    `);
+        await db_1.prisma.$executeRawUnsafe(`
+      ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "pauseMessage" TEXT DEFAULT 'Paused: will resume tomorrow';
+    `);
+        console.log('[DB] Auto-migration check completed for Tournament pause columns.');
+    }
+    catch (e) {
+        console.warn('[DB] Auto-migration check error:', e);
+    }
 });
 // Prevent Node.js from silently crashing due to unhandled promises
 process.on('unhandledRejection', (reason, promise) => {

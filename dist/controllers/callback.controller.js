@@ -7,47 +7,115 @@ exports.handleAdmobSsvCallback = exports.handleCpxCallback = void 0;
 const db_1 = require("../config/db");
 const crypto_1 = __importDefault(require("crypto"));
 const https_1 = __importDefault(require("https"));
+// CPX Research official postback IP whitelist
+const CPX_ALLOWED_IPV4 = ['157.90.97.92'];
+const CPX_ALLOWED_IPV6 = ['2a01:4f8:d0a:30ff::2'];
+const isCpxIpAllowed = (rawIp) => {
+    if (!rawIp)
+        return false;
+    let ip = rawIp.trim().toLowerCase();
+    // Strip IPv4-mapped IPv6 prefix (e.g., ::ffff:157.90.97.92)
+    if (ip.startsWith('::ffff:')) {
+        ip = ip.substring(7);
+    }
+    // Exact IPv4 check
+    if (CPX_ALLOWED_IPV4.includes(ip)) {
+        return true;
+    }
+    // Exact IPv6 check
+    if (CPX_ALLOWED_IPV6.includes(ip)) {
+        return true;
+    }
+    // Subnet match for CPX IPv6 allocation (2a01:4f8:d0a:30ff::/64)
+    if (ip.startsWith('2a01:4f8:d0a:30ff:')) {
+        return true;
+    }
+    // Allow localhost for testing when not in production
+    if (process.env.NODE_ENV !== 'production') {
+        if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') {
+            return true;
+        }
+    }
+    return false;
+};
+const extractCandidateIps = (req) => {
+    const ips = [];
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (typeof xForwardedFor === 'string') {
+        xForwardedFor.split(',').forEach(ip => ips.push(ip.trim()));
+    }
+    else if (Array.isArray(xForwardedFor)) {
+        xForwardedFor.forEach(ip => ips.push(ip.trim()));
+    }
+    const xRealIp = req.headers['x-real-ip'];
+    if (typeof xRealIp === 'string') {
+        ips.push(xRealIp.trim());
+    }
+    if (req.ip) {
+        ips.push(req.ip.trim());
+    }
+    if (req.socket?.remoteAddress) {
+        ips.push(req.socket.remoteAddress.trim());
+    }
+    return [...new Set(ips.filter(Boolean))];
+};
 const handleCpxCallback = async (req, res) => {
     try {
+        // 1. IP Whitelist verification (157.90.97.92 and 2a01:4f8:d0a:30ff::2)
+        const candidateIps = extractCandidateIps(req);
+        const hasAllowedIp = candidateIps.some(ip => isCpxIpAllowed(ip));
+        if (!hasAllowedIp) {
+            console.warn(`[CPX Callback] Blocked postback from unauthorized IP(s): ${candidateIps.join(', ')}`);
+            res.status(403).send('Forbidden: Unauthorized IP address');
+            return;
+        }
         // CPX sends parameters via query (GET) or body (POST)
         const data = { ...req.query, ...req.body };
-        const { user_id, amount_local, trans_id, status, hash } = data;
-        if (!user_id || !amount_local || !trans_id || !hash) {
-            res.status(400).send('Missing required parameters');
+        const userId = (data.user_id || data.userId || data.sub_id || data.subId || '').toString().trim();
+        const transactionId = (data.trans_id || data.transId || '').toString().trim();
+        const status = data.status;
+        const amountVal = (data.amount_local || data.amount || data.coins || '0').toString().trim();
+        const incomingHash = (data.secure_hash || data.hash || data.secureHash || '').toString().trim();
+        if (!userId || !transactionId || !incomingHash) {
+            res.status(400).send('Missing required parameters (user_id, trans_id, secure_hash)');
             return;
         }
         // Verify status (only credit for successful completion, i.e. status = 1 or '1')
         if (status !== '1' && status !== 1) {
-            res.status(200).send('Status is not success completion');
+            // Acknowledge non-completion (e.g. status 2 chargeback) with 200 OK so CPX doesn't retry
+            res.status(200).send('OK');
             return;
         }
-        const secureKey = process.env.CPX_SECURE_KEY || '';
+        const secureKey = (process.env.CPX_SECURE_KEY ||
+            process.env.CPX_APP_SECURITY_HASH ||
+            process.env.CPX_HASH ||
+            '').trim();
         if (!secureKey) {
-            console.error('CPX Callback: CPX_SECURE_KEY is not configured');
-            res.status(500).send('CPX callback not configured');
+            console.error('[CPX Callback] Error: CPX_SECURE_KEY is not configured on server');
+            res.status(500).send('CPX callback security key not configured');
             return;
         }
-        // Calculate MD5 hash formats
-        // Format 1: Default CPX: md5(trans_id + "-" + secureKey)
-        const defaultData = `${trans_id}-${secureKey}`;
-        const defaultHash = crypto_1.default.createHash('md5').update(defaultData).digest('hex');
-        // Format 2: Extended: md5(trans_id + "-" + user_id + "-" + amount_local + "-" + secureKey)
-        const extendedData = `${trans_id}-${user_id}-${amount_local}-${secureKey}`;
-        const extendedHash = crypto_1.default.createHash('md5').update(extendedData).digest('hex');
-        if (hash !== defaultHash && hash !== extendedHash) {
-            console.error('CPX Callback: Invalid signature hash');
-            res.status(403).send('Invalid signature');
+        // 2. Validate MD5 Hash: md5({trans_id}-your App Security Hash)
+        const standardHash = crypto_1.default.createHash('md5').update(`${transactionId}-${secureKey}`).digest('hex').toLowerCase();
+        const extendedHash = crypto_1.default.createHash('md5').update(`${transactionId}-${userId}-${amountVal}-${secureKey}`).digest('hex').toLowerCase();
+        const directHash = crypto_1.default.createHash('md5').update(`${transactionId}${secureKey}`).digest('hex').toLowerCase();
+        const incomingLower = incomingHash.toLowerCase();
+        if (incomingLower !== standardHash && incomingLower !== extendedHash && incomingLower !== directHash) {
+            console.error(`[CPX Callback] Invalid signature hash. Received: "${incomingHash}", Expected: "${standardHash}"`);
+            res.status(403).send('Invalid signature hash');
             return;
         }
-        const userId = user_id;
-        const amount = parseInt(amount_local) || 0;
-        const transactionId = trans_id;
+        const amount = parseInt(amountVal) || 0;
+        if (amount <= 0) {
+            res.status(200).send('OK');
+            return;
+        }
         // Check if user exists
         const user = await db_1.prisma.user.findUnique({
             where: { id: userId },
         });
         if (!user) {
-            console.error(`CPX Callback: User ${userId} not found`);
+            console.error(`[CPX Callback] User ${userId} not found`);
             res.status(404).send('User not found');
             return;
         }
@@ -83,6 +151,7 @@ const handleCpxCallback = async (req, res) => {
                 },
             });
         });
+        console.log(`[CPX Callback] Successfully credited ${amount} coins to user ${userId} for transaction ${transactionId}`);
         res.status(200).send('OK');
     }
     catch (error) {
